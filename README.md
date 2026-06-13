@@ -10,9 +10,9 @@ npx skills@latest add petechu/skills
 
 ## Skills
 
-| Skill                                | Description                                                                                                      |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| [to-html](./skills/to-html/SKILL.md) | Convert conversation context into a self-contained static HTML page using Tailwind CSS and a Clean design system |
+| Skill                                      | Description                                                                                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| [html-artifacts](./skills/html-artifacts/SKILL.md) | Generate polished, self-contained HTML artifacts for reports, plans, specs, code reviews, PR write-ups, research summaries, and more |
 
 > **Note:** This collection is growing. The skills above are the first of many — additional skills will be added over time.
 
@@ -28,7 +28,7 @@ A skill is a markdown file (`SKILL.md`) that an agent loads on demand to gain fo
 
 ```
 skills/
-├── to-html/
+├── html-artifacts/
 │   ├── SKILL.md        # Skill definition and workflow
 │   └── REFERENCE.md    # Clean design system reference
 └── ...                 # More skills coming soon
