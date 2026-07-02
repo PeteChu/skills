@@ -45,6 +45,7 @@ Notes:
 
 - A vague "update the wiki" should **initialize only when no wiki exists**; if one exists, update it.
 - `query` requires an existing wiki — it answers wiki-first rather than silently running a full initialization.
+- **Read `doctor` before acting.** Its `recommendation` and `wikis` array tell you what to do. If `recommendation` is `none` and there is a `wikis` array, you are looking at a container that holds several per-package wikis — pick the one the user means and re-run with `--target`/`--output` (see [Multiple wikis](#multiple-wikis-monorepos--per-package)). Do **not** run `prepare init` against the container in that case.
 
 ## Running the engine
 
@@ -73,6 +74,33 @@ Every command prints JSON and uses conventional exit status (`ok:true` → 0, `o
 ```
 
 For `update` and `query`, language/format/detail/max-size are inherited from the existing wiki unless you override them. Pass the **same** `--target`/`--output` to `finalize` that you used for `prepare`.
+
+## Multiple wikis (monorepos / per-package)
+
+A repo can hold **more than one wiki** — typically one per package in a monorepo. Each lives in its own subdirectory:
+
+```
+docs/code-wiki/
+├── backend/      wiki for the backend package
+├── frontend/     wiki for the frontend package
+└── web/          wiki for the web package
+```
+
+This is created automatically by passing `--target <pkg>`: the wiki then lives at `docs/code-wiki/<pkg>`. A whole-repo wiki (no `--target`) instead lives directly at `docs/code-wiki`.
+
+The important wrinkle: when several package wikis exist, running `doctor` (or any command) **with no `--target`/`--output`** resolves to the `docs/code-wiki` container, which is _not itself a wiki_. The engine detects this situation so you don't get lost:
+
+- `doctor` reports `recommendation: "none"`, a `note`, and a **`wikis` array** listing every existing package wiki (its `outputDir`, `chapters`, `answers`). It will **not** tell you to `init` the container.
+- `prepare query`/`prepare update` with no target fails with a message that **names the existing package wikis** and tells you to pass `--target`/`--output`.
+- `prepare init --force` on the container is **refused** — it would delete every package wiki at once. To replace one package wiki, target it explicitly: `--output docs/code-wiki/<pkg> --force`.
+
+So when a user says "update the wiki" or "ask the wiki …" in a repo that has package wikis:
+
+1. Run `doctor` and look for a `wikis` array.
+2. If present, identify which package the user means from their wording (or ask if it's ambiguous), then re-run `doctor`/`prepare` with `--target <pkg>` (preferred) or `--output docs/code-wiki/<pkg>`.
+3. Proceed with the normal core loop against that one wiki.
+
+Never run `prepare init` against the `docs/code-wiki` container when package wikis exist — it cannot target a single package and the container is not where content belongs.
 
 ## Writing good wiki content (always)
 

@@ -138,6 +138,47 @@ run).
 
 When not in a Git repo: `git.repo:false`, `recommendation:"none"`, plus a note.
 
+#### Multi-wiki (monorepo) detection
+
+When the resolved output is the `docs/code-wiki` **container** and the container
+is not itself a wiki, `doctor` looks for per-package wikis in its subdirectories
+(`docs/code-wiki/<pkg>`). If it finds any, it does **not** recommend `init`
+(which would target the container) — instead it reports them and steers you to
+one. The output gains two fields:
+
+```jsonc
+{
+  "wiki": {
+    "exists": true,
+    "initialized": false,
+    "outputDir": "docs/code-wiki",
+    "chapters": 0,
+    "answers": 0,
+  },
+  "recommendation": "none",
+  "wikis": [
+    {
+      "outputDir": "docs/code-wiki/backend",
+      "initialized": true,
+      "hasMetadata": true,
+      "chapters": 12,
+      "answers": 3,
+    },
+    {
+      "outputDir": "docs/code-wiki/web",
+      "initialized": true,
+      "hasMetadata": true,
+      "chapters": 7,
+      "answers": 1,
+    },
+  ],
+  "note": "docs/code-wiki is a container holding 2 existing wiki(s): docs/code-wiki/backend, docs/code-wiki/web. Re-run doctor with --target <pkg> (or --output docs/code-wiki/<pkg>) ... Do not run 'prepare init' here — it targets the container, not a package.",
+}
+```
+
+Read `wikis` (when present) to pick the package the user means, then re-run
+`doctor`/`prepare` with `--target <pkg>` or `--output docs/code-wiki/<pkg>`.
+
 ### prepare (all actions)
 
 ```jsonc
@@ -266,6 +307,12 @@ location regardless of the agent's current directory.
 - **Path safety:** `target` and `output` must resolve inside the repository;
   otherwise the command fails with `ok:false`. `--force` deletion is performed
   only on the validated output dir.
+- **Multiple wikis (monorepo):** with no `--target`/`--output`, the resolved
+  output is the `docs/code-wiki` container. If that container is not itself a
+  wiki but holds initialized package wikis, `doctor` reports them (see
+  [Multi-wiki detection](#multi-wiki-monorepo-detection)) and `prepare init`
+  **refuses `--force`** rather than deleting every package wiki — target the
+  specific package with `--output docs/code-wiki/<pkg> --force` to replace one.
 
 ---
 

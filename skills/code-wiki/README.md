@@ -81,6 +81,12 @@ The agent owns the content (index, chapters, answers, log prose). The engine
 owns the schema, run state, validation, and metadata. Every successful operation
 appends exactly one dated, parseable heading to `log.md`.
 
+For a **monorepo** or multi-package repo, pass `--target <pkg>` and each package
+gets its own wiki under `docs/code-wiki/<pkg>/`. When several package wikis
+exist, `doctor` lists them in a `wikis` array (rather than recommending `init`
+against the container), and `prepare init --force` on the container is refused so
+package wikis are never accidentally deleted.
+
 ## Tests
 
 The engine is tested as a black-box CLI against temporary Git repositories using

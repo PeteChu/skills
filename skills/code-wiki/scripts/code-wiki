@@ -587,6 +587,63 @@ function isNonEmptyDir(dir) {
   return fs.readdirSync(dir).length > 0;
 }
 
+// The default container directory that holds wikis: <repoRoot>/docs/code-wiki.
+// In a single-wiki repo the wiki lives here directly; in a monorepo this dir is
+// just a container and each package wiki lives in a subdirectory
+// (docs/code-wiki/<pkg>).
+function docsWikiRoot(repoRoot) {
+  return path.join(repoRoot, "docs", "code-wiki");
+}
+
+// True when `outputDir` resolves exactly to the docs/code-wiki container (i.e.
+// the agent gave no --target subdir and no explicit --output). This is the only
+// situation where per-package discovery applies — a deeper outputDir is a
+// specific package the agent asked about, so we leave it alone.
+function isContainerOutput(repoRoot, outputDir) {
+  return path.resolve(outputDir) === path.resolve(docsWikiRoot(repoRoot));
+}
+
+// Find initialized package wikis among the immediate subdirectories of the
+// docs/code-wiki container. The container itself is not included here. Returns
+// absolute dirs, sorted, so output is deterministic.
+function discoverPackageWikis(repoRoot) {
+  const root = docsWikiRoot(repoRoot);
+  const out = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch (_) {
+    return out;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith(".")) continue;
+    const dir = path.join(root, e.name);
+    if (wikiInitialized(dir)) out.push(dir);
+  }
+  return out.sort();
+}
+
+// A compact, repo-relative summary of one wiki for doctor's `wikis` array.
+function summarizeWiki(repoRoot, dir) {
+  return {
+    outputDir: toPosix(path.relative(repoRoot, dir)) || dir,
+    initialized: wikiInitialized(dir),
+    hasMetadata: hasMetadata(dir),
+    chapters: chapterPages(dir).length,
+    answers: answerFiles(dir).length,
+  };
+}
+
+// Repo-relative paths of package wikis inside the container, but only when
+// `outputDir` is the container itself. Empty otherwise. Used to make prepare's
+// error messages point at existing wikis instead of misleading toward init.
+function containerPackageWikiPaths(repoRoot, outputDir) {
+  if (!isContainerOutput(repoRoot, outputDir)) return [];
+  return discoverPackageWikis(repoRoot).map((d) =>
+    toPosix(path.relative(repoRoot, d)),
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * Engine-owned schema + canonical prompt
  * ------------------------------------------------------------------ */
@@ -876,10 +933,15 @@ function doPrepare(action, values, flags) {
 
   // update/query require an initialized wiki.
   if (action !== "init" && !wikiInitialized(outputDir)) {
-    return fail(
-      "prepare " + action,
-      `no initialized code wiki at ${toPosix(path.relative(repoRoot, outputDir)) || outputDir} — run 'prepare init' first`,
-    );
+    const outRel = toPosix(path.relative(repoRoot, outputDir)) || outputDir;
+    const pkgs = containerPackageWikiPaths(repoRoot, outputDir);
+    let msg = `no initialized code wiki at ${outRel} — run 'prepare init' first`;
+    if (pkgs.length) {
+      msg +=
+        `. However, existing package wiki(s) were found: ${pkgs.join(", ")}. ` +
+        `Pass --target <pkg> or --output ${outRel}/<pkg> to operate on one of them instead.`;
+    }
+    return fail("prepare " + action, msg);
   }
   if (action === "query" && !values.question) {
     return fail("prepare query", "--question is required");
@@ -906,10 +968,25 @@ function doPrepare(action, values, flags) {
   // init: handle empty / forced output.
   if (action === "init") {
     if (isNonEmptyDir(outputDir)) {
+      const outRel = toPosix(path.relative(repoRoot, outputDir)) || outputDir;
+      const pkgs = containerPackageWikiPaths(repoRoot, outputDir);
       if (!opts.force) {
+        let msg = `output ${outRel} is not empty — re-run with --force to replace its contents (this deletes existing wiki files)`;
+        if (pkgs.length) {
+          msg +=
+            `. WARNING: ${outRel} is a container holding ${pkgs.length} initialized ` +
+            `package wiki(s) (${pkgs.join(", ")}); --force would DELETE all of them. ` +
+            `To document a single package, pass --target <pkg> instead.`;
+        }
+        return fail("prepare init", msg);
+      }
+      // Refuse to --force a container that holds initialized package wikis:
+      // that would silently destroy every package wiki at once. The agent must
+      // target the specific package it wants to replace.
+      if (pkgs.length) {
         return fail(
           "prepare init",
-          `output ${toPosix(path.relative(repoRoot, outputDir)) || outputDir} is not empty — re-run with --force to replace its contents (this deletes existing wiki files)`,
+          `refusing --force on ${outRel}: it is a container holding ${pkgs.length} initialized package wiki(s) (${pkgs.join(", ")}). To replace a single package wiki, target it explicitly, e.g. --output ${outRel}/<pkg> --force.`,
         );
       }
       // Forced: safely delete only the resolved wiki output contents.
@@ -1250,9 +1327,29 @@ function doDoctor(values) {
   const runFile = path.join(outputDir, RUN_FILE);
   const activeRun = fs.existsSync(runFile) ? readJson(runFile, null) : null;
 
+  // Multi-wiki awareness. When the resolved output is the docs/code-wiki
+  // container and the container is not itself a wiki, look for per-package
+  // wikis inside it. This is the monorepo layout: the container holds one wiki
+  // per package (docs/code-wiki/<pkg>), and recommending "init" against the
+  // container would be wrong at best and destructive under --force at worst.
+  // We surface the existing wikis and steer the agent toward one of them.
+  const packageWikis =
+    isContainerOutput(repoRoot, outputDir) && !initialized
+      ? discoverPackageWikis(repoRoot)
+      : [];
+
   let recommendation = "none";
+  let note = null;
   if (activeRun) {
     recommendation = `finalize ${activeRun.action}`;
+  } else if (packageWikis.length > 0) {
+    // Do not recommend init on a populated container; point at a package.
+    recommendation = "none";
+    const paths = packageWikis.map((d) => toPosix(path.relative(repoRoot, d)));
+    note =
+      `${rel} is a container holding ${paths.length} existing wiki(s): ${paths.join(", ")}. ` +
+      `Re-run doctor with --target <pkg> (or --output ${rel}/<pkg>) to inspect or work on one. ` +
+      `Do not run 'prepare init' here — it targets the container, not a package.`;
   } else if (!initialized) {
     recommendation = "init";
   } else {
@@ -1263,25 +1360,28 @@ function doDoctor(values) {
     ? readJson(path.join(outputDir, META_FILE), {}).options || null
     : null;
 
-  emit(
-    {
-      ok: true,
-      command: "doctor",
-      git: { repo: true, root: repoRoot, head: gitHead(repoRoot) },
-      wiki: {
-        exists,
-        initialized,
-        hasMetadata: meta,
-        outputDir: rel,
-        chapters: initialized ? chapterPages(outputDir).length : 0,
-        answers: initialized ? answerFiles(outputDir).length : 0,
-      },
-      run: { active: !!activeRun, action: activeRun ? activeRun.action : null },
-      options,
-      recommendation,
+  const payload = {
+    ok: true,
+    command: "doctor",
+    git: { repo: true, root: repoRoot, head: gitHead(repoRoot) },
+    wiki: {
+      exists,
+      initialized,
+      hasMetadata: meta,
+      outputDir: rel,
+      chapters: initialized ? chapterPages(outputDir).length : 0,
+      answers: initialized ? answerFiles(outputDir).length : 0,
     },
-    true,
-  );
+    run: { active: !!activeRun, action: activeRun ? activeRun.action : null },
+    options,
+    recommendation,
+    wikis: [],
+  };
+  if (packageWikis.length > 0) {
+    payload.wikis = packageWikis.map((d) => summarizeWiki(repoRoot, d));
+  }
+  if (note) payload.note = note;
+  emit(payload, true);
 }
 
 /* ------------------------------------------------------------------ *

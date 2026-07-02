@@ -459,6 +459,104 @@ test("monorepo --target writes to docs/code-wiki/<basename> and finalize finds i
 });
 
 /* ------------------------------------------------------------------ *
+ * multi-wiki / monorepo detection
+ * ------------------------------------------------------------------ */
+
+// Seed a fully-initialized package wiki directly (without running the engine),
+// so we can test how doctor/prepare behave when several package wikis exist.
+function seedPackageWiki(repo, outRel, name) {
+  write(repo, `${outRel}/00-index.md`, `# ${name} Wiki\n`);
+  write(repo, `${outRel}/01_core.md`, `# Core\nsee source\n`);
+  write(repo, `${outRel}/.code-wiki-schema.md`, "schema\n");
+  const base = path.join(repo, outRel);
+  fs.mkdirSync(base, { recursive: true });
+  fs.writeFileSync(
+    path.join(base, "log.md"),
+    `# Log\n\n## [${today()}] init | ${name} wiki\n`,
+    "utf8",
+  );
+}
+
+test("doctor surfaces existing package wikis instead of recommending init on the container", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  seedPackageWiki(repo, "docs/code-wiki/backend", "Backend");
+  seedPackageWiki(repo, "docs/code-wiki/web", "Web");
+  commitAll(repo, "package wikis");
+
+  const r = run(repo, ["doctor"]);
+  assert.strictEqual(r.status, 0);
+  // The container itself is not a wiki.
+  assert.strictEqual(r.json.wiki.initialized, false);
+  assert.strictEqual(r.json.wiki.chapters, 0);
+  // It must NOT recommend init against the container.
+  assert.strictEqual(r.json.recommendation, "none");
+  // It lists the package wikis it found.
+  assert.ok(Array.isArray(r.json.wikis) && r.json.wikis.length === 2);
+  const dirs = r.json.wikis.map((w) => w.outputDir).sort();
+  assert.deepStrictEqual(dirs, [
+    "docs/code-wiki/backend",
+    "docs/code-wiki/web",
+  ]);
+  assert.ok(r.json.note && /container/.test(r.json.note));
+});
+
+test("doctor --target detects the dedicated package wiki", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  seedPackageWiki(repo, "docs/code-wiki/backend", "Backend");
+  commitAll(repo, "package wiki");
+
+  const r = run(repo, ["doctor", "--target", "backend"]);
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.json.wiki.outputDir, "docs/code-wiki/backend");
+  assert.strictEqual(r.json.wiki.initialized, true);
+  assert.ok(r.json.wiki.chapters >= 1);
+  assert.strictEqual(r.json.recommendation, "update");
+  // No multi-wiki envelope when targeting a specific package.
+  assert.strictEqual(r.json.wikis, undefined);
+});
+
+test("prepare query with no target names the existing package wikis", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  seedPackageWiki(repo, "docs/code-wiki/backend", "Backend");
+  commitAll(repo, "package wiki");
+
+  const r = run(repo, ["prepare", "query", "--question", "how does it work?"]);
+  assert.notStrictEqual(r.status, 0);
+  assert.strictEqual(r.json.ok, false);
+  assert.match(r.json.error, /docs\/code-wiki\/backend/);
+  assert.match(r.json.error, /--target/);
+});
+
+test("prepare init --force is refused on a container holding package wikis", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  seedPackageWiki(repo, "docs/code-wiki/backend", "Backend");
+  commitAll(repo, "package wiki");
+
+  const r = run(repo, ["prepare", "init", "--force"]);
+  assert.notStrictEqual(r.status, 0);
+  assert.strictEqual(r.json.ok, false);
+  assert.match(r.json.error, /refusing --force/);
+  // The package wiki must survive untouched.
+  assert.ok(
+    fs.existsSync(path.join(repo, "docs/code-wiki/backend/00-index.md")),
+    "package wiki preserved",
+  );
+});
+
+test("prepare init --force still clears a plain (non-package) non-empty output", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  write(repo, "docs/code-wiki/old.md", "# old\n"); // a loose file, not a package wiki
+  const r = run(repo, ["prepare", "init", "--force"]);
+  assert.strictEqual(r.status, 0, "force clears a non-package output");
+  assert.ok(!fs.existsSync(path.join(repo, "docs/code-wiki/old.md")));
+});
+
+/* ------------------------------------------------------------------ *
  * options inheritance
  * ------------------------------------------------------------------ */
 
