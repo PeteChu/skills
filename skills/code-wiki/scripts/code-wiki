@@ -1,0 +1,1410 @@
+#!/usr/bin/env node
+"use strict";
+
+/*
+ * code-wiki engine
+ * ----------------
+ * A deterministic, dependency-free Node.js helper (Node 18+) that drives a
+ * persistent code wiki. The engine never calls an LLM and never decides
+ * content. It owns the deterministic parts of the workflow:
+ *
+ *   - prepare  : resolve paths, scaffold the wiki, emit a canonical prompt
+ *   - finalize : validate the agent's edits, write metadata, clean up temp files
+ *   - doctor   : inspect repo / wiki state and recommend a next action
+ *   - abort    : clear an abandoned run without touching wiki content
+ *
+ * Every command prints JSON to stdout. `ok:true` exits 0; `ok:false` exits
+ * nonzero. `doctor` exits 0 whenever inspection itself succeeds, even if no
+ * wiki exists yet.
+ */
+
+const fs = require("fs");
+const path = require("path");
+const child_process = require("child_process");
+
+/* ------------------------------------------------------------------ *
+ * Constants
+ * ------------------------------------------------------------------ */
+
+const ENGINE_VERSION = 1;
+
+const RUN_FILE = ".code-wiki-run.json";
+const PROMPT_FILE = ".code-wiki-prompt.md";
+const META_FILE = ".code-wiki.json";
+const SCHEMA_FILE = ".code-wiki-schema.md";
+const INDEX_FILE = "00-index.md";
+const LOG_FILE = "log.md";
+const ANSWERS_DIR = "answers";
+
+// Files that are engine-owned metadata / temp state. They are never listed as
+// generated wiki content.
+const NON_CONTENT_FILES = new Set([
+  META_FILE,
+  RUN_FILE,
+  PROMPT_FILE,
+  ".gitignore",
+]);
+
+// Files/dirs that are excluded from the source "file map" by default.
+const DEFAULT_SOURCE_EXCLUDES = [
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".cache",
+  ".vercel",
+  ".idea",
+  ".vscode",
+  "docs/code-wiki",
+];
+
+const VALID_FORMATS = new Set(["standard", "obsidian"]);
+const VALID_DETAILS = new Set(["summary", "standard", "deep", "exhaustive"]);
+
+const DEFAULT_MAX_SIZE = 100000;
+const FILE_MAP_HARD_CAP = 2000;
+
+const LANG_BY_EXT = {
+  ".js": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".jsx": "javascript",
+  ".ts": "typescript",
+  ".tsx": "typescript",
+  ".py": "python",
+  ".rb": "ruby",
+  ".go": "go",
+  ".rs": "rust",
+  ".java": "java",
+  ".kt": "kotlin",
+  ".scala": "scala",
+  ".c": "c",
+  ".h": "c",
+  ".cpp": "cpp",
+  ".hpp": "cpp",
+  ".cc": "cpp",
+  ".cs": "csharp",
+  ".php": "php",
+  ".swift": "swift",
+  ".m": "objc",
+  ".json": "json",
+  ".md": "markdown",
+  ".mdx": "markdown",
+  ".yml": "yaml",
+  ".yaml": "yaml",
+  ".toml": "toml",
+  ".ini": "ini",
+  ".sh": "shell",
+  ".bash": "shell",
+  ".zsh": "shell",
+  ".css": "css",
+  ".scss": "scss",
+  ".html": "html",
+  ".vue": "vue",
+  ".svelte": "svelte",
+  ".sql": "sql",
+  ".graphql": "graphql",
+  ".proto": "protobuf",
+  ".dockerfile": "dockerfile",
+  ".tf": "terraform",
+  ".lua": "lua",
+  ".r": "r",
+};
+
+const HEADING_RE = /^## \[(\d{4}-\d{2}-\d{2})\] (init|update|query) \| .+$/;
+// Numbered chapter pages: `01_*.md` (canonical) or `01-*.md`. The index
+// `00-index.md` is excluded separately and also fails the `>= 1` guard.
+const CHAPTER_RE = /^(\d{2,})[-_].+\.md$/;
+
+/* ------------------------------------------------------------------ *
+ * Small helpers
+ * ------------------------------------------------------------------ */
+
+function today() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function toIsoNow() {
+  return new Date().toISOString();
+}
+
+function readJson(file, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function writeJson(file, obj) {
+  fs.writeFileSync(file, JSON.stringify(obj, null, 2) + "\n", "utf8");
+}
+
+// True when `child` is `parent` or lives somewhere inside it.
+function contains(parent, child) {
+  const rel = path.relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function toPosix(p) {
+  return p.split(path.sep).filter(Boolean).join("/");
+}
+
+// Convert a glob into a RegExp. Supports `**` (cross-segment), `*` (within a
+// segment), and `?` (single char within a segment).
+function globToRegex(glob) {
+  const s = glob.replace(/\\/g, "/").replace(/^\.\//, "");
+  let re = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "*") {
+      if (s[i + 1] === "*") {
+        re += ".*";
+        i++;
+        if (s[i + 1] === "/") i++; // swallow trailing slash after **
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else if (".+()[]{}^$|\\".includes(c)) {
+      re += "\\" + c;
+    } else {
+      re += c;
+    }
+  }
+  return new RegExp("^" + re + "$");
+}
+
+// A path is excluded if any pattern matches the full relpath, the basename,
+// or any individual path segment. This makes bare names like `node_modules`
+// and `dist` "just work" anywhere in the tree.
+function isExcluded(relpath, regexes) {
+  const posix = toPosix(relpath);
+  const segments = posix.split("/");
+  const base = segments[segments.length - 1];
+  for (const re of regexes) {
+    if (re.test(posix)) return true;
+    if (re.test(base)) return true;
+    for (const seg of segments) if (re.test(seg)) return true;
+  }
+  return false;
+}
+
+function langOf(file) {
+  const ext = path.extname(file).toLowerCase();
+  if (ext === "" && path.basename(file).toLowerCase() === "dockerfile")
+    return "dockerfile";
+  return LANG_BY_EXT[ext] || null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Git helpers
+ * ------------------------------------------------------------------ */
+
+function git(args, opts = {}) {
+  try {
+    const stdout = child_process.execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+      ...opts,
+    });
+    return { ok: true, stdout: stdout.toString().trim(), stderr: "" };
+  } catch (e) {
+    return {
+      ok: false,
+      stdout: (e.stdout || "").toString().trim(),
+      stderr: (e.stderr || "").toString().trim(),
+      code: e.status == null ? 1 : e.status,
+    };
+  }
+}
+
+function findRepoRoot(cwd) {
+  const r = git(["rev-parse", "--show-toplevel"], { cwd });
+  return r.ok ? path.resolve(r.stdout) : null;
+}
+
+function gitHead(cwd) {
+  const r = git(["rev-parse", "HEAD"], { cwd });
+  return r.ok ? r.stdout : null;
+}
+
+// Returns [{status, path}] of files changed since prevCommit, comparing the
+// finalize commit to the current working tree (so it captures both committed
+// and uncommitted edits — the common "I just changed the code" case) plus
+// untracked files. The caller filters the wiki output dir out of the result.
+function changedSince(prevCommit, cwd) {
+  if (!prevCommit) return [];
+  const out = [];
+  const diff = git(["diff", "--name-status", prevCommit], { cwd });
+  if (diff.ok) {
+    for (const line of diff.stdout.split("\n").filter(Boolean)) {
+      const parts = line.split("\t");
+      const status = parts[0];
+      // Renames look like R100\tpath\tnewpath; the new path is what matters.
+      const file = parts.length >= 3 ? parts[parts.length - 1] : parts[1];
+      if (file) out.push({ status: status[0], path: file });
+    }
+  }
+  const untracked = git(["ls-files", "--others", "--exclude-standard"], {
+    cwd,
+  });
+  if (untracked.ok) {
+    for (const p of untracked.stdout.split("\n").filter(Boolean)) {
+      out.push({ status: "?", path: p });
+    }
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
+ * Output
+ * ------------------------------------------------------------------ */
+
+function emit(payload, ok) {
+  process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
+  process.exit(ok ? 0 : 1);
+}
+
+function fail(command, message, extra = {}) {
+  emit({ ok: false, command, error: message, ...extra }, false);
+}
+
+/* ------------------------------------------------------------------ *
+ * Argument parsing
+ * ------------------------------------------------------------------ */
+
+// Parses a flat argv array into { command, sub, flags, values }.
+//   node code-wiki prepare init --target src --force
+//   => command:'prepare', sub:'init', values:{target:'src'}, flags:{force:true}
+function parseArgs(argv) {
+  const values = {};
+  const flags = {};
+  const positional = [];
+  let command = null;
+  let sub = null;
+
+  const VALUE_FLAGS = new Set([
+    "--target",
+    "--output",
+    "--exclude",
+    "--language",
+    "--format",
+    "--detail-level",
+    "--max-size",
+    "--question",
+  ]);
+  const BOOL_FLAGS = new Set(["--force", "--help", "-h"]);
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (VALUE_FLAGS.has(a)) {
+      const v = argv[i + 1];
+      if (v === undefined || v.startsWith("--")) {
+        throw new Error(`flag ${a} requires a value`);
+      }
+      values[a.slice(2)] = v;
+      i++;
+    } else if (BOOL_FLAGS.has(a)) {
+      flags[a.replace(/^--?/, "")] = true;
+    } else if (a.startsWith("--")) {
+      // Unknown flag: tolerate bare long flags as boolean, else require value.
+      flags[a.slice(2)] = true;
+    } else {
+      positional.push(a);
+    }
+  }
+
+  if (positional.length) command = positional[0];
+  if (positional.length >= 2 && ["prepare", "finalize"].includes(command)) {
+    sub = positional[1];
+  }
+
+  return { command, sub, flags, values, positional };
+}
+
+/* ------------------------------------------------------------------ *
+ * Option resolution & path plumbing
+ * ------------------------------------------------------------------ */
+
+// Resolve repoRoot, targetDir, outputDir and validate path safety.
+function resolvePaths(repoRoot, values) {
+  const resolveInRepo = (p) =>
+    path.isAbsolute(p) ? path.resolve(p) : path.resolve(repoRoot, p);
+
+  const targetDir = values.target ? resolveInRepo(values.target) : repoRoot;
+  const targetIsSubdir = targetDir !== repoRoot;
+
+  const defaultOutput = targetIsSubdir
+    ? path.join(repoRoot, "docs", "code-wiki", path.basename(targetDir))
+    : path.join(repoRoot, "docs", "code-wiki");
+
+  const outputDir = values.output
+    ? resolveInRepo(values.output)
+    : defaultOutput;
+
+  if (!contains(repoRoot, targetDir)) {
+    throw {
+      code: "unsafe",
+      message: `target ${targetDir} is outside the repository`,
+    };
+  }
+  if (!contains(repoRoot, outputDir)) {
+    throw {
+      code: "unsafe",
+      message: `output ${outputDir} is outside the repository`,
+    };
+  }
+
+  return { targetDir, outputDir };
+}
+
+// Build the effective option set, filling defaults and validating values.
+function buildEffectiveOptions(values, flags, { inherit } = {}) {
+  const format = values.format || (inherit && inherit.format) || "standard";
+  const detailLevel =
+    values["detail-level"] || (inherit && inherit.detailLevel) || "standard";
+  const language =
+    values.language || (inherit && inherit.language) || "english";
+  const maxSize =
+    values["max-size"] != null
+      ? parseInt(values["max-size"], 10)
+      : inherit && inherit.maxSize != null
+        ? inherit.maxSize
+        : DEFAULT_MAX_SIZE;
+
+  if (!VALID_FORMATS.has(format)) {
+    throw {
+      code: "badvalue",
+      message: `invalid --format "${format}" (expected standard|obsidian)`,
+    };
+  }
+  if (!VALID_DETAILS.has(detailLevel)) {
+    throw {
+      code: "badvalue",
+      message: `invalid --detail-level "${detailLevel}" (expected summary|standard|deep|exhaustive)`,
+    };
+  }
+  if (!Number.isFinite(maxSize) || maxSize <= 0) {
+    throw {
+      code: "badvalue",
+      message: `invalid --max-size "${values["max-size"]}"`,
+    };
+  }
+
+  const userExcludes = values.exclude
+    ? values.exclude
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  // User excludes extend (never replace) the defaults.
+  const exclude = Array.from(
+    new Set([...DEFAULT_SOURCE_EXCLUDES, ...userExcludes]),
+  );
+
+  return {
+    format,
+    detailLevel,
+    language,
+    maxSize,
+    exclude,
+    target: values.target || null,
+    output: values.output || null,
+    force: !!flags.force,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * File map / wiki scanning
+ * ------------------------------------------------------------------ */
+
+function walkFiles(rootDir) {
+  const out = [];
+  const stack = [rootDir];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      continue;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else if (e.isFile()) {
+        out.push(full);
+      }
+    }
+  }
+  return out;
+}
+
+// Orientation map of source files under targetDir.
+function buildFileMap(targetDir, opts, outputDir) {
+  const excludeRx = opts.exclude.map(globToRegex);
+  const outputRel = path.relative(targetDir, outputDir);
+  const all = walkFiles(targetDir);
+  const files = [];
+  let excludedCount = 0;
+  let oversizeCount = 0;
+  let oversizeBytes = 0;
+  let truncated = false;
+
+  for (const full of all.sort()) {
+    const rel = path.relative(targetDir, full);
+    const posix = toPosix(rel);
+
+    // Never treat the wiki output itself as source.
+    if (
+      outputRel &&
+      !outputRel.startsWith("..") &&
+      (posix === toPosix(outputRel) ||
+        posix.startsWith(toPosix(outputRel) + "/"))
+    ) {
+      excludedCount++;
+      continue;
+    }
+    if (isExcluded(posix, excludeRx)) {
+      excludedCount++;
+      continue;
+    }
+    let size = 0;
+    try {
+      size = fs.statSync(full).size;
+    } catch (_) {
+      continue;
+    }
+    if (size > opts.maxSize) {
+      oversizeCount++;
+      oversizeBytes += size;
+      continue;
+    }
+    if (files.length >= FILE_MAP_HARD_CAP) {
+      truncated = true;
+      continue;
+    }
+    files.push({ path: posix, bytes: size, lang: langOf(full) });
+  }
+
+  return {
+    files,
+    included: files.length,
+    excludedCount,
+    oversize: { count: oversizeCount, bytes: oversizeBytes },
+    truncated,
+    maxSize: opts.maxSize,
+  };
+}
+
+// relpath -> size for durable wiki content files under outputDir.
+function scanWikiContent(outputDir) {
+  const map = new Map();
+  if (!fs.existsSync(outputDir)) return map;
+  const all = walkFiles(outputDir);
+  for (const full of all) {
+    const rel = path.relative(outputDir, full);
+    const posix = toPosix(rel);
+    const base = posix.split("/").pop();
+    if (posix.startsWith(".obsidian/")) continue;
+    if (NON_CONTENT_FILES.has(base)) continue;
+    let size = 0;
+    try {
+      size = fs.statSync(full).size;
+    } catch (_) {
+      continue;
+    }
+    map.set(posix, size);
+  }
+  return map;
+}
+
+// Durable generated wiki files (for metadata), as posix relpaths.
+function generatedFiles(outputDir) {
+  return Array.from(scanWikiContent(outputDir).keys()).sort();
+}
+
+function chapterPages(outputDir) {
+  const out = [];
+  for (const rel of generatedFiles(outputDir)) {
+    const base = rel.split("/").pop();
+    if (base === INDEX_FILE) continue;
+    const m = base.match(CHAPTER_RE);
+    if (m && parseInt(m[1], 10) >= 1) out.push(rel);
+  }
+  return out;
+}
+
+function answerFiles(outputDir) {
+  return generatedFiles(outputDir)
+    .filter((p) => p.startsWith(ANSWERS_DIR + "/"))
+    .sort();
+}
+
+function parseLogHeadings(text) {
+  if (!text) return [];
+  const out = [];
+  for (const line of text.split("\n")) {
+    if (HEADING_RE.test(line)) out.push(line.trim());
+  }
+  return out;
+}
+
+function readLogHeadings(outputDir) {
+  const logPath = path.join(outputDir, LOG_FILE);
+  try {
+    return parseLogHeadings(fs.readFileSync(logPath, "utf8"));
+  } catch (_) {
+    return [];
+  }
+}
+
+function wikiInitialized(outputDir) {
+  return (
+    fs.existsSync(path.join(outputDir, INDEX_FILE)) &&
+    fs.existsSync(path.join(outputDir, LOG_FILE)) &&
+    fs.existsSync(path.join(outputDir, SCHEMA_FILE))
+  );
+}
+
+function hasMetadata(outputDir) {
+  return fs.existsSync(path.join(outputDir, META_FILE));
+}
+
+function isNonEmptyDir(dir) {
+  if (!fs.existsSync(dir)) return false;
+  return fs.readdirSync(dir).length > 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine-owned schema + canonical prompt
+ * ------------------------------------------------------------------ */
+
+function schemaMarkdown() {
+  return `# Code Wiki Schema (engine-owned)
+
+This file is owned and restored by the \`code-wiki\` engine. It defines the
+canonical rules every wiki follows regardless of which coding agent produced
+it. **Manual edits here may be overwritten** — the engine refreshes this file
+on every \`prepare\` and restores it on every \`finalize\`.
+
+## File roles
+
+| File / dir        | Owner | Purpose                                                          |
+| ----------------- | ----- | --------------------------------------------------------------- |
+| \`00-index.md\`     | agent | Entry point: what this codebase is, how to navigate the wiki.   |
+| \`NN_*.md\`         | agent | Chapter / concept pages, numbered from \`01\`. The substance of the wiki. |
+| \`answers/\`        | agent | Durable answer pages for substantial queries.                   |
+| \`log.md\`          | agent | Append-only maintenance history. One heading per operation.     |
+| \`.code-wiki-schema.md\` | engine | This file. Canonical rules.                              |
+| \`.code-wiki.json\` | engine | Metadata: options, generated files, commit, stats.              |
+| \`.obsidian/\`, \`.gitignore\` | engine | Obsidian vault scaffolding (obsidian format only).   |
+
+Temporary engine files (present only mid-run, never committed intent):
+\`.code-wiki-run.json\` (active run state) and \`.code-wiki-prompt.md\` (prompt
+copy). They are removed on successful \`finalize\` and cleared by \`abort\`.
+
+## Log heading format
+
+Every successful operation appends exactly **one** new heading to \`log.md\`:
+
+\`\`\`md
+## [YYYY-MM-DD] init | short human summary
+## [YYYY-MM-DD] update | what changed and why
+## [YYYY-MM-DD] query | the question that was asked
+\`\`\`
+
+Headings are human-readable and parseable; there are no hidden run IDs. The
+engine validates that exactly one new heading of the correct verb was added.
+
+## Read policy (source evidence)
+
+- **Source scope:** read source from the target directory only.
+- **Excludes:** generated/dependency/IDE dirs and the wiki output itself are
+  excluded by default; user excludes extend (never replace) the defaults.
+- **Max size:** files larger than the configured max are skipped in the
+  orientation map and should not dominate source inspection.
+- **Wiki artifacts are NOT source.** Never cite \`docs/code-wiki/**\` as
+  evidence for how the code works. Read the real source.
+
+## Authoring rules
+
+- **Cite sources.** Every claim about implementation references a real file
+  path (and line range when useful). Keep the wiki grounded in actual code.
+- **Diagrams by default.** Include Mermaid relationship diagrams to show
+  system structure; humans grasp structure faster from diagrams than prose.
+- **Depth follows detail-level.** \`summary\` → high-level orientation;
+  \`standard\` → useful detail; \`deep\` → thorough; \`exhaustive\` → comprehensive.
+- **Language.** Visible prose is written in the configured language.
+
+## Format
+
+- \`standard\`: portable Markdown usable anywhere.
+- \`obsidian\`: use wikilinks \`[[page]]\`, YAML frontmatter, callouts
+  \`> [!note]\`, and tags. The engine creates \`.obsidian/\` scaffolding.
+
+## Maintenance model
+
+- \`init\` creates a wiki from scratch. Requires an index, this schema,
+  \`log.md\`, and at least one chapter page.
+- \`update\` refreshes an existing wiki, focusing on files changed since the
+  previous finalized commit.
+- \`query\` answers a question wiki-first; file a durable answer page only for
+  substantial answers, and link it from 00-index.md so answers stay
+  discoverable.
+`;
+}
+
+function buildPrompt(action, ctx) {
+  const { opts, outputDir, targetDir, repoRoot, fileMap, changed, date } = ctx;
+  const relOutput = toPosix(path.relative(repoRoot, outputDir)) || outputDir;
+  const relTarget = toPosix(path.relative(repoRoot, targetDir)) || ".";
+
+  const depthGuide = {
+    summary:
+      "high-level orientation: what the system is and its main parts. Keep it concise.",
+    standard:
+      "useful, working detail: main modules, data flow, key concepts, and how to navigate the code.",
+    deep: "thorough: subsystems, edge cases, invariants, and non-obvious behavior.",
+    exhaustive:
+      "comprehensive: cover subsystems, internals, extension points, and edge cases in full.",
+  }[opts.detailLevel];
+
+  const formatGuide =
+    opts.format === "obsidian"
+      ? `Use Obsidian conventions: YAML frontmatter on each page, wikilinks \`[[page-name]]\` to connect chapters and answers, callouts (\`> [!note]\`, \`> [!warning]\`\`), and tags.`
+      : `Use portable standard Markdown. Link pages with normal relative links.`;
+
+  const lines = [];
+  lines.push(`# Code wiki · ${action}`);
+  lines.push("");
+  lines.push(
+    `Target source: \`${relTarget}\` (repo root: \`${toPosix(repoRoot)}\`)`,
+  );
+  lines.push(`Write the wiki into: \`${relOutput}\``);
+  lines.push(
+    `Format: ${opts.format} · Language: ${opts.language} · Detail level: ${opts.detailLevel}`,
+  );
+  lines.push(`Operation date for log headings: ${date}`);
+  lines.push("");
+  lines.push(
+    `You own the wiki CONTENT. The engine owns paths, scaffolding, validation, and metadata. Do not edit \`.code-wiki-run.json\`, \`.code-wiki-prompt.md\`, \`.code-wiki-schema.md\` (engine-owned), or \`.code-wiki.json\` (engine writes it).`,
+  );
+  lines.push("");
+  lines.push(`## Read policy`);
+  lines.push(
+    `- Read source only from \`${relTarget}\`. Files larger than ${opts.maxSize} bytes are skipped in the map below; do not let one huge file dominate your inspection.`,
+  );
+  lines.push(
+    `- The orientation map below is a starting point, not an allowlist — follow imports and read what matters.`,
+  );
+  lines.push(
+    `- Never cite wiki artifacts under \`${relOutput}\` as source evidence. Read the real code.`,
+  );
+  lines.push("");
+  lines.push(`## Authoring standards (always apply)`);
+  lines.push(`- ${depthGuide}`);
+  lines.push(`- ${formatGuide}`);
+  lines.push(
+    `- Cite real file paths (and line ranges when useful) for every implementation claim.`,
+  );
+  lines.push(`- Include Mermaid relationship diagrams to show structure.`);
+  lines.push("");
+
+  if (fileMap) {
+    lines.push(`## Source orientation map (${fileMap.included} files shown)`);
+    if (fileMap.files.length) {
+      const grouped = new Map();
+      for (const f of fileMap.files) {
+        const k = f.lang || "other";
+        if (!grouped.has(k)) grouped.set(k, []);
+        grouped.get(k).push(f.path);
+      }
+      for (const [lang, paths] of [...grouped.entries()].sort()) {
+        lines.push(
+          `- **${lang}** (${paths.length}): ${paths.slice(0, 12).join(", ")}${paths.length > 12 ? ", …" : ""}`,
+        );
+      }
+    } else {
+      lines.push(`- (no source files found under the target)`);
+    }
+    if (fileMap.oversize.count) {
+      lines.push(
+        `- ${fileMap.oversize.count} file(s) skipped for exceeding max size (${fileMap.oversize.bytes} bytes total).`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (action === "init") {
+    lines.push(`## What to do (init)`);
+    lines.push(
+      `1. Read the source in \`${relTarget}\` to understand the system.`,
+    );
+    lines.push(
+      `2. Write \`${INDEX_FILE}\`: what this codebase is, how the wiki is organized, and links into the chapters.`,
+    );
+    lines.push(
+      `3. Write one or more numbered chapter pages \`01_*.md\`, \`02_*.md\`, … covering the main concepts/modules. Each chapter cites source files and includes a Mermaid diagram where it helps.`,
+    );
+    lines.push(`4. Append exactly ONE new heading to \`${LOG_FILE}\`:`);
+    lines.push(`   \`\`\`md`);
+    lines.push(
+      `   ## [${date}] init | <one-line summary of what this wiki covers>`,
+    );
+    lines.push(`   \`\`\``);
+    lines.push(
+      `5. Run \`finalize init\`. If it reports a repairPrompt, fix only the named files and retry.`,
+    );
+  } else if (action === "update") {
+    lines.push(`## Files changed since the previous finalized commit`);
+    if (changed && changed.length) {
+      for (const c of changed.slice(0, 200))
+        lines.push(`- ${c.status} ${c.path}`);
+      if (changed.length > 200)
+        lines.push(`- …and ${changed.length - 200} more`);
+    } else {
+      lines.push(
+        `- (no committed changes detected since the last finalize — still verify the wiki is accurate)`,
+      );
+    }
+    lines.push("");
+    lines.push(`## What to do (update)`);
+    lines.push(
+      `1. Focus on the changed files above; read them and the surrounding context.`,
+    );
+    lines.push(
+      `2. Refresh existing chapters/answers that are now stale, and add new chapter pages for new subsystems (next free \`NN_\` number).`,
+    );
+    lines.push(`3. Update \`${INDEX_FILE}\` if navigation changed.`);
+    lines.push(`4. Append exactly ONE new heading to \`${LOG_FILE}\`:`);
+    lines.push(`   \`\`\`md`);
+    lines.push(`   ## [${date}] update | <what changed in the wiki and why>`);
+    lines.push(`   \`\`\``);
+    lines.push(
+      `5. Run \`finalize update\`. If it reports a repairPrompt, fix only the named files and retry. A no-content update is allowed (it warns, it does not fail).`,
+    );
+  } else if (action === "query") {
+    lines.push(`## Question`);
+    lines.push(`> ${ctx.question}`);
+    lines.push("");
+    if (changed && changed.length) {
+      lines.push(`## Freshness note`);
+      lines.push(
+        `${changed.length} file(s) changed since the last finalize. Weigh wiki claims against these changes; do not answer blindly from stale pages.`,
+      );
+      lines.push("");
+    }
+    lines.push(`## What to do (query)`);
+    lines.push(
+      `1. Answer the question wiki-FIRST: read existing chapters/answers, then confirm against current source.`,
+    );
+    lines.push(
+      `2. If the answer is substantial and reusable, write a durable page under \`${ANSWERS_DIR}/\` (slug the filename from the question) and LINK it from \`${INDEX_FILE}\` (for example an "Answers" section) so future readers and queries can find it without scanning filenames. Trivial answers need no answer page.`,
+    );
+    lines.push(`3. Append exactly ONE new heading to \`${LOG_FILE}\`:`);
+    lines.push(`   \`\`\`md`);
+    lines.push(`   ## [${date}] query | <the question>`);
+    lines.push(`   \`\`\``);
+    lines.push(
+      `4. Run \`finalize query\`. If it reports a repairPrompt, fix only the named files and retry.`,
+    );
+  }
+
+  lines.push("");
+  lines.push(
+    `After \`finalize\` succeeds, the run is complete. Report what you wrote to the user.`,
+  );
+  return lines.join("\n");
+}
+
+/* ------------------------------------------------------------------ *
+ * prepare
+ * ------------------------------------------------------------------ */
+
+function scaffoldCommon(outputDir, opts) {
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.mkdirSync(path.join(outputDir, ANSWERS_DIR), { recursive: true });
+  // Engine-owned schema is always canonical.
+  fs.writeFileSync(path.join(outputDir, SCHEMA_FILE), schemaMarkdown(), "utf8");
+  if (opts.format === "obsidian") {
+    const obsDir = path.join(outputDir, ".obsidian");
+    fs.mkdirSync(obsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(obsDir, "app.json"),
+      JSON.stringify(
+        { promptDelete: false, spellcheck: false, alwaysUpdateLinks: true },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(outputDir, ".gitignore"),
+      ".obsidian/\n",
+      "utf8",
+    );
+  }
+}
+
+function writeRunAndPrompt(outputDir, runState, prompt) {
+  writeJson(path.join(outputDir, RUN_FILE), runState);
+  fs.writeFileSync(path.join(outputDir, PROMPT_FILE), prompt, "utf8");
+}
+
+function doPrepare(action, values, flags) {
+  const repoRoot = requireRepo("prepare " + action);
+
+  let paths;
+  try {
+    paths = resolvePaths(repoRoot, values);
+  } catch (e) {
+    return fail("prepare " + action, e.message);
+  }
+  const { targetDir, outputDir } = paths;
+
+  // update/query require an initialized wiki.
+  if (action !== "init" && !wikiInitialized(outputDir)) {
+    return fail(
+      "prepare " + action,
+      `no initialized code wiki at ${toPosix(path.relative(repoRoot, outputDir)) || outputDir} — run 'prepare init' first`,
+    );
+  }
+  if (action === "query" && !values.question) {
+    return fail("prepare query", "--question is required");
+  }
+
+  // Inherit options from existing metadata for update/query.
+  let inherit = null;
+  if (action !== "init" && hasMetadata(outputDir)) {
+    inherit = readJson(path.join(outputDir, META_FILE), {}).options || null;
+  }
+
+  let opts;
+  try {
+    opts = buildEffectiveOptions(values, flags, { inherit });
+  } catch (e) {
+    return fail("prepare " + action, e.message);
+  }
+
+  const date = today();
+  const priorHeadings = readLogHeadings(outputDir);
+  const priorSnapshot =
+    action === "init" ? new Map() : scanWikiContent(outputDir);
+
+  // init: handle empty / forced output.
+  if (action === "init") {
+    if (isNonEmptyDir(outputDir)) {
+      if (!opts.force) {
+        return fail(
+          "prepare init",
+          `output ${toPosix(path.relative(repoRoot, outputDir)) || outputDir} is not empty — re-run with --force to replace its contents (this deletes existing wiki files)`,
+        );
+      }
+      // Forced: safely delete only the resolved wiki output contents.
+      safeClearDir(outputDir);
+    }
+    scaffoldCommon(outputDir, opts);
+  } else {
+    // Ensure scaffolding pieces that the engine owns are present.
+    fs.mkdirSync(path.join(outputDir, ANSWERS_DIR), { recursive: true });
+    fs.writeFileSync(
+      path.join(outputDir, SCHEMA_FILE),
+      schemaMarkdown(),
+      "utf8",
+    );
+  }
+
+  const fileMap = buildFileMap(targetDir, opts, outputDir);
+  const prevCommit =
+    action !== "init" && hasMetadata(outputDir)
+      ? readJson(path.join(outputDir, META_FILE), {}).commit || null
+      : null;
+  const rawChanged =
+    action !== "init" ? changedSince(prevCommit, repoRoot) : [];
+  // Drop changes inside the wiki output itself — they aren't "stale source".
+  const outRel = toPosix(path.relative(repoRoot, outputDir));
+  const changed = rawChanged.filter((c) => {
+    const p = toPosix(c.path);
+    return !(p === outRel || (outRel && p.startsWith(outRel + "/")));
+  });
+
+  const runState = {
+    action,
+    startedAt: toIsoNow(),
+    date,
+    repoRoot,
+    targetDir,
+    outputDir,
+    options: opts,
+    priorLogHeadings: priorHeadings,
+    priorSnapshot: Object.fromEntries(priorSnapshot),
+    prevCommit: prevCommit || gitHead(repoRoot),
+  };
+
+  const prompt = buildPrompt(action, {
+    opts,
+    outputDir,
+    targetDir,
+    repoRoot,
+    fileMap,
+    changed,
+    date,
+    question: values.question || null,
+  });
+
+  writeRunAndPrompt(outputDir, runState, prompt);
+
+  emit(
+    {
+      ok: true,
+      command: "prepare " + action,
+      action,
+      targetDir: toPosix(path.relative(repoRoot, targetDir)) || ".",
+      outputDir: toPosix(path.relative(repoRoot, outputDir)) || outputDir,
+      options: opts,
+      fileMap,
+      changedFiles: changed,
+      prompt,
+      artifacts: {
+        runState: RUN_FILE,
+        promptFile: PROMPT_FILE,
+        schema: SCHEMA_FILE,
+        answersDir: ANSWERS_DIR,
+      },
+    },
+    true,
+  );
+}
+
+// Delete the contents of a directory (not the dir itself) after confirming it
+// is inside the repo. Only ever called on outputDir, which is already validated.
+function safeClearDir(dir) {
+  for (const entry of fs.readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    fs.rmSync(full, { recursive: true, force: true });
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * finalize
+ * ------------------------------------------------------------------ */
+
+function doFinalize(action, values, _flags) {
+  const repoRoot = requireRepo("finalize " + action);
+  // finalize locates the active run via its run file. Honor an explicit
+  // --output/--target (same resolution as prepare) first, then fall back to
+  // scanning the docs/code-wiki tree.
+  let resolvedOutput = null;
+  try {
+    resolvedOutput = resolvePaths(repoRoot, values).outputDir;
+  } catch (e) {
+    return fail("finalize " + action, e.message);
+  }
+  const docsWikiRoot = path.join(repoRoot, "docs", "code-wiki");
+
+  const candidates = [];
+  if (resolvedOutput) candidates.push(resolvedOutput);
+  candidates.push(docsWikiRoot);
+  if (fs.existsSync(docsWikiRoot)) {
+    for (const e of fs.readdirSync(docsWikiRoot)) {
+      const maybe = path.join(docsWikiRoot, e);
+      try {
+        if (fs.statSync(maybe).isDirectory()) candidates.push(maybe);
+      } catch (_) {}
+    }
+  }
+
+  let runState = null;
+  let outputDir = null;
+  for (const cand of candidates) {
+    const rf = path.join(cand, RUN_FILE);
+    if (fs.existsSync(rf)) {
+      runState = readJson(rf, null);
+      outputDir = cand;
+      break;
+    }
+  }
+  if (!runState) {
+    return fail(
+      "finalize " + action,
+      "no active code-wiki run found — run the matching `prepare` first, or pass the same --output/--target you used for prepare (or `abort` to clear an abandoned run)",
+    );
+  }
+
+  if (runState.action !== action) {
+    return fail(
+      "finalize " + action,
+      `active run is a '${runState.action}' run — run 'finalize ${runState.action}' instead (or 'abort' to discard)`,
+    );
+  }
+
+  const passed = [];
+  const warnings = [];
+  const repairSteps = [];
+
+  const have = (rel) => fs.existsSync(path.join(outputDir, rel));
+
+  // Required engine/agent files per action.
+  const requireFile = (rel, label) => {
+    if (have(rel)) {
+      passed.push(`${rel} present`);
+      return true;
+    }
+    repairSteps.push(`Create ${rel} (${label}).`);
+    return false;
+  };
+
+  if (action === "init") {
+    requireFile(INDEX_FILE, "the wiki index");
+    requireFile(
+      SCHEMA_FILE,
+      "engine-owned schema — usually restored automatically",
+    );
+    requireFile(LOG_FILE, "the maintenance log");
+    const chapters = chapterPages(outputDir);
+    if (chapters.length >= 1) {
+      passed.push(`${chapters.length} chapter page(s) present`);
+    } else {
+      repairSteps.push(
+        "Create at least one numbered chapter page (e.g. 01_*.md).",
+      );
+    }
+  } else {
+    // update/query require initialized structure
+    if (!wikiInitialized(outputDir)) {
+      repairSteps.push(
+        `Wiki is not initialized — ensure ${INDEX_FILE}, ${LOG_FILE}, and ${SCHEMA_FILE} exist.`,
+      );
+    } else {
+      passed.push("initialized structure present");
+    }
+  }
+
+  // Exactly one new log heading of the correct verb.
+  const prior = new Set((runState.priorLogHeadings || []).map((h) => h.trim()));
+  const current = readLogHeadings(outputDir);
+  const newHeadings = current.filter((h) => !prior.has(h.trim()));
+  const verbHeadings = newHeadings.filter(
+    (h) => HEADING_RE.test(h) && new RegExp(`] ${action} \\|`).test(h),
+  );
+
+  if (newHeadings.length === 0) {
+    repairSteps.push(
+      `Append exactly one new '## [${runState.date || today()}] ${action} | <summary>' heading to ${LOG_FILE}.`,
+    );
+  } else if (verbHeadings.length !== 1 || newHeadings.length !== 1) {
+    repairSteps.push(
+      `Expected exactly ONE new '${action}' log heading in ${LOG_FILE}; found ${newHeadings.length} new heading(s), ${verbHeadings.length} matching '${action}'. Keep exactly one '## [YYYY-MM-DD] ${action} | ...' line added this run.`,
+    );
+  } else {
+    passed.push(`exactly one new '${action}' log heading`);
+  }
+
+  // update: warn (do not fail) on no content change.
+  if (action === "update") {
+    const before = new Map(Object.entries(runState.priorSnapshot || {}));
+    const after = scanWikiContent(outputDir);
+    // A no-op is about substantive pages (index/chapters/answers), not the
+    // mandatory log line or the engine-restored schema — exclude both.
+    before.delete(SCHEMA_FILE);
+    before.delete(LOG_FILE);
+    after.delete(SCHEMA_FILE);
+    after.delete(LOG_FILE);
+    let changedContent = false;
+    const keys = new Set([...before.keys(), ...after.keys()]);
+    for (const k of keys) {
+      if (before.get(k) !== after.get(k)) {
+        changedContent = true;
+        break;
+      }
+    }
+    if (!changedContent) {
+      warnings.push(
+        "no wiki content changed during this update (allowed, but the wiki may already be current)",
+      );
+    }
+  }
+
+  // Restore canonical schema if missing or altered.
+  const schemaPath = path.join(outputDir, SCHEMA_FILE);
+  let schemaRestored = false;
+  const canonical = schemaMarkdown();
+  try {
+    if (fs.readFileSync(schemaPath, "utf8") !== canonical) {
+      fs.writeFileSync(schemaPath, canonical, "utf8");
+      schemaRestored = true;
+    }
+  } catch (_) {
+    fs.writeFileSync(schemaPath, canonical, "utf8");
+    schemaRestored = true;
+  }
+
+  if (repairSteps.length) {
+    const repairPrompt =
+      `Finalize for '${action}' failed. Fix only the items below, then re-run 'finalize ${action}':\n` +
+      repairSteps.map((s) => `- ${s}`).join("\n");
+    return fail("finalize " + action, "validation failed", {
+      action,
+      passed,
+      warnings,
+      schemaRestored,
+      repairPrompt,
+    });
+  }
+
+  // Success: write metadata, remove temp artifacts.
+  const head = gitHead(repoRoot);
+  const gen = generatedFiles(outputDir);
+  const chapters = chapterPages(outputDir);
+  const answers = answerFiles(outputDir);
+
+  const metadata = {
+    version: ENGINE_VERSION,
+    action,
+    finalizedAt: toIsoNow(),
+    commit: head,
+    repoRoot,
+    outputDir,
+    options: runState.options,
+    generatedFiles: gen,
+    answers,
+    stats: {
+      chapters: chapters.length,
+      answers: answers.length,
+      generatedCount: gen.length,
+      schemaRestored,
+    },
+  };
+  writeJson(path.join(outputDir, META_FILE), metadata);
+
+  const removed = [];
+  for (const f of [RUN_FILE, PROMPT_FILE]) {
+    const p = path.join(outputDir, f);
+    if (fs.existsSync(p)) {
+      fs.rmSync(p, { force: true });
+      removed.push(f);
+    }
+  }
+
+  emit(
+    {
+      ok: true,
+      command: "finalize " + action,
+      action,
+      passed,
+      warnings,
+      schemaRestored,
+      metadata,
+      generatedFiles: gen,
+      removedArtifacts: removed,
+    },
+    true,
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * doctor
+ * ------------------------------------------------------------------ */
+
+function doDoctor(values) {
+  const repoRoot = findRepoRoot(process.cwd());
+  if (!repoRoot) {
+    return emit(
+      {
+        ok: true,
+        command: "doctor",
+        git: { repo: false },
+        wiki: { exists: false, initialized: false },
+        run: { active: false },
+        recommendation: "none",
+        note: "not inside a Git repository; code-wiki requires one",
+      },
+      true,
+    );
+  }
+
+  let paths;
+  try {
+    paths = resolvePaths(repoRoot, values);
+  } catch (e) {
+    return fail("doctor", e.message);
+  }
+  const { outputDir } = paths;
+  const rel = toPosix(path.relative(repoRoot, outputDir)) || outputDir;
+
+  const exists = fs.existsSync(outputDir);
+  const initialized = wikiInitialized(outputDir);
+  const meta = hasMetadata(outputDir);
+  const runFile = path.join(outputDir, RUN_FILE);
+  const activeRun = fs.existsSync(runFile) ? readJson(runFile, null) : null;
+
+  let recommendation = "none";
+  if (activeRun) {
+    recommendation = `finalize ${activeRun.action}`;
+  } else if (!initialized) {
+    recommendation = "init";
+  } else {
+    recommendation = "update";
+  }
+
+  const options = meta
+    ? readJson(path.join(outputDir, META_FILE), {}).options || null
+    : null;
+
+  emit(
+    {
+      ok: true,
+      command: "doctor",
+      git: { repo: true, root: repoRoot, head: gitHead(repoRoot) },
+      wiki: {
+        exists,
+        initialized,
+        hasMetadata: meta,
+        outputDir: rel,
+        chapters: initialized ? chapterPages(outputDir).length : 0,
+        answers: initialized ? answerFiles(outputDir).length : 0,
+      },
+      run: { active: !!activeRun, action: activeRun ? activeRun.action : null },
+      options,
+      recommendation,
+    },
+    true,
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * abort
+ * ------------------------------------------------------------------ */
+
+function doAbort(values) {
+  const repoRoot = requireRepo("abort");
+  let paths;
+  try {
+    paths = resolvePaths(repoRoot, values);
+  } catch (e) {
+    return fail("abort", e.message);
+  }
+  const { outputDir } = paths;
+
+  const removed = [];
+  for (const f of [RUN_FILE, PROMPT_FILE]) {
+    const p = path.join(outputDir, f);
+    if (fs.existsSync(p)) {
+      fs.rmSync(p, { force: true });
+      removed.push(f);
+    }
+  }
+
+  emit(
+    {
+      ok: true,
+      command: "abort",
+      removed,
+      wikiPreserved: true,
+      note: removed.length
+        ? "active run cleared; wiki content untouched"
+        : "no active run to clear",
+    },
+    true,
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * dispatch
+ * ------------------------------------------------------------------ */
+
+function requireRepo(command) {
+  const repoRoot = findRepoRoot(process.cwd());
+  if (!repoRoot) {
+    return fail(
+      command,
+      "not inside a Git repository — code-wiki requires one",
+    );
+  }
+  return repoRoot;
+}
+
+function usage() {
+  return [
+    "usage: code-wiki <command> [options]",
+    "",
+    "commands:",
+    "  doctor                       inspect repo + wiki state, recommend next action",
+    "  prepare init [options]       scaffold a new wiki, emit the canonical prompt",
+    "  prepare update [options]     refresh an existing wiki",
+    "  prepare query --question Q   answer a question wiki-first",
+    "  finalize init|update|query   validate edits, write metadata, clean up",
+    "  abort [options]              clear an abandoned run (keeps wiki content)",
+    "",
+    "options:",
+    "  --target <path>              source dir to document (default: repo root)",
+    "  --output <path>              wiki output dir (default: docs/code-wiki)",
+    "  --exclude <glob[,glob...]>   extra source excludes (extend defaults)",
+    "  --language <lang>            prose language (default: english)",
+    "  --format standard|obsidian   markdown format (default: standard)",
+    "  --detail-level summary|standard|deep|exhaustive  (default: standard)",
+    "  --max-size <bytes>           skip source files larger than this (default: 100000)",
+    "  --question <text>            the query (required for prepare query)",
+    "  --force                      allow init to replace a non-empty wiki",
+  ].join("\n");
+}
+
+function main() {
+  const argv = process.argv.slice(2);
+  if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
+    process.stdout.write(usage() + "\n");
+    return process.exit(0);
+  }
+
+  let parsed;
+  try {
+    parsed = parseArgs(argv);
+  } catch (e) {
+    return fail("(parse)", e.message);
+  }
+
+  const { command, sub, values, flags } = parsed;
+
+  try {
+    switch (command) {
+      case "doctor":
+        return doDoctor(values);
+      case "abort":
+        return doAbort(values);
+      case "prepare":
+        if (!sub) return fail("prepare", "expected prepare init|update|query");
+        if (!["init", "update", "query"].includes(sub))
+          return fail("prepare " + sub, "unknown prepare subcommand");
+        return doPrepare(sub, values, flags);
+      case "finalize":
+        if (!sub)
+          return fail("finalize", "expected finalize init|update|query");
+        if (!["init", "update", "query"].includes(sub))
+          return fail("finalize " + sub, "unknown finalize subcommand");
+        return doFinalize(sub, values, flags);
+      case "migrate":
+        return fail("migrate", "migrate is not implemented in v1");
+      default:
+        return fail(
+          command || "(unknown)",
+          `unknown command. Run with --help for usage.`,
+        );
+    }
+  } catch (e) {
+    return fail(command || "(unknown)", e && e.message ? e.message : String(e));
+  }
+}
+
+main();

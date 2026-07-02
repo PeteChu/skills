@@ -1,0 +1,71 @@
+{
+  "skill_name": "code-wiki",
+  "evals": [
+    {
+      "id": 0,
+      "name": "plain-init",
+      "prompt": "I just joined this project and I'm kind of lost. Can you create a code wiki that explains how the doit task manager works? Put it in the repo so the whole team can read it later.",
+      "expected_output": "An initialized, validated code wiki under docs/code-wiki/ with an index, at least one source-cited chapter page containing a Mermaid diagram, a single dated init log heading, and engine-written .code-wiki.json metadata. No temporary engine files remain.",
+      "files": [],
+      "expectations": [
+        "A wiki is created under docs/code-wiki/ in the repo",
+        "docs/code-wiki/00-index.md exists",
+        "At least one numbered chapter page (e.g. 01_*.md) exists",
+        "docs/code-wiki/log.md contains exactly one new '## [YYYY-MM-DD] init | ...' heading",
+        "docs/code-wiki/.code-wiki.json metadata exists, proving finalize succeeded",
+        "Chapter pages cite real source paths (e.g. src/store.js, src/commands.js)",
+        "At least one Mermaid diagram appears in the wiki content",
+        "No temporary engine files remain (.code-wiki-run.json, .code-wiki-prompt.md)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "obsidian-deep-target",
+      "prompt": "Generate a code wiki for the src/ directory of this project. I use Obsidian, so make it Obsidian-friendly (wikilinks, frontmatter, callouts), and go deep — I really want to understand the internals.",
+      "expected_output": "An initialized wiki using Obsidian format targeted at src/, living under docs/code-wiki/src, with .obsidian scaffolding, deep-detail chapters using Obsidian conventions, source citations, a Mermaid diagram, one init log heading, and valid metadata.",
+      "files": [],
+      "expectations": [
+        "The wiki targets the src/ directory and lives under docs/code-wiki/src",
+        "Obsidian scaffolding exists (.obsidian/app.json and a .gitignore ignoring .obsidian/)",
+        "Chapter pages use Obsidian conventions (wikilinks [[...]], YAML frontmatter, or > [!...] callouts)",
+        "Chapters reflect deep detail (substantial, internals-level explanation)",
+        "Chapter pages cite real source paths under src/",
+        "docs/code-wiki/src/log.md contains exactly one new init heading",
+        "docs/code-wiki/src/.code-wiki.json metadata exists (finalize succeeded)",
+        "No temporary engine files remain"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "query-save-answer",
+      "prompt": "I'm trying to understand how doit avoids corrupting the tasks file if the process dies in the middle of a write. Can you figure it out from the code and add the explanation to the code wiki so it's saved for next time?",
+      "expected_output": "A query run against the existing wiki: a durable answer page filed under docs/code-wiki/answers/ that explains the atomic temp-file-then-rename write strategy citing src/store.js, exactly one new '## [date] query | ...' log heading, .code-wiki.json updated with action=query and the answer listed, and the existing wiki structure preserved. No temp files remain.",
+      "files": [],
+      "expectations": [
+        "A durable answer page is filed under docs/code-wiki/answers/*.md",
+        "docs/code-wiki/log.md contains exactly one new '## [YYYY-MM-DD] query | ...' heading",
+        "docs/code-wiki/.code-wiki.json metadata was updated and lists the answer page (finalize query succeeded)",
+        "The answer cites the real source (src/store.js)",
+        "The answer explains the atomic write strategy (temp file + rename)",
+        "The existing wiki structure is preserved (index and chapters untouched by the query)",
+        "No temporary engine files remain"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "update-for-clear-command",
+      "prompt": "Heads up — I just added a new `clear` command to doit (it wipes all tasks in one shot). Can you update the code wiki so it reflects the latest code?",
+      "expected_output": "An update run: the wiki refreshed to document the new clear command (and the store.clearAll change), exactly one new '## [date] update | ...' log heading, .code-wiki.json updated with action=update, existing structure preserved, and no temp files remaining.",
+      "files": [],
+      "expectations": [
+        "docs/code-wiki/log.md contains exactly one new '## [YYYY-MM-DD] update | ...' heading",
+        "docs/code-wiki/.code-wiki.json metadata was updated (finalize update succeeded)",
+        "The wiki now documents the new `clear` command",
+        "The wiki reflects the store.js change (clearAll)",
+        "Existing structure is preserved (index and prior chapters still present)",
+        "Updated content cites real source paths (src/commands.js / src/store.js)",
+        "No temporary engine files remain"
+      ]
+    }
+  ]
+}

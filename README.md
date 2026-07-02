@@ -13,6 +13,7 @@ npx skills@latest add petechu/skills
 | Skill                                      | Description                                                                                                       |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | [html-artifacts](./skills/html-artifacts/SKILL.md) | Generate polished, self-contained HTML artifacts for reports, plans, specs, code reviews, PR write-ups, research summaries, and more |
+| [code-wiki](./skills/code-wiki/SKILL.md) | Build, update, and query a persistent, source-cited code wiki for a repository through a bundled, deterministic, dependency-free Node.js engine |
 
 > **Note:** This collection is growing. The skills above are the first of many — additional skills will be added over time.
 
@@ -31,6 +32,11 @@ skills/
 ├── html-artifacts/
 │   ├── SKILL.md        # Skill definition and workflow
 │   └── REFERENCE.md    # Clean design system reference
+├── code-wiki/
+│   ├── SKILL.md        # Skill definition and workflow
+│   ├── scripts/code-wiki  # Bundled deterministic Node.js engine
+│   ├── references/contract.md  # Full engine contract
+│   └── tests/          # Black-box engine tests
 └── ...                 # More skills coming soon
 ```
 
