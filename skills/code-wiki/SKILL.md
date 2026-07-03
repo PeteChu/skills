@@ -27,7 +27,18 @@ The engine is a single dependency-free Node.js 18+ script: **`scripts/code-wiki`
                           re-run finalize
 ```
 
-The `prompt` returned by `prepare` is canonical and tailored to the action, the options, the source file map, and (for update/query) the files that changed. **Read it and follow it** rather than improvising the wiki structure — that is what keeps the wiki consistent across different agents.
+The `prompt` returned by `prepare` is canonical and tailored to the action, the options, the source file map, and (for update/query) the files that changed. **Read it and follow it** rather than improvising the wiki structure — that is what keeps the wiki consistent across different agents. The prompt is the `prompt` field of the JSON output; on a large repo it can run to dozens of KB, so pull just it out with `jq -r .prompt` (or `node -e 'console.log(JSON.parse(require("fs").readFileSync(0)).prompt)'`) rather than scanning the whole blob.
+
+## How staleness is tracked (update & query)
+
+The engine records, in `.code-wiki.json`, the commit at which each **chapter and answer page** was last reviewed. When you run `prepare update`, the "files changed" list is computed against the **oldest** of those per-page commits — not one global baseline.
+
+The reason this matters: every `finalize` (including a `query` that only wrote an answer page) advances a single global "last commit" field. If `update` trusted that field, a `query` could stamp HEAD as the baseline while leaving every chapter unrefreshed, and the next `update` would see an empty diff and wrongly conclude "nothing to do." Diffing against the oldest chapter instead means a source change made after _any_ chapter was last written always surfaces, and the prompt lists each chapter that lags HEAD (with how many commits behind), so you know which pages to re-read even when the diff looks small.
+
+- For wikis created or finalized by older engine versions (no per-page history yet), the diff falls back to the global commit and the prompt prints a **transition note** plus, if the diff is empty, a warning that *empty ≠ current* — spot-check the chapters against source rather than trusting the empty list.
+- `query`'s freshness hint uses the same baseline, so its "files changed since last review" reflects chapter staleness too.
+
+This is the key defense against confidently shipping a stale wiki: treat an empty `update` diff as unverified until you've checked the stale chapters the prompt names.
 
 ## Detecting intent
 
@@ -71,6 +82,10 @@ Every command prints JSON and uses conventional exit status (`ok:true` → 0, `o
 --max-size <bytes>             skip source files larger than this in the orientation map.
 --question "<text>"            the query (required for `prepare query`).
 --force                        lets `init` replace a non-empty wiki. ASK THE USER FIRST.
+--lean                         (update/query) drops the full source orientation map from the
+                               prompt — the existing wiki is your orientation, so you keep just
+                               the changed files + staleness list. Use it on large repos to cut
+                               noise and cost. The full map is still in the JSON `fileMap` field.
 ```
 
 For `update` and `query`, language/format/detail/max-size are inherited from the existing wiki unless you override them. Pass the **same** `--target`/`--output` to `finalize` that you used for `prepare`.
@@ -108,6 +123,7 @@ Never run `prepare init` against the `docs/code-wiki` container when package wik
 - **Include Mermaid diagrams** to show structure and data flow; humans grasp architecture faster from a diagram than prose.
 - **Match the detail level.** `summary` = orientation; `standard` = working detail; `deep` = thorough; `exhaustive` = comprehensive.
 - **One log heading per operation**, exactly: `## [YYYY-MM-DD] init|update|query | <summary>`. The prompt gives you today's date and the exact line to add. The engine fails finalize if there isn't exactly one new heading of the right verb — this keeps history parseable.
+- **Heed `finalize` warnings, especially Markdown lint.** `finalize` flags stray trailing backslashes (which glue two lines into one when rendered) and unbalanced inline-code spans (an odd number of backticks). These slip past the structural checks but break rendering. Fix any `…: line ends with a stray backslash` / `…: odd number of backticks` warnings before reporting the wiki done — they are warnings, not failures, but they point at real breakage. When you refresh a chapter, also re-open the cited source files and confirm line ranges like `service.go:156-211` still point at the right code; a commit can shift line numbers without changing your prose.
 - For `query`, file a durable page under `answers/` only when the answer is substantial and reusable; trivial answers can skip it.
 - Keep `00-index.md` current as the wiki's map: link every new chapter **and** every durable answer page, so a reader (or a later `query`) can find things without scanning filenames.
 

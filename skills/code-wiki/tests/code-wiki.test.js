@@ -599,3 +599,148 @@ test("user excludes extend (not replace) the defaults", () => {
     "default exclude still present",
   );
 });
+
+/* ------------------------------------------------------------------ *
+ * per-chapter staleness tracking
+ * ------------------------------------------------------------------ */
+
+test("a query that only writes an answer does not hide later source changes from update", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  run(repo, ["prepare", "init"]);
+  authorInitWiki(repo);
+  run(repo, ["finalize", "init"]);
+
+  // A substantive source change AFTER the chapters were written.
+  write(
+    repo,
+    "src/math.js",
+    "export const add=(a,b)=>a+b;\nexport const sub=(a,b)=>a-b;\n",
+  );
+  commitAll(repo, "add sub");
+
+  // A query lands and only writes an answer page. Under the old single-global-
+  // baseline model this stamped HEAD and hid the sub() change from the next
+  // update — the exact staleness blind spot the feedback described.
+  run(repo, ["prepare", "query", "--question", "How does add work?"]);
+  write(
+    repo,
+    "docs/code-wiki/answers/how-add-works.md",
+    "# How does add work?\n\na+b. src/math.js:1\n",
+  );
+  appendHeading(repo, "docs/code-wiki/log.md", "query", "How does add work?");
+  run(repo, ["finalize", "query"]);
+
+  const prep = run(repo, ["prepare", "update"]);
+  assert.strictEqual(prep.status, 0);
+  // The post-chapter source change still surfaces...
+  assert.ok(
+    prep.json.changedFiles.some((c) => c.path === "src/math.js"),
+    "update must surface the source change made after the chapters were written",
+  );
+  // ...and the untouched chapter is flagged stale with a commit count.
+  assert.ok(
+    Array.isArray(prep.json.chapterStaleness) &&
+      prep.json.chapterStaleness.some(
+        (s) => /01_core/.test(s.file) && s.commitsBehind >= 1,
+      ),
+    "the untouched chapter must be reported stale",
+  );
+  assert.match(prep.json.prompt, /Chapter staleness/);
+  assert.match(prep.json.prompt, /01_core/);
+});
+
+test("finalize records a per-file last-reviewed commit for chapters and answers", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  run(repo, ["prepare", "init"]);
+  authorInitWiki(repo);
+  run(repo, ["finalize", "init"]);
+  const meta = JSON.parse(
+    fs.readFileSync(path.join(repo, "docs/code-wiki/.code-wiki.json"), "utf8"),
+  );
+  assert.ok(meta.fileCommit, "metadata carries a fileCommit map");
+  assert.ok(meta.fileCommit["01_core.md"], "chapter has a last-reviewed commit");
+});
+
+test("--lean omits the full source orientation map from the update prompt", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  run(repo, ["prepare", "init"]);
+  authorInitWiki(repo);
+  run(repo, ["finalize", "init"]);
+
+  const full = run(repo, ["prepare", "update"]);
+  const lean = run(repo, ["prepare", "update", "--lean"]);
+  assert.strictEqual(full.status, 0);
+  assert.strictEqual(lean.status, 0);
+  assert.match(full.json.prompt, /Source orientation map/);
+  assert.doesNotMatch(lean.json.prompt, /Source orientation map/);
+  // The changed-files section is still present in the lean prompt.
+  assert.match(lean.json.prompt, /since chapters were last reviewed/);
+});
+
+test("finalize warns about malformed markdown (trailing backslash, unbalanced backticks)", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  run(repo, ["prepare", "init"]);
+  write(repo, "docs/code-wiki/00-index.md", "# Wiki\n\nEntry.\n");
+  // Chapter with two rendering-breakage patterns the structural validators miss.
+  const trailingBackslash = "- " + "`mapper.go`" + "\\"; // glues to next line
+  const unbalanced = "See " + "`" + "unclosed span here"; // odd backtick count
+  write(
+    repo,
+    "docs/code-wiki/01_core.md",
+    ["# Core", "", trailingBackslash, "The service fetches data.", "", unbalanced, "", "src/math.js:1"].join(
+      "\n",
+    ) + "\n",
+  );
+  const base = path.join(repo, "docs/code-wiki");
+  fs.mkdirSync(base, { recursive: true });
+  fs.writeFileSync(
+    path.join(base, "log.md"),
+    `# Log\n\n## [${today()}] init | core\n`,
+    "utf8",
+  );
+
+  const r = run(repo, ["finalize", "init"]);
+  assert.strictEqual(r.status, 0, "malformed markdown is a warning, not a failure");
+  const msgs = (r.json.warnings || []).join("\n");
+  assert.match(msgs, /01_core\.md:\d+:.*backslash/);
+  assert.match(msgs, /01_core\.md:\d+:.*backticks?/);
+});
+
+test("update warns an empty diff does not prove current when a wiki lacks per-chapter tracking", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  run(repo, ["prepare", "init"]);
+  authorInitWiki(repo);
+  run(repo, ["finalize", "init"]);
+
+  // Source changes after the chapters, then a query that stamps HEAD.
+  write(
+    repo,
+    "src/math.js",
+    "export const add=(a,b)=>a+b;\nexport const sub=(a,b)=>a-b;\n",
+  );
+  commitAll(repo, "add sub");
+  run(repo, ["prepare", "query", "--question", "x?"]);
+  write(repo, "docs/code-wiki/answers/x.md", "# x\n\nsrc/math.js\n");
+  appendHeading(repo, "docs/code-wiki/log.md", "query", "x?");
+  run(repo, ["finalize", "query"]);
+
+  // Simulate a wiki finalized before per-file tracking existed: strip fileCommit
+  // but keep the query-stamped commit. This is the user's exact transition case.
+  const metaPath = path.join(repo, "docs/code-wiki/.code-wiki.json");
+  const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+  delete meta.fileCommit;
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), "utf8");
+
+  const prep = run(repo, ["prepare", "update"]);
+  assert.strictEqual(prep.status, 0);
+  // The diff falls back to the query-stamped HEAD and comes back empty...
+  assert.strictEqual(prep.json.changedFiles.length, 0);
+  // ...so the prompt must warn that empty != current and flag the gap.
+  assert.match(prep.json.prompt, /source-diff is empty/);
+  assert.match(prep.json.prompt, /predates per-chapter staleness tracking/);
+});

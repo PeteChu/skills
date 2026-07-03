@@ -63,6 +63,7 @@ option, and JSON reference.
 --max-size <bytes>              skip source files larger than this (default: 100000)
 --question "<text>"             required for prepare query
 --force                         let init replace a non-empty wiki
+--lean                          update/query: drop the full source map from the prompt
 ```
 
 ## Wiki layout

@@ -60,6 +60,10 @@ const DEFAULT_SOURCE_EXCLUDES = [
   ".vercel",
   ".idea",
   ".vscode",
+  ".agents",
+  ".claude",
+  ".codex",
+  ".cursor",
   "docs/code-wiki",
 ];
 
@@ -266,6 +270,91 @@ function changedSince(prevCommit, cwd) {
   return out;
 }
 
+// Short hash for display. Falls back to the raw value (or its first 7 chars)
+// when git can't resolve it (e.g. the commit was pruned after a rebase).
+function shortHash(commit, cwd) {
+  if (!commit) return null;
+  const r = git(["rev-parse", "--short", commit], { cwd });
+  return r.ok ? r.stdout : commit.slice(0, 7);
+}
+
+// How many commits is `commit` behind HEAD? Returns 0 when `commit` is HEAD or
+// unknown/unreachable (history rewritten, shallow clone, etc.). We never want a
+// missing commit to break staleness reporting, so failures degrade to 0.
+function commitsBehind(commit, cwd) {
+  if (!commit) return 0;
+  const exists = git(["cat-file", "-e", commit + "^{commit}"], { cwd });
+  if (!exists.ok) return 0;
+  const r = git(["rev-list", "--count", commit + "..HEAD"], { cwd });
+  return r.ok ? parseInt(r.stdout, 10) || 0 : 0;
+}
+
+// The durable wiki files whose staleness we track: chapter pages and answer
+// pages. These are the files that make claims about source code, so "when was
+// this last checked against HEAD?" is meaningful for them. The index is
+// navigation and log.md is bookkeeping, so neither is tracked.
+function stalenessFiles(outputDir) {
+  return [...chapterPages(outputDir), ...answerFiles(outputDir)];
+}
+
+// The single commit to diff update/query changes against. It is the OLDEST
+// (most-behind-HEAD) last-reviewed commit among the tracked files, so that a
+// source change made after *any* chapter was last refreshed is surfaced even if
+// other chapters are current. A `query` that only wrote answer pages does not
+// advance this baseline for chapters, which is the whole point. Returns null
+// when nothing is tracked yet (fresh wiki or pre-tracking metadata); callers
+// fall back to the global metadata commit in that case.
+function contentBaselineCommit(outputDir, repoRoot, meta) {
+  const fc = (meta && meta.fileCommit) || {};
+  const commits = [];
+  for (const rel of stalenessFiles(outputDir)) {
+    const c = fc[rel];
+    if (c && commits.indexOf(c) === -1) commits.push(c);
+  }
+  if (!commits.length) return (meta && meta.commit) || null;
+  let oldest = null;
+  let maxBehind = -1;
+  for (const c of commits) {
+    const behind = commitsBehind(c, repoRoot);
+    if (behind > maxBehind) {
+      maxBehind = behind;
+      oldest = c;
+    }
+  }
+  return oldest || (meta && meta.commit) || null;
+}
+
+// Per-file freshness for the update prompt: each tracked file whose last-reviewed
+// commit is behind HEAD, with how far. Sorted most-stale-first so the agent's
+// attention lands on the chapters most likely to need re-reading. Returns [] when
+// per-file tracking isn't active yet (the wiki predates it); the caller then emits
+// a transition note instead.
+function computeStaleness(outputDir, repoRoot, meta) {
+  const fc = (meta && meta.fileCommit) || {};
+  if (!fc || Object.keys(fc).length === 0) return [];
+  const out = [];
+  for (const rel of stalenessFiles(outputDir)) {
+    const c = fc[rel];
+    if (!c) continue;
+    const behind = commitsBehind(c, repoRoot);
+    if (behind > 0)
+      out.push({
+        file: rel,
+        lastCommit: shortHash(c, repoRoot),
+        commitsBehind: behind,
+      });
+  }
+  out.sort((a, b) => b.commitsBehind - a.commitsBehind);
+  return out;
+}
+
+// Returns true when the wiki's metadata carries per-file last-reviewed commits
+// (i.e. it was finalized by an engine version that tracks staleness). Used to
+// decide whether the update prompt shows a staleness list or a transition note.
+function stalenessTracked(meta) {
+  return !!(meta && meta.fileCommit && Object.keys(meta.fileCommit).length);
+}
+
 /* ------------------------------------------------------------------ *
  * Output
  * ------------------------------------------------------------------ */
@@ -303,7 +392,7 @@ function parseArgs(argv) {
     "--max-size",
     "--question",
   ]);
-  const BOOL_FLAGS = new Set(["--force", "--help", "-h"]);
+  const BOOL_FLAGS = new Set(["--force", "--help", "-h", "--lean"]);
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -552,6 +641,59 @@ function answerFiles(outputDir) {
     .sort();
 }
 
+// Cheap structural Markdown lint over the durable content files (chapters,
+// answers, index). These are heuristics, not a full CommonMark parser: they
+// catch the two rendering-breakage patterns that slip past the structural
+// validators — a stray trailing backslash (which glues two lines into one in
+// most renderers) and an unbalanced inline-code span (odd backtick count).
+// Lines inside fenced code blocks are ignored, since code legitimately ends
+// with backslashes and odd backticks. Everything here is a WARNING, never a
+// hard failure: unusual-but-valid prose should not block a finalize.
+function lintMarkdown(outputDir) {
+  const warnings = [];
+  const files = [...stalenessFiles(outputDir), INDEX_FILE];
+  for (const rel of files) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(outputDir, rel), "utf8");
+    } catch (_) {
+      continue;
+    }
+    const lines = text.split("\n");
+    let inFence = false;
+    let fenceMarker = null;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const fence = line.match(/^\s*(```|~~~)/);
+      if (fence) {
+        const marker = fence[1][0] === "`" ? "```" : "~~~";
+        if (!inFence) {
+          inFence = true;
+          fenceMarker = marker;
+        } else if (marker === fenceMarker) {
+          inFence = false;
+          fenceMarker = null;
+        }
+        continue;
+      }
+      if (inFence) continue;
+      const trimmedEnd = line.replace(/\s+$/, "");
+      if (trimmedEnd && trimmedEnd.endsWith("\\")) {
+        warnings.push(
+          `${rel}:${i + 1}: line ends with a stray backslash — this glues it to the next line in rendered Markdown`,
+        );
+      }
+      const ticks = (line.match(/`/g) || []).length;
+      if (ticks % 2 === 1) {
+        warnings.push(
+          `${rel}:${i + 1}: odd number of backticks — an inline code span may be unclosed`,
+        );
+      }
+    }
+  }
+  return warnings;
+}
+
 function parseLogHeadings(text) {
   if (!text) return [];
   const out = [];
@@ -716,7 +858,8 @@ engine validates that exactly one new heading of the correct verb was added.
 - \`init\` creates a wiki from scratch. Requires an index, this schema,
   \`log.md\`, and at least one chapter page.
 - \`update\` refreshes an existing wiki, focusing on files changed since the
-  previous finalized commit.
+  oldest chapter was last reviewed (not a single global commit, so a prior
+  \`query\` can't hide post-chapter changes).
 - \`query\` answers a question wiki-first; file a durable answer page only for
   substantial answers, and link it from 00-index.md so answers stay
   discoverable.
@@ -724,7 +867,18 @@ engine validates that exactly one new heading of the correct verb was added.
 }
 
 function buildPrompt(action, ctx) {
-  const { opts, outputDir, targetDir, repoRoot, fileMap, changed, date } = ctx;
+  const {
+    opts,
+    outputDir,
+    targetDir,
+    repoRoot,
+    fileMap,
+    changed,
+    date,
+    lean,
+    staleness,
+    tracked,
+  } = ctx;
   const relOutput = toPosix(path.relative(repoRoot, outputDir)) || outputDir;
   const relTarget = toPosix(path.relative(repoRoot, targetDir)) || ".";
 
@@ -779,7 +933,11 @@ function buildPrompt(action, ctx) {
   lines.push(`- Include Mermaid relationship diagrams to show structure.`);
   lines.push("");
 
-  if (fileMap) {
+  // The full orientation map is essential for `init` (you're learning the
+  // codebase cold), but for an update/query it is mostly noise: the existing
+  // wiki is already your orientation, and the changed files + staleness list
+  // below are what matter. `--lean` drops it for update/query to cut cost.
+  if (fileMap && (action === "init" || !lean)) {
     lines.push(`## Source orientation map (${fileMap.included} files shown)`);
     if (fileMap.files.length) {
       const grouped = new Map();
@@ -825,32 +983,68 @@ function buildPrompt(action, ctx) {
       `5. Run \`finalize init\`. If it reports a repairPrompt, fix only the named files and retry.`,
     );
   } else if (action === "update") {
-    lines.push(`## Files changed since the previous finalized commit`);
+    lines.push(`## Source changes since chapters were last reviewed`);
+    lines.push(
+      `_Computed against the oldest last-reviewed chapter (see "Chapter staleness" below), not a single global commit — so a prior \`query\` that only touched \`answers/\` does not hide changes that affect chapters._`,
+    );
     if (changed && changed.length) {
       for (const c of changed.slice(0, 200))
         lines.push(`- ${c.status} ${c.path}`);
       if (changed.length > 200)
         lines.push(`- …and ${changed.length - 200} more`);
     } else {
+      lines.push(`- (none detected)`);
+    }
+    lines.push("");
+    // Staleness is the safety net the changed-files list alone can't provide.
+    // Even when the diff looks empty, a chapter that hasn't been reviewed in N
+    // commits may describe code that has since moved under it. This is what
+    // stops a confident no-op update from shipping a stale wiki.
+    lines.push(`## Chapter staleness`);
+    if (tracked && staleness && staleness.length) {
       lines.push(
-        `- (no committed changes detected since the last finalize — still verify the wiki is accurate)`,
+        `These pages have not been reviewed since their last write and may lag the current source. Re-read the source they cite before deciding they are still accurate:`,
+      );
+      for (const s of staleness.slice(0, 15)) {
+        lines.push(
+          `- \`${s.file}\` — last reviewed at \`${s.lastCommit}\`, ${s.commitsBehind} commit(s) behind HEAD`,
+        );
+      }
+      if (staleness.length > 15)
+        lines.push(`- …and ${staleness.length - 15} more`);
+    } else if (tracked) {
+      lines.push(
+        `Every chapter was last reviewed at HEAD — no chapter is known to be stale, so an empty change list above is meaningful.`,
+      );
+    } else {
+      lines.push(
+        `_This wiki predates per-chapter staleness tracking, so the change list above uses the last finalize commit and can miss changes that a prior \`query\`/\`init\` stamped at HEAD without refreshing every chapter. Treat an empty list as unverified: spot-check the chapters most likely to drift against current source._`,
+      );
+    }
+    if (changed && changed.length === 0) {
+      lines.push("");
+      lines.push(
+        `> **The source-diff is empty.** That does NOT prove the wiki is current — a prior \`query\` or \`init\` can stamp HEAD as the baseline without refreshing every chapter. Judge staleness by comparing each chapter's claims to current source, not by the diff being empty. If, after checking, nothing is stale, a no-op update is acceptable.`,
       );
     }
     lines.push("");
     lines.push(`## What to do (update)`);
     lines.push(
-      `1. Focus on the changed files above; read them and the surrounding context.`,
+      `1. Focus on the changed files above and on the stale chapters; read them and the surrounding context.`,
     );
     lines.push(
       `2. Refresh existing chapters/answers that are now stale, and add new chapter pages for new subsystems (next free \`NN_\` number).`,
     );
-    lines.push(`3. Update \`${INDEX_FILE}\` if navigation changed.`);
-    lines.push(`4. Append exactly ONE new heading to \`${LOG_FILE}\`:`);
+    lines.push(
+      `3. **Re-verify line-range citations** in every chapter you touch (and every stale chapter you re-read). A commit can shift line numbers while leaving the prose correct, so a citation like \`service.go:156-211\` can silently drift — re-open the file and confirm the range still points at the cited code.`,
+    );
+    lines.push(`4. Update \`${INDEX_FILE}\` if navigation changed.`);
+    lines.push(`5. Append exactly ONE new heading to \`${LOG_FILE}\`:`);
     lines.push(`   \`\`\`md`);
     lines.push(`   ## [${date}] update | <what changed in the wiki and why>`);
     lines.push(`   \`\`\``);
     lines.push(
-      `5. Run \`finalize update\`. If it reports a repairPrompt, fix only the named files and retry. A no-content update is allowed (it warns, it does not fail).`,
+      `6. Run \`finalize update\`. If it reports a repairPrompt, fix only the named files and retry. A no-content update is allowed (it warns, it does not fail), but prefer it only after genuinely checking the stale chapters above.`,
     );
   } else if (action === "query") {
     lines.push(`## Question`);
@@ -1004,10 +1198,18 @@ function doPrepare(action, values, flags) {
   }
 
   const fileMap = buildFileMap(targetDir, opts, outputDir);
-  const prevCommit =
+  const meta =
     action !== "init" && hasMetadata(outputDir)
-      ? readJson(path.join(outputDir, META_FILE), {}).commit || null
-      : null;
+      ? readJson(path.join(outputDir, META_FILE), {})
+      : {};
+  const tracked = action !== "init" && stalenessTracked(meta);
+  // Diff against the OLDEST last-reviewed chapter, not the global metadata
+  // commit. The global commit advances on every finalize (including a query
+  // that only wrote answer pages), so using it here is what let a prior query
+  // hide post-chapter source changes. The oldest chapter baseline can't lie
+  // that way: if any chapter is stale, its post-write changes surface.
+  const prevCommit =
+    action !== "init" ? contentBaselineCommit(outputDir, repoRoot, meta) : null;
   const rawChanged =
     action !== "init" ? changedSince(prevCommit, repoRoot) : [];
   // Drop changes inside the wiki output itself — they aren't "stale source".
@@ -1016,6 +1218,13 @@ function doPrepare(action, values, flags) {
     const p = toPosix(c.path);
     return !(p === outRel || (outRel && p.startsWith(outRel + "/")));
   });
+  // Per-chapter freshness, for the update prompt's safety net. Computed only
+  // when per-file tracking is active; otherwise the prompt emits a transition
+  // note telling the agent the diff may under-report.
+  const staleness =
+    action === "update" && tracked
+      ? computeStaleness(outputDir, repoRoot, meta)
+      : [];
 
   const runState = {
     action,
@@ -1038,6 +1247,9 @@ function doPrepare(action, values, flags) {
     fileMap,
     changed,
     date,
+    lean: !!flags.lean,
+    staleness,
+    tracked,
     question: values.question || null,
   });
 
@@ -1053,6 +1265,7 @@ function doPrepare(action, values, flags) {
       options: opts,
       fileMap,
       changedFiles: changed,
+      chapterStaleness: staleness,
       prompt,
       artifacts: {
         runState: RUN_FILE,
@@ -1214,6 +1427,12 @@ function doFinalize(action, values, _flags) {
     }
   }
 
+  // Structural Markdown warnings (a stray trailing backslash that glues lines,
+  // or an unbalanced inline-code span). These slip past the structural checks
+  // above but break rendering, so surface them on every finalize — pass or
+  // fail — and fix them before considering the wiki done.
+  for (const w of lintMarkdown(outputDir)) warnings.push(w);
+
   // Restore canonical schema if missing or altered.
   const schemaPath = path.join(outputDir, SCHEMA_FILE);
   let schemaRestored = false;
@@ -1247,6 +1466,32 @@ function doFinalize(action, values, _flags) {
   const chapters = chapterPages(outputDir);
   const answers = answerFiles(outputDir);
 
+  // Per-file last-reviewed commit, which drives staleness on the next
+  // update/query. A tracked file touched (created or byte-changed) during this
+  // run is stamped at HEAD; an untouched file keeps its prior baseline. Files
+  // with no prior baseline (a wiki finalized before tracking existed) inherit
+  // the old global commit rather than pretending they were just reviewed — this
+  // is what makes the first tracked update after deployment still honest about
+  // stale chapters.
+  const priorMeta = hasMetadata(outputDir)
+    ? readJson(path.join(outputDir, META_FILE), {})
+    : {};
+  const priorFileCommit = priorMeta.fileCommit || {};
+  const priorGlobalCommit = priorMeta.commit || null;
+  const priorSizes = new Map(Object.entries(runState.priorSnapshot || {}));
+  const afterSizes = scanWikiContent(outputDir);
+  const fileCommit = {};
+  for (const rel of [...chapters, ...answers]) {
+    const touched = priorSizes.get(rel) !== afterSizes.get(rel);
+    if (touched && head) {
+      fileCommit[rel] = head;
+    } else if (priorFileCommit[rel]) {
+      fileCommit[rel] = priorFileCommit[rel];
+    } else if (priorGlobalCommit) {
+      fileCommit[rel] = priorGlobalCommit;
+    }
+  }
+
   const metadata = {
     version: ENGINE_VERSION,
     action,
@@ -1257,6 +1502,7 @@ function doFinalize(action, values, _flags) {
     options: runState.options,
     generatedFiles: gen,
     answers,
+    fileCommit,
     stats: {
       chapters: chapters.length,
       answers: answers.length,
@@ -1375,8 +1621,9 @@ function doDoctor(values) {
     run: { active: !!activeRun, action: activeRun ? activeRun.action : null },
     options,
     recommendation,
-    wikis: [],
   };
+  // `wikis` is present ONLY in the multi-wiki (container) case, so a caller
+  // targeting a single package never sees an empty envelope to misread.
   if (packageWikis.length > 0) {
     payload.wikis = packageWikis.map((d) => summarizeWiki(repoRoot, d));
   }
@@ -1458,6 +1705,7 @@ function usage() {
     "  --max-size <bytes>           skip source files larger than this (default: 100000)",
     "  --question <text>            the query (required for prepare query)",
     "  --force                      allow init to replace a non-empty wiki",
+    "  --lean                       update/query: drop the full source map from the prompt",
   ].join("\n");
 }
 

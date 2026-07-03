@@ -97,11 +97,15 @@ run).
 | `--max-size <bytes>`                                 | `100000`                           | prepare (inherited)                 |
 | `--question "<text>"`                                | (required)                         | prepare query                       |
 | `--force`                                            | off                                | prepare init                        |
+| `--lean`                                             | off                                | prepare update/query                |
 
 - Invalid `--format` / `--detail-level` / non-positive `--max-size` fail fast.
 - `--exclude` **extends** the built-in defaults; it never replaces them.
 - On `update`/`query`, `language`, `format`, `detail-level`, and `max-size` are
   inherited from the existing `.code-wiki.json` unless explicitly overridden.
+- `--lean` drops the full source orientation map from the `update`/`query`
+  prompt (the existing wiki is the orientation); the map is still returned in
+  the JSON `fileMap` field. It has no effect on `init`.
 - Pass the **same** `--target`/`--output` to `finalize` that you passed to
   `prepare` so it can locate the active run.
 
@@ -209,6 +213,9 @@ Read `wikis` (when present) to pick the package the user means, then re-run
     "maxSize": 100000,
   },
   "changedFiles": [{ "status": "M", "path": "src/index.js" }], // update/query only
+  "chapterStaleness": [ // update only; empty until the wiki has per-page history
+    { "file": "01_core.md", "lastCommit": "ab12c34", "commitsBehind": 4 },
+  ],
   "prompt": "<canonical prompt text to follow>",
   "artifacts": {
     "runState": ".code-wiki-run.json",
@@ -246,6 +253,10 @@ Read `wikis` (when present) to pick the package the user means, then re-run
       "log.md",
     ],
     "answers": ["answers/how-add-works.md"],
+    "fileCommit": { // per-page last-reviewed commit (chapters + answers);
+      "01_core.md": "sha",     // drives update/query staleness detection
+      "answers/how-add-works.md": "sha",
+    },
     "stats": {
       "chapters": 3,
       "answers": 1,
@@ -365,8 +376,9 @@ relative path, the basename, or any path segment (so `node_modules` and
 
 `prepare` writes `.code-wiki-run.json` containing the action, effective options,
 today's date, the prior set of log headings, a snapshot of existing wiki content,
-and the previous finalized commit. `finalize` reads this to know what to validate
-and what counts as "new". `finalize` locates the active run by:
+and the content-baseline commit (the oldest last-reviewed chapter) to diff
+against. `finalize` reads this to know what to validate and what counts as "new".
+`finalize` locates the active run by:
 
 1. the output dir resolved from `--output`/`--target` (if provided),
 2. then `docs/code-wiki` itself,
@@ -416,15 +428,52 @@ Log heading format (exactly one per operation):
 
 On any failure, `finalize` returns a `repairPrompt` naming exactly what to fix.
 
+**Warnings (non-blocking).** `finalize` always returns a `warnings` array, on
+success or failure, for issues that do not block the run but should be fixed:
+
+- `update` with no substantive content change (index/chapters/answers unchanged
+  aside from the mandatory log line and engine-restored schema).
+- **Markdown lint** over the durable content files (chapters, answers, index):
+  a line ending with a stray `\` (which glues it to the next line when
+  rendered) and a line with an odd number of backticks (a likely-unclosed
+  inline code span). Lines inside fenced code blocks are skipped. These are
+  heuristics, not a full CommonMark parser, and never fail a finalize — but they
+  catch the rendering breakage the structural validators miss.
+
 ---
 
 ## Changed-file detection
 
-For `update` and `query`, the engine reports files changed **since the previous
-finalized commit** (the `commit` stored in `.code-wiki.json`). It compares that
-commit to the current working tree, so it captures both committed and
-uncommitted edits, plus untracked files. Changes **inside the wiki output dir**
-are filtered out — they are the wiki's own churn, not stale source. For `query`,
-this same list is surfaced as a freshness hint so answers don't lean on stale
-pages. The detection requires at least one prior commit (which an initialized
-wiki always has).
+For `update` and `query`, the engine reports files changed against the **oldest
+last-reviewed commit** among the wiki's chapter and answer pages — not the
+single global `commit` in `.code-wiki.json`. The global `commit` advances on
+every finalize (a `query` that only wrote an answer page stamps HEAD too), so
+trusting it would let a prior `query` hide post-chapter source changes from the
+next `update`. Diffing against the oldest chapter instead means a change made
+after *any* chapter was last written always surfaces, and a `query` no longer
+silently widens the gap between "metadata stamped at HEAD" and "every chapter
+reviewed against HEAD."
+
+`finalize` records, in metadata `fileCommit`, the commit at which each chapter
+and answer page was last touched:
+
+- a page refreshed (created or byte-changed) this run is stamped at HEAD;
+- an untouched page keeps its prior baseline;
+- a page with no prior baseline (a wiki finalized before this feature existed)
+  inherits the old global `commit` — so the first tracked update after upgrade
+  stays honest about stale chapters rather than pretending everything is fresh.
+
+When no per-page history exists at all, the diff falls back to the global
+`commit` and the update prompt prints a **transition note** (and, if the diff is
+empty, a warning that empty ≠ current).
+
+The comparison is commit → working tree, so it captures committed, uncommitted,
+and untracked edits. Changes **inside the wiki output dir** are filtered out —
+they are the wiki's own churn, not stale source. For `query`, the same list is
+surfaced as a freshness hint so answers don't lean on stale pages. The detection
+requires at least one prior commit (which an initialized wiki always has).
+
+`prepare update` also emits `chapterStaleness`: each chapter/answer whose
+last-reviewed commit is behind HEAD, with how many commits behind (most-stale
+first), so the agent knows which pages to re-read even when the diff looks small
+or empty.
