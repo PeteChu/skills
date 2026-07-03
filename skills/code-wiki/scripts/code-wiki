@@ -392,7 +392,13 @@ function parseArgs(argv) {
     "--max-size",
     "--question",
   ]);
-  const BOOL_FLAGS = new Set(["--force", "--help", "-h", "--lean"]);
+  const BOOL_FLAGS = new Set([
+    "--force",
+    "--help",
+    "-h",
+    "--lean",
+    "--no-gitignore",
+  ]);
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -510,6 +516,9 @@ function buildEffectiveOptions(values, flags, { inherit } = {}) {
     target: values.target || null,
     output: values.output || null,
     force: !!flags.force,
+    // Whether the source map honors .gitignore. A per-invocation scan choice
+    // (like --exclude/--force), so it is not inherited from prior metadata.
+    respectGitignore: !flags["no-gitignore"],
   };
 }
 
@@ -541,10 +550,15 @@ function walkFiles(rootDir) {
 }
 
 // Orientation map of source files under targetDir.
-function buildFileMap(targetDir, opts, outputDir) {
+function buildFileMap(targetDir, opts, outputDir, repoRoot) {
   const excludeRx = opts.exclude.map(globToRegex);
   const outputRel = path.relative(targetDir, outputDir);
-  const all = walkFiles(targetDir);
+  // When honoring .gitignore, enumerate the files Git considers in scope
+  // (tracked + non-ignored untracked) instead of every file on disk. Falls
+  // back to a plain walk if Git can't answer.
+  const all = opts.respectGitignore
+    ? gitScopeFiles(targetDir, repoRoot)
+    : walkFiles(targetDir);
   const files = [];
   let excludedCount = 0;
   let oversizeCount = 0;
@@ -569,12 +583,17 @@ function buildFileMap(targetDir, opts, outputDir) {
       excludedCount++;
       continue;
     }
-    let size = 0;
+    // Git may surface non-files (submodule dir entries, directory symlinks);
+    // a plain walk never would. Stat once and keep only real files so the
+    // map stays a list of files.
+    let st;
     try {
-      size = fs.statSync(full).size;
+      st = fs.statSync(full);
     } catch (_) {
       continue;
     }
+    if (!st.isFile()) continue;
+    const size = st.size;
     if (size > opts.maxSize) {
       oversizeCount++;
       oversizeBytes += size;
@@ -594,7 +613,39 @@ function buildFileMap(targetDir, opts, outputDir) {
     oversize: { count: oversizeCount, bytes: oversizeBytes },
     truncated,
     maxSize: opts.maxSize,
+    // True when the map was filtered through Git (gitignored files omitted).
+    gitignore: opts.respectGitignore,
   };
+}
+
+// The set of source files Git considers "in scope": tracked files plus
+// untracked files that no ignore source (.gitignore, .git/info/exclude,
+// core.excludesFile, nested .gitignore) matches. Delegating to Git is the
+// authoritative way to honor .gitignore — it gets the rules right (anchored
+// vs unanchored patterns, **, negation, directory-only patterns, and the
+// "a tracked file is never ignored" rule) without re-implementing them.
+// Returns absolute paths under targetDir. On any Git failure (e.g. a repo so
+// fresh it has no index) it falls back to a plain tree walk, so building the
+// map never hard-fails.
+function gitScopeFiles(targetDir, repoRoot) {
+  const relTarget = toPosix(path.relative(repoRoot, targetDir));
+  const args = ["ls-files", "--cached", "--others", "--exclude-standard"];
+  if (relTarget && relTarget !== ".") args.push("--", relTarget);
+  const r = git(args, { cwd: repoRoot });
+  if (!r.ok) return walkFiles(targetDir);
+  const out = [];
+  const seen = new Set();
+  for (const part of r.stdout.split("\n")) {
+    if (!part) continue;
+    const abs = path.isAbsolute(part) ? part : path.resolve(repoRoot, part);
+    // The pathspec should already confine results to targetDir, but guard so a
+    // surprising Git entry outside it can never leak into the source map.
+    if (!contains(targetDir, abs)) continue;
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    out.push(abs);
+  }
+  return out;
 }
 
 // relpath -> size for durable wiki content files under outputDir.
@@ -831,7 +882,10 @@ engine validates that exactly one new heading of the correct verb was added.
 
 - **Source scope:** read source from the target directory only.
 - **Excludes:** generated/dependency/IDE dirs and the wiki output itself are
-  excluded by default; user excludes extend (never replace) the defaults.
+  excluded by default; files matched by \`.gitignore\` are excluded too (honored
+  via Git, so a tracked file that later matches a pattern still counts). User
+  excludes extend (never replace) the defaults. Pass \`--no-gitignore\` to include
+  ignored files.
 - **Max size:** files larger than the configured max are skipped in the
   orientation map and should not dominate source inspection.
 - **Wiki artifacts are NOT source.** Never cite \`docs/code-wiki/**\` as
@@ -917,6 +971,15 @@ function buildPrompt(action, ctx) {
   lines.push(
     `- Read source only from \`${relTarget}\`. Files larger than ${opts.maxSize} bytes are skipped in the map below; do not let one huge file dominate your inspection.`,
   );
+  if (opts.respectGitignore) {
+    lines.push(
+      `- The orientation map honors the repository's \`.gitignore\`, so gitignored files (local build output, caches, secrets) are omitted and the map reflects real source. Pass \`--no-gitignore\` if you ever need them included.`,
+    );
+  } else {
+    lines.push(
+      `- The orientation map includes gitignored files (--no-gitignore). Treat local build output, caches, and other ignored artifacts as noise, not source.`,
+    );
+  }
   lines.push(
     `- The orientation map below is a starting point, not an allowlist — follow imports and read what matters.`,
   );
@@ -1197,7 +1260,7 @@ function doPrepare(action, values, flags) {
     );
   }
 
-  const fileMap = buildFileMap(targetDir, opts, outputDir);
+  const fileMap = buildFileMap(targetDir, opts, outputDir, repoRoot);
   const meta =
     action !== "init" && hasMetadata(outputDir)
       ? readJson(path.join(outputDir, META_FILE), {})
@@ -1699,6 +1762,8 @@ function usage() {
     "  --target <path>              source dir to document (default: repo root)",
     "  --output <path>              wiki output dir (default: docs/code-wiki)",
     "  --exclude <glob[,glob...]>   extra source excludes (extend defaults)",
+    "  --no-gitignore               include gitignored files in the source map",
+    "                               (default: .gitignore is honored via git)",
     "  --language <lang>            prose language (default: english)",
     "  --format standard|obsidian   markdown format (default: standard)",
     "  --detail-level summary|standard|deep|exhaustive  (default: standard)",

@@ -79,6 +79,9 @@ Every command prints JSON and uses conventional exit status (`ok:true` → 0, `o
 --language <lang>              prose language (default: english).
 --detail-level summary|standard|deep|exhaustive   how deep to go (default: standard).
 --exclude <glob[,glob...]>     extra source excludes; these EXTEND the defaults.
+--no-gitignore                 include gitignored files in the orientation map. By default the
+                               map honors .gitignore (via git), so ignored build output, caches,
+                               and secrets stay out of the wiki's source view.
 --max-size <bytes>             skip source files larger than this in the orientation map.
 --question "<text>"            the query (required for `prepare query`).
 --force                        lets `init` replace a non-empty wiki. ASK THE USER FIRST.

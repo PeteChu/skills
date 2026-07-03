@@ -601,6 +601,79 @@ test("user excludes extend (not replace) the defaults", () => {
 });
 
 /* ------------------------------------------------------------------ *
+ * .gitignore respect
+ * ------------------------------------------------------------------ */
+
+test("the source map honors .gitignore (ignored files are excluded)", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  write(repo, ".gitignore", "vendor/\n*.log\n");
+  write(repo, "vendor/lib.js", "module.exports = 1;\n"); // ignored dir
+  write(repo, "debug.log", "noise\n"); // ignored glob
+  const r = run(repo, ["prepare", "init"]);
+  assert.strictEqual(r.status, 0);
+  const paths = r.json.fileMap.files.map((f) => f.path);
+  assert.ok(paths.includes("src/math.js"), "real source still mapped");
+  assert.ok(
+    !paths.some((p) => p.startsWith("vendor/")),
+    "gitignored directory excluded",
+  );
+  assert.ok(!paths.includes("debug.log"), "gitignored glob excluded");
+  assert.strictEqual(r.json.fileMap.gitignore, true);
+  assert.strictEqual(r.json.options.respectGitignore, true);
+});
+
+test("a tracked file matching a .gitignore pattern is still mapped", () => {
+  const repo = makeRepo();
+  seedSource(repo); // commits README.md
+  write(repo, ".gitignore", "*.md\n");
+  write(repo, "UNTRACKED.md", "# notes\n"); // untracked + ignored
+  const r = run(repo, ["prepare", "init"]);
+  assert.strictEqual(r.status, 0);
+  const paths = r.json.fileMap.files.map((f) => f.path);
+  assert.ok(
+    paths.includes("README.md"),
+    "a tracked file wins over a later .gitignore pattern",
+  );
+  assert.ok(
+    !paths.includes("UNTRACKED.md"),
+    "an untracked file the pattern matches is excluded",
+  );
+});
+
+test("--no-gitignore includes ignored files in the map", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  write(repo, ".gitignore", "vendor/\n");
+  write(repo, "vendor/lib.js", "module.exports = 1;\n");
+  const r = run(repo, ["prepare", "init", "--no-gitignore"]);
+  assert.strictEqual(r.status, 0);
+  const paths = r.json.fileMap.files.map((f) => f.path);
+  assert.ok(
+    paths.some((p) => p.startsWith("vendor/")),
+    "ignored file included with --no-gitignore",
+  );
+  assert.strictEqual(r.json.fileMap.gitignore, false);
+  assert.strictEqual(r.json.options.respectGitignore, false);
+});
+
+test("nested .gitignore files are honored", () => {
+  const repo = makeRepo();
+  seedSource(repo);
+  write(repo, "src/.gitignore", "generated/\n");
+  write(repo, "src/generated/out.js", "module.exports = 1;\n");
+  write(repo, "src/real.js", "module.exports = 1;\n");
+  const r = run(repo, ["prepare", "init"]);
+  assert.strictEqual(r.status, 0);
+  const paths = r.json.fileMap.files.map((f) => f.path);
+  assert.ok(paths.includes("src/real.js"), "sibling source still mapped");
+  assert.ok(
+    !paths.some((p) => p.startsWith("src/generated/")),
+    "directory ignored by a nested .gitignore is excluded",
+  );
+});
+
+/* ------------------------------------------------------------------ *
  * per-chapter staleness tracking
  * ------------------------------------------------------------------ */
 

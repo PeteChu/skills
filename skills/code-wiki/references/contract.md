@@ -91,6 +91,7 @@ run).
 | `--target <path>`                                    | repo root                          | prepare (all), doctor               |
 | `--output <path>`                                    | `docs/code-wiki[/target-basename]` | prepare, finalize, doctor, abort    |
 | `--exclude <glob[,glob...]>`                         | (none; extends defaults)           | prepare                             |
+| `--no-gitignore`                                     | off (gitignore honored)            | prepare                             |
 | `--language <lang>`                                  | `english`                          | prepare (inherited on update/query) |
 | `--format standard\|obsidian`                        | `standard`                         | prepare (inherited)                 |
 | `--detail-level summary\|standard\|deep\|exhaustive` | `standard`                         | prepare (inherited)                 |
@@ -101,6 +102,12 @@ run).
 
 - Invalid `--format` / `--detail-level` / non-positive `--max-size` fail fast.
 - `--exclude` **extends** the built-in defaults; it never replaces them.
+- `.gitignore` is **honored by default**: the source map is enumerated via
+  `git ls-files --cached --others --exclude-standard`, so ignored files (build
+  output, caches, secrets) are omitted. A tracked file that later matches a
+  pattern is still included (Git never ignores tracked files). `--no-gitignore`
+  switches to a plain tree walk that includes ignored files. This is a
+  per-invocation choice; it is **not** inherited from prior metadata.
 - On `update`/`query`, `language`, `format`, `detail-level`, and `max-size` are
   inherited from the existing `.code-wiki.json` unless explicitly overridden.
 - `--lean` drops the full source orientation map from the `update`/`query`
@@ -203,6 +210,7 @@ Read `wikis` (when present) to pick the package the user means, then re-run
     "target": null,
     "output": null,
     "force": false,
+    "respectGitignore": true,
   },
   "fileMap": {
     "files": [{ "path": "src/index.js", "bytes": 123, "lang": "javascript" }],
@@ -211,6 +219,7 @@ Read `wikis` (when present) to pick the package the user means, then re-run
     "oversize": { "count": 1, "bytes": 250000 },
     "truncated": false,
     "maxSize": 100000,
+    "gitignore": true, // true when the map was filtered through Git
   },
   "changedFiles": [{ "status": "M", "path": "src/index.js" }], // update/query only
   "chapterStaleness": [ // update only; empty until the wiki has per-page history
@@ -361,14 +370,18 @@ Chapter pages are detected as `NN_*.md` or `NN-*.md` with `NN ≥ 01`
 
 ## The source file map
 
-`prepare` walks the target directory and produces an **orientation** map (it is
-not an allowlist — follow imports and read what matters). Default excludes
-include `.git`, `node_modules`, `dist`, `build`, `out`, `coverage`, `.next`,
-`.nuxt`, `.turbo`, `.cache`, `.vercel`, `.idea`, `.vscode`, and the wiki output
-itself. User excludes extend these. Files larger than `--max-size` are counted
-under `oversize` but not listed. A pattern matches if it matches the full
-relative path, the basename, or any path segment (so `node_modules` and
-`dist` "just work" anywhere).
+`prepare` enumerates the target directory and produces an **orientation** map
+(it is not an allowlist — follow imports and read what matters). By default the
+file set comes from `git ls-files --cached --others --exclude-standard`, so
+files matched by any `.gitignore` source are omitted (tracked files are never
+ignored, so a tracked file a later pattern matches still appears). `--no-gitignore`
+instead walks the whole tree, ignored files included. On top of either set,
+default excludes then remove `.git`, `node_modules`, `dist`, `build`, `out`,
+`coverage`, `.next`, `.nuxt`, `.turbo`, `.cache`, `.vercel`, `.idea`, `.vscode`,
+and the wiki output itself. User excludes extend these. Files larger than
+`--max-size` are counted under `oversize` but not listed. A pattern matches if
+it matches the full relative path, the basename, or any path segment (so
+`node_modules` and `dist` "just work" anywhere).
 
 ---
 
