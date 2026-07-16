@@ -4,7 +4,7 @@ This reference distills the patterns from `html-effectiveness/ARTICLE.md` and th
 
 ## What the examples have in common
 
-- **One file, no dependencies.** Every example is a complete `.html` document with inline CSS and optional inline vanilla JS. No CDN, no external images, no build step.
+- **One file, minimal dependencies.** Every example is a complete `.html` document with Tailwind CSS (CDN), optional Alpine.js (CDN), and minimal custom CSS. No build step.
 - **Warm editorial design.** Ivory background, white panels, dark slate text, muted gray borders, clay accent, olive positive state, rust danger state.
 - **Readable structure.** Header with mono eyebrow, serif title, short lead/prompt. Sections are separated by whitespace, rules, cards, or panels.
 - **Information density without walls of text.** Cards, grids, tables, SVG diagrams, chips, callouts, timelines, sidebars, and collapsible details carry information that Markdown would flatten.
@@ -13,37 +13,24 @@ This reference distills the patterns from `html-effectiveness/ARTICLE.md` and th
 
 ## Standard tokens
 
-Use these tokens as the default. Add a small number of task-specific tokens only when the content needs them.
+Custom colors registered in the `@theme` block of the Tailwind v4 Play CDN (see page shell) are the primary palette. Use Tailwind utility classes directly. Grays and slate use arbitrary values when exact match matters; built-in Tailwind grays (`gray-500`, `gray-700`) are close enough for body text.
 
-```css
-:root {
-  --ivory: #faf9f5;
-  --slate: #141413;
-  --clay: #d97757;
-  --clay-d: #b85c3e;
-  --oat: #e3dacc;
-  --olive: #788c5d;
-  --rust: #b04a3f;
-  --gray-150: #f0eee6;
-  --gray-300: #d1cfc5;
-  --gray-500: #87867f;
-  --gray-700: #3d3d3a;
-  --white: #ffffff;
-
-  --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
-  --sans:
-    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
-}
-```
-
-Typical aliases seen in editor/prototype examples:
-
-```css
---gray-50: #f0eee6;
---gray-200: #d1cfc5;
---gray-800: #3d3d3a;
-```
+| Old CSS variable      | Tailwind equivalent                                    |
+| --------------------- | ------------------------------------------------------ |
+| `--ivory: #faf9f5`    | `bg-ivory` / `text-ivory` / `border-ivory`             |
+| `--slate: #141413`    | `text-[#141413]` / `bg-[#141413]`                      |
+| `--clay: #d97757`     | `bg-clay` / `text-clay` / `border-clay`                |
+| `--clay-d: #b85c3e`   | `bg-clay-dark` / `text-clay-dark` / `border-clay-dark` |
+| `--oat: #e3dacc`      | `bg-oat` / `text-oat`                                  |
+| `--olive: #788c5d`    | `bg-olive` / `text-olive` / `border-olive`             |
+| `--rust: #b04a3f`     | `bg-rust` / `text-rust` / `border-rust`                |
+| `--gray-150: #f0eee6` | `bg-[#f0eee6]`                                         |
+| `--gray-300: #d1cfc5` | `border-gray-300` (close) or `border-[#d1cfc5]`        |
+| `--gray-500: #87867f` | `text-[#87867f]`                                       |
+| `--gray-700: #3d3d3a` | `text-[#3d3d3a]`                                       |
+| `--serif`             | `font-serif`                                           |
+| `--sans`              | `font-sans`                                            |
+| `--mono`              | `font-mono`                                            |
 
 ## Page shell recipe
 
@@ -54,81 +41,45 @@ Typical aliases seen in editor/prototype examples:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Short, specific title</title>
-    <style>
-      :root {
-        /* tokens */
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono:
+          ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
+    </style>
+    <style>
       * {
         box-sizing: border-box;
       }
       html {
         scroll-behavior: smooth;
       }
-      body {
-        margin: 0;
-        padding: 56px 24px 96px;
-        background: var(--ivory);
-        color: var(--gray-700);
-        font-family: var(--sans);
-        font-size: 15px;
-        line-height: 1.6;
-        -webkit-font-smoothing: antialiased;
-      }
-      .page {
-        max-width: 1100px;
-        margin: 0 auto;
-      }
-      header.page-head {
-        margin-bottom: 44px;
-        max-width: 820px;
-      }
-      .eyebrow {
-        font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--gray-500);
-        margin-bottom: 10px;
-      }
-      h1,
-      h2,
-      h3 {
-        font-family: var(--serif);
-        color: var(--slate);
-        font-weight: 500;
-      }
-      h1 {
-        font-size: clamp(32px, 5vw, 44px);
-        line-height: 1.12;
-        letter-spacing: -0.015em;
-        margin: 0 0 14px;
-      }
-      .lead {
-        max-width: 720px;
-        margin: 0;
-      }
-      .panel {
-        background: var(--white);
-        border: 1.5px solid var(--gray-300);
-        border-radius: 12px;
-      }
-      code,
-      pre {
-        font-family: var(--mono);
-      }
-      @media (max-width: 820px) {
-        body {
-          padding: 36px 18px 72px;
-        }
-      }
     </style>
   </head>
-  <body>
-    <main class="page">
-      <header class="page-head">
-        <div class="eyebrow">Project · artifact type</div>
-        <h1>What the reader should understand</h1>
-        <p class="lead">
+  <body
+    class="bg-ivory text-[#3d3d3a] font-sans antialiased px-6 py-14 lg:px-6 lg:py-16"
+  >
+    <main class="mx-auto max-w-[1100px]">
+      <header class="mb-11 max-w-[820px]">
+        <p
+          class="font-mono text-[11px] tracking-[0.08em] uppercase text-gray-500 mb-2.5"
+        >
+          Project · artifact type
+        </p>
+        <h1
+          class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-3.5"
+        >
+          What the reader should understand
+        </h1>
+        <p class="max-w-[720px] m-0">
           One short paragraph that orients the reader and explains why the
           artifact exists.
         </p>
@@ -138,6 +89,8 @@ Typical aliases seen in editor/prototype examples:
 </html>
 ```
 
+Add Alpine when needed: `<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>` before `</head>`.
+
 ## Reusable components
 
 ### Prompt or source box
@@ -145,151 +98,128 @@ Typical aliases seen in editor/prototype examples:
 Use near the top when the artifact is generated from a request, investigation, or prompt.
 
 ```html
-<div class="prompt-box">
-  <span class="label">Prompt</span>
+<div class="bg-[#f0eee6] border border-gray-300 rounded-xl p-4 text-sm">
+  <span
+    class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-gray-500"
+    >Prompt</span
+  >
   Show me three different approaches and the tradeoffs for each.
 </div>
-```
-
-```css
-.prompt-box {
-  background: var(--gray-150);
-  border: 1.5px solid var(--gray-300);
-  border-radius: 12px;
-  padding: 16px 20px;
-  font-size: 14px;
-}
-.prompt-box .label {
-  display: block;
-  margin-bottom: 6px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--gray-500);
-}
 ```
 
 ### Chips / pills
 
 Use for metadata, risk, categories, and compact properties.
 
-```css
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1.5px solid var(--gray-300);
-  border-radius: 999px;
-  background: var(--white);
-  padding: 6px 11px;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--gray-700);
-}
-.chip.attention {
-  background: rgba(217, 119, 87, 0.12);
-  border-color: rgba(217, 119, 87, 0.55);
-  color: var(--clay-d);
-}
-.chip.good {
-  background: rgba(120, 140, 93, 0.12);
-  border-color: rgba(120, 140, 93, 0.45);
-  color: var(--olive);
-}
+```html
+<div class="flex flex-wrap gap-2">
+  <span
+    class="inline-flex items-center gap-1.5 border border-gray-300 rounded-full bg-white px-2.5 py-1.5 font-mono text-[11.5px] text-[#3d3d3a]"
+    >default</span
+  >
+  <span
+    class="inline-flex items-center gap-1.5 border border-gray-300 rounded-full bg-white px-2.5 py-1.5 font-mono text-[11.5px] text-clay-dark bg-[rgba(217,119,87,0.12)] border-[rgba(217,119,87,0.55)]"
+    >attention</span
+  >
+  <span
+    class="inline-flex items-center gap-1.5 border border-gray-300 rounded-full bg-white px-2.5 py-1.5 font-mono text-[11.5px] text-olive bg-[rgba(120,140,93,0.12)] border-[rgba(120,140,93,0.45)]"
+    >good</span
+  >
+</div>
 ```
 
 ### Section header with number
 
 ```html
-<div class="sec-head">
-  <span class="num">02</span>
-  <h2>Data flow</h2>
-</div>
-<p class="sec-intro">What this section is meant to clarify.</p>
-```
-
-```css
-section {
-  margin-bottom: 60px;
-}
-.sec-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.sec-head .num {
-  font-family: var(--mono);
-  font-size: 12px;
-  background: var(--oat);
-  color: var(--slate);
-  padding: 3px 9px;
-  border-radius: 8px;
-}
-.sec-head h2 {
-  margin: 0;
-  font-size: 25px;
-  letter-spacing: -0.01em;
-}
-.sec-intro {
-  color: var(--gray-500);
-  max-width: 720px;
-  margin: 0 0 24px;
-}
+<section class="mb-14">
+  <div class="flex items-baseline gap-3 mb-2">
+    <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg"
+      >02</span
+    >
+    <h2
+      class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight"
+    >
+      Data flow
+    </h2>
+  </div>
+  <p class="text-gray-500 max-w-[720px] m-0 mb-6">
+    What this section is meant to clarify.
+  </p>
+</section>
 ```
 
 ### Code panel
 
+Syntax highlighting token classes still need a small custom CSS block (pseudo-classes can't be replaced by Tailwind).
+
 ```html
-<div class="code">
-  <pre><span class="kw">export function</span> <span class="fn">Example</span>() {
-  <span class="kw">return</span> <span class="str">"escaped code"</span>;
-}</pre>
+<div class="bg-[#141413] rounded-xl p-4 overflow-x-auto">
+  <pre
+    class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed whitespace-pre"
+  >
+    <span class="kw">export function</span> <span class="fn">Example</span>() {
+    <span class="kw">return</span> <span class="str">"escaped code"</span>;
+  }</pre>
 </div>
 ```
 
 ```css
-.code {
-  background: var(--slate);
-  border-radius: 12px;
-  padding: 18px 20px;
-  overflow-x: auto;
+.kw {
+  color: #d97757;
 }
-.code pre {
-  margin: 0;
-  color: #e8e6de;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.65;
-  white-space: pre;
+.str {
+  color: #788c5d;
 }
-.code .kw {
-  color: var(--clay);
-}
-.code .str {
-  color: var(--olive);
-}
-.code .cm {
-  color: var(--gray-500);
-}
-.code .fn {
+.fn {
   color: #c9b98a;
+}
+.cm {
+  color: #87867f;
 }
 ```
 
 ### Diff rows
 
-Use grid rows for line number, marker, code. Tint additions/removals subtly.
+Uses CSS grid with custom backgrounds. Keep a small `<style>` block — the line-number and marker columns are hard to express purely with Tailwind.
+
+```html
+<div
+  class="bg-[#141413] font-mono text-[12.5px] leading-relaxed overflow-x-auto"
+>
+  <div
+    class="diff-row add"
+    style="grid-template-columns:48px 18px 1fr; display:grid; align-items:baseline; white-space:pre; padding-right:14px;"
+  >
+    <span
+      class="ln"
+      style="text-align:right; padding-right:14px; color:#87867f; user-select:none;"
+      >42</span
+    >
+    <span class="mark" style="text-align:center; color:#788c5d;">+</span>
+    <span class="body" style="color:#e8e6dc;">
+      const result = await api.call();</span
+    >
+  </div>
+  <div
+    class="diff-row del"
+    style="grid-template-columns:48px 18px 1fr; display:grid; align-items:baseline; white-space:pre; padding-right:14px; background:rgba(176,74,63,0.15);"
+  >
+    <span
+      class="ln"
+      style="text-align:right; padding-right:14px; color:#87867f; user-select:none;"
+      >43</span
+    >
+    <span class="mark" style="text-align:center; color:#b04a3f;">−</span>
+    <span class="body" style="color:#e8e6dc;">
+      const result = await oldApi.call();</span
+    >
+  </div>
+</div>
+```
 
 ```css
 .diff {
-  background: var(--slate);
+  background: #141413;
   font-family: var(--mono);
   font-size: 12.5px;
   line-height: 1.7;
@@ -305,12 +235,12 @@ Use grid rows for line number, marker, code. Tint additions/removals subtly.
 .diff-row .ln {
   text-align: right;
   padding-right: 14px;
-  color: var(--gray-500);
+  color: #87867f;
   user-select: none;
 }
 .diff-row .mark {
   text-align: center;
-  color: var(--gray-500);
+  color: #87867f;
 }
 .diff-row .body {
   color: #e8e6dc;
@@ -322,13 +252,13 @@ Use grid rows for line number, marker, code. Tint additions/removals subtly.
   background: rgba(120, 140, 93, 0.15);
 }
 .diff-row.add .mark {
-  color: var(--olive);
+  color: #788c5d;
 }
 .diff-row.del {
   background: rgba(176, 74, 63, 0.15);
 }
 .diff-row.del .mark {
-  color: var(--rust);
+  color: #b04a3f;
 }
 .diff-row.hunk {
   background: rgba(255, 255, 255, 0.04);
@@ -337,55 +267,64 @@ Use grid rows for line number, marker, code. Tint additions/removals subtly.
 
 ### Collapsible detail
 
+Uses `::before` for the toggle arrow, which needs a small custom CSS block.
+
 ```html
-<details class="file" open>
-  <summary>
-    <span class="path">apps/web/example.tsx</span
-    ><span class="badge">worth a look</span>
+<details
+  class="file border border-gray-300 rounded-xl bg-white overflow-hidden"
+  open
+>
+  <summary
+    class="list-none cursor-pointer p-3.5 flex gap-3 items-center bg-[#f0eee6]"
+  >
+    <span class="flex-1 font-mono text-[13px] text-[#141413]"
+      >apps/web/example.tsx</span
+    >
+    <span class="text-xs text-clay font-mono">worth a look</span>
   </summary>
-  <div class="body">Explanation and snippets.</div>
+  <div class="p-4">Explanation and snippets.</div>
 </details>
 ```
 
 ```css
-details.file {
-  border: 1.5px solid var(--gray-300);
-  border-radius: 12px;
-  background: var(--white);
-  overflow: hidden;
-}
 details.file summary {
   list-style: none;
   cursor: pointer;
-  padding: 14px 18px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  background: var(--gray-150);
 }
 details.file summary::-webkit-details-marker {
   display: none;
 }
 details.file summary::before {
   content: "▸";
-  color: var(--clay);
+  color: #d97757;
   transition: transform 120ms;
+  margin-right: 4px;
 }
 details.file[open] summary::before {
   transform: rotate(90deg);
 }
-details.file .path {
-  flex: 1;
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--slate);
-}
-details.file .body {
-  padding: 16px 18px 18px;
-}
 ```
 
 ### Timeline
+
+The vertical line and dot use `::before`/`::after` pseudo-elements, so a custom CSS block is needed.
+
+```html
+<div class="timeline" style="position:relative; padding-left:16px;">
+  <div class="tl-entry" style="position:relative; padding:0 0 22px 28px;">
+    <div
+      class="tl-dot impact"
+      style="position:absolute; left:-5px; top:6px; width:12px; height:12px; border-radius:50%; background:#d97757; border:2px solid #faf9f5; box-sizing:content-box;"
+    ></div>
+    <span
+      class="tl-time"
+      style="display:inline-block; font-family:ui-monospace,sans-serif; font-size:12px; color:#3d3d3a; background:#f0eee6; border:1px solid #d1cfc5; border-radius:6px; padding:2px 8px; margin-bottom:6px;"
+      >Aug 14</span
+    >
+    <p class="m-0">Deployed fix to production.</p>
+  </div>
+</div>
+```
 
 ```css
 .timeline {
@@ -399,7 +338,7 @@ details.file .body {
   top: 8px;
   bottom: 8px;
   width: 2px;
-  background: var(--gray-300);
+  background: #d1cfc5;
 }
 .tl-entry {
   position: relative;
@@ -412,30 +351,35 @@ details.file .body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--gray-500);
-  border: 2px solid var(--ivory);
+  background: #87867f;
+  border: 2px solid #faf9f5;
   box-sizing: content-box;
 }
 .tl-dot.impact {
-  background: var(--clay);
+  background: #d97757;
 }
 .tl-dot.done {
-  background: var(--olive);
-}
-.tl-time {
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--gray-700);
-  background: var(--gray-150);
-  border: 1px solid var(--gray-300);
-  border-radius: 6px;
-  padding: 2px 8px;
-  margin-bottom: 6px;
+  background: #788c5d;
 }
 ```
 
 ### Copy button helper
+
+Prefer Alpine for simple copy buttons:
+
+```html
+<button
+  x-data="{ copied: false }"
+  @click="await navigator.clipboard.writeText('text to copy'); copied = true"
+  @click.outside="copied = false"
+  class="font-mono text-xs text-clay hover:text-clay-dark"
+>
+  <span x-show="!copied">Copy</span>
+  <span x-show="copied" class="text-olive">Copied ✓</span>
+</button>
+```
+
+Fallback vanilla JS for complex cases:
 
 ```js
 function copyText(text, button, resetLabel) {
@@ -477,35 +421,19 @@ Structure:
 3. Each card: number badge, short thesis, concrete example (code/mock/table), pros/cons, chips.
 4. Recommendation aside at the end.
 
-CSS clues:
+CSS clues (Tailwind classes in HTML):
 
-```css
-.approaches {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 28px;
-}
-@media (max-width: 1100px) {
-  .approaches {
-    grid-template-columns: 1fr;
-  }
-}
-.approach {
-  background: var(--white);
-  border: 1.5px solid var(--gray-300);
-  border-radius: 12px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.reco {
-  border-left: 4px solid var(--clay);
-  background: var(--white);
-  border-radius: 0 12px 12px 0;
-  padding: 24px 28px;
-  max-width: 860px;
-}
+```html
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-7">
+  <div
+    class="bg-white border border-gray-300 rounded-xl p-6 flex flex-col gap-4"
+  >
+    <!-- card content -->
+  </div>
+</div>
+<div class="border-l-4 border-clay bg-white rounded-r-xl p-6 max-w-[860px]">
+  <!-- recommendation -->
+</div>
 ```
 
 ### 2. Implementation plan
@@ -580,7 +508,19 @@ Recommended sections:
 - Timeline/keyframe visualization.
 - Copy-paste implementation snippet.
 
-Use CSS variables for tunable values:
+Use Alpine to manage tunable values:
+
+```html
+<div
+  x-data="{ ease: 'cubic-bezier(0.34, 1.56, 0.64, 1)', duration: 280 }"
+  :style="`--ease: ${ease}; --duration: ${duration}ms`"
+>
+  <label class="font-mono text-xs text-gray-500">Duration</label>
+  <input type="range" min="100" max="600" x-model="duration" class="w-full" />
+</div>
+```
+
+Fallback to JS + CSS custom properties when Alpine does not apply:
 
 ```css
 :root {
@@ -588,8 +528,6 @@ Use CSS variables for tunable values:
   --duration: 280ms;
 }
 ```
-
-Then update with JS:
 
 ```js
 document.documentElement.style.setProperty("--ease", selectedEase);
@@ -636,9 +574,8 @@ Rendering pattern:
 
 Before finishing, scan the HTML for accidental dependencies:
 
-- Any `https://` or `http://` occurrence should be an informational hyperlink only, never a CSS/JS/image/data source required for rendering.
-- No `//cdn`, `<link rel="stylesheet">`, remote `<img>`, or remote `<script src>`.
-- No Tailwind/Bootstrap/import maps/frameworks.
+- The only CDN dependencies allowed are `cdn.jsdelivr.net/npm/@tailwindcss/browser@4` (Tailwind v4 Play CDN) and `cdn.jsdelivr.net/npm/alpinejs@3` (Alpine.js). No other `https://` or `http://` URL should be a CSS/JS/image/data dependency.
+- No `<link rel="stylesheet">`, remote `<img>`, or remote `<script src>` except the two permitted above.
 - No fetch/XHR/WebSocket unless explicitly requested.
 - No references to local files that will not travel with the artifact.
 
