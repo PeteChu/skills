@@ -15,6 +15,7 @@ npx skills@latest add petechu/skills
 | [html-artifacts](./skills/html-artifacts/SKILL.md) | Generate polished, self-contained HTML artifacts for reports, plans, specs, code reviews, PR write-ups, research summaries, and more            |
 | [code-wiki](./skills/code-wiki/SKILL.md)           | Build, update, and query a persistent, source-cited code wiki for a repository through a bundled, deterministic, dependency-free Node.js engine |
 | [teach-back](./skills/teach-back/SKILL.md)         | Practice technical explanations with a believable persona, adaptive questions, coaching feedback, and replay                                    |
+| [session-cost](./skills/session-cost/SKILL.md)     | Analyze one session's cost and tool trajectory to find expensive workflow habits and concrete improvements                                      |
 
 > **Note:** This collection is growing. The skills above are the first of many — additional skills will be added over time.
 
@@ -28,7 +29,7 @@ A skill is a markdown file (`SKILL.md`) that an agent loads on demand to gain fo
 
 ## Structure
 
-```
+```text
 skills/
 ├── html-artifacts/
 │   ├── SKILL.md        # Skill definition and workflow
@@ -40,6 +41,9 @@ skills/
 │   └── tests/          # Black-box engine tests
 ├── teach-back/
 │   └── SKILL.md        # Interactive explanation practice and feedback
+├── session-cost/
+│   ├── SKILL.md        # Break a session's cost down by process
+│   └── scripts/session-cost  # Deterministic per-turn token/cost extractor
 └── ...                 # More skills coming soon
 ```
 

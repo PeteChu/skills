@@ -1,0 +1,837 @@
+#!/usr/bin/env python3
+"""session-cost — deterministic half of the session-cost skill.
+
+Parses a Claude Code session JSONL, attributes token usage + cost to every
+assistant turn, folds in work delegated to subagents, and aggregates by process
+label. Owns the bookkeeping only: intent-labelling and recommendations are the
+agent's job (see SKILL.md).
+
+  python3 session-cost <session> > ledger.json        # freeze a per-turn ledger (JSON), incl. delegated cost
+  python3 session-cost <session> --compact            # same, one line per turn (cheap to read)
+  python3 session-cost --list                         # recent sessions (LIVE = still growing, +SUB = has subagents)
+  python3 session-cost --label ledger.json ranges.txt # range shorthand -> labels.json (validated)
+  python3 session-cost --aggregate --ledger ledger.json --labels labels.json
+                                                       #   [--reconcile <ccusage_cost[:tokens]>]
+  python3 session-cost --selfcheck
+
+A <session> is a .jsonl path, a session uuid, a project-dir substring, or
+empty (newest session for the current working directory, else newest overall).
+"""
+
+import json, os, re, sys, glob, datetime
+
+PROJECTS = os.path.expanduser("~/.claude/projects")
+UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
+)
+
+# Per-1M-token USD list prices. cache_write derived as 1.25x input, cache_read
+# as 0.10x input (Anthropic's standard relationship). UPDATE as prices change;
+# override per-prefix with --rates '{"sonnet":{"in":3,"out":15}, ...}'.
+FAMILY = {
+    "opus": {"in": 5.0, "out": 25.0},
+    "sonnet-5": {"in": 2.0, "out": 10.0},  # introductory through 2026-08-31
+    "sonnet": {"in": 3.0, "out": 15.0},
+    "haiku": {"in": 1.0, "out": 5.0},
+}
+CODE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+SPAWN_TOOLS = {"Agent", "Task"}  # tools whose calls run in a sidechain transcript
+QUESTION_RE = re.compile(
+    r"^\s*(how|why|what|when|where|who|which|can|does|is|are|explain|difference|compare)\b",
+    re.I,
+)
+
+
+def encode_cwd(cwd):
+    # Claude encodes the project path into the dir name: '/' and '.' -> '-'.
+    return cwd.translate(str.maketrans({c: "-" for c in "/. "})) if cwd else ""
+
+
+def is_anthropic(model):
+    return bool(re.search(r"(^|[/_-])claude([/_-]|$)", (model or "").lower()))
+
+
+def rates_for(model, override):
+    m = (model or "").lower()
+    table = {**FAMILY, **(override or {})}
+    for fam, r in table.items():
+        if fam in m:
+            return {
+                "in": r["in"],
+                "out": r["out"],
+                "cc": r["in"] * 1.25,
+                "cr": r["in"] * 0.10,
+            }
+    return None
+
+
+def resolve_session(arg):
+    if arg and (os.path.isfile(arg) or arg.endswith(".jsonl")):
+        return arg
+    if arg and UUID_RE.match(arg):
+        hits = glob.glob(os.path.join(PROJECTS, "*", arg + ".jsonl"))
+        if hits:
+            return max(hits, key=os.path.getmtime)
+        die(f"no session with uuid {arg}")
+    base = PROJECTS
+    if arg:  # project-dir substring
+        dirs = [
+            d
+            for d in glob.glob(os.path.join(PROJECTS, "*"))
+            if arg in os.path.basename(d)
+        ]
+        if not dirs:
+            die(f"no project dir matching {arg!r}")
+        base = max(dirs, key=os.path.getmtime)
+    else:  # current working directory's project
+        enc = encode_cwd(os.getcwd())
+        d = os.path.join(PROJECTS, enc)
+        if os.path.isdir(d):
+            base = d
+    files = glob.glob(os.path.join(base, "*.jsonl"))
+    if not files:
+        die(f"no sessions under {base}")
+    return max(files, key=os.path.getmtime)
+
+
+def die(msg):
+    print("error: " + msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def tool_detail(name, data):
+    """Compact trajectory evidence: tool name plus its most useful argument."""
+    if not isinstance(data, dict):
+        return name
+    keys = {
+        "Read": ("file_path", "path"), "Edit": ("file_path", "path"),
+        "Write": ("file_path", "path"), "Grep": ("pattern", "path"),
+        "Glob": ("pattern",), "Bash": ("command",), "WebSearch": ("query",),
+        "Agent": ("description", "prompt"), "Task": ("description", "prompt"),
+    }.get(name, ())
+    values = [str(data[k]) for k in keys if data.get(k)]
+    if not values:
+        return name
+    value = " · ".join(values)
+    value = re.sub(r"\s+", " ", value).strip()
+    return f"{name}({value[:100]})"
+
+
+def user_text(entry):
+    """Real human-typed text of a user entry, skipping tool_result blocks."""
+    msg = entry.get("message") or {}
+    c = msg.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        out = []
+        for b in c:
+            if isinstance(b, dict) and b.get("type") == "text" and b.get("text"):
+                out.append(b["text"])
+        return "\n".join(out)
+    return ""
+
+
+def extract(path, override):
+    # Claude Code writes one logical assistant turn across SEVERAL consecutive
+    # JSONL lines (one per content block: thinking / text / each tool_use), all
+    # sharing the same message.id. Each line repeats the message's usage block.
+    # Count usage ONCE per message.id, taking the MAX per token kind across its
+    # lines: on the parent every line is an identical snapshot (so max == any one
+    # line), but a subagent transcript can carry a growing output across lines —
+    # max grabs the real figure where "first line" would grab a stub. Summing
+    # would over-count ~Nx. See selfcheck for the shape.
+    turns, last_ask = [], ""
+    total = {"in": 0, "cc": 0, "cr": 0, "out": 0}
+    raw, seen, cur = 0, set(), None
+
+    excluded = {"turns": 0, "models": set()}
+
+    def flush():
+        nonlocal cur
+        if not cur:
+            return
+        if not is_anthropic(cur["model"]):
+            excluded["turns"] += 1
+            excluded["models"].add(cur["model"] or "?")
+            cur = None
+            return
+        u = cur["u"]
+        for k, v in (("in", u[0]), ("cc", u[1]), ("cr", u[2]), ("out", u[3])):
+            total[k] += v
+        joined = "\n".join(cur["text"])
+        ask = cur["ask"]
+        rates = rates_for(cur["model"], override)
+        costs = None
+        if rates:
+            costs = {
+                "in": u[0] * rates["in"] / 1e6,
+                "cc": u[1] * rates["cc"] / 1e6,
+                "cr": u[2] * rates["cr"] / 1e6,
+                "out": u[3] * rates["out"] / 1e6,
+            }
+        cost = sum(costs.values()) if costs else None
+        signals = {
+            "tools": cur["tools"],
+            "tool_details": cur["tool_details"],
+            "has_thinking": cur["think"],
+            "text_chars": len(joined),
+            "has_code": "```" in joined or bool(set(cur["tools"]) & CODE_TOOLS),
+            "ask_chars": len(ask),
+            "ask_question": bool(
+                ask.strip().endswith("?") or QUESTION_RE.match(ask)
+            ),
+        }
+        if cur["spawns"]:
+            signals["spawns"] = cur["spawns"]  # Agent/Task tool_use ids -> join key for subagents
+        turns.append({
+            "i": len(turns) + 1,
+            "ts": cur["ts"],
+            "model": cur["model"],
+            "tokens": {"in": u[0], "cc": u[1], "cr": u[2], "out": u[3]},
+            "cost_usd": cost,
+            "costs_usd": costs,
+            "signals": signals,
+            "preview": joined[:200].replace("\n", " "),
+            "ask": ask[:160].replace("\n", " "),
+        })
+        cur = None
+
+    for line in open(path):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            o = json.loads(line)
+        except ValueError:
+            continue
+        if o.get("type") == "user":
+            t = user_text(o)
+            if t:
+                last_ask = t
+            continue
+        if o.get("type") != "assistant":
+            continue
+        raw += 1
+        msg = o.get("message") or {}
+        mid = msg.get("id")
+        u = msg.get("usage") or {}
+        uvals = (u.get("input_tokens", 0), u.get("cache_creation_input_tokens", 0) or 0,
+                 u.get("cache_read_input_tokens", 0) or 0, u.get("output_tokens", 0))
+        if cur is not None and cur["mid"] != mid:
+            flush()
+        if cur is None:
+            if mid in seen:
+                continue  # a closed group reappearing non-consecutively; ignore
+            cur = {
+                "mid": mid, "ts": o.get("timestamp", ""), "model": msg.get("model", ""),
+                "u": uvals, "text": [], "tools": [], "tool_details": [], "think": False,
+                "ask": last_ask, "spawns": [],
+            }
+            seen.add(mid)
+        else:
+            cur["u"] = tuple(max(a, b) for a, b in zip(cur["u"], uvals))
+        for b in msg.get("content") or []:
+            if not isinstance(b, dict):
+                continue
+            ty = b.get("type")
+            if ty == "text" and b.get("text"):
+                cur["text"].append(b["text"])
+            elif ty == "thinking":
+                cur["think"] = True
+            elif ty == "tool_use":
+                name = b.get("name", "?")
+                cur["tools"].append(name)
+                cur["tool_details"].append(tool_detail(name, b.get("input")))
+                if name in SPAWN_TOOLS and b.get("id"):
+                    cur["spawns"].append(b["id"])
+    flush()
+    priced = all(t["cost_usd"] is not None for t in turns) if turns else False
+    return {
+        "session": os.path.basename(path),
+        "raw_lines": raw,
+        "turns": turns,
+        "total": total,
+        "priced": priced,
+        "models": sorted({t["model"] for t in turns}),
+        "excluded": {"turns": excluded["turns"], "models": sorted(excluded["models"])},
+    }
+
+
+def subagent_dir_for(parent_path):
+    stem = os.path.splitext(os.path.basename(parent_path))[0]  # "<uuid>.jsonl" -> "<uuid>"
+    return os.path.join(os.path.dirname(parent_path), stem, "subagents")
+
+
+def _deleg_acc():
+    return {"agents": 0, "turns": 0, "tokens": {"in": 0, "cc": 0, "cr": 0, "out": 0},
+            "cost": 0.0, "priced": True, "types": []}
+
+
+def _merge_deleg(acc, sub):
+    acc["agents"] += 1
+    acc["turns"] += sub["turns"]
+    for k in acc["tokens"]:
+        acc["tokens"][k] += sub["tokens"][k]
+    if sub["cost_usd"] is None:
+        acc["priced"] = False
+    else:
+        acc["cost"] += sub["cost_usd"]
+    if sub["agentType"] not in acc["types"]:
+        acc["types"].append(sub["agentType"])
+
+
+def load_subagents(parent_path, override):
+    # Each Agent/Task call runs in its own sidechain transcript beside the
+    # parent: <stem>/subagents/agent-<id>.jsonl (+ agent-<id>.meta.json holding
+    # toolUseId, the exact id of the parent's spawning tool_use block). Parse
+    # each with the same extract() and roll its tokens+cost to the parent turn
+    # whose Agent/Task tool_use id == toolUseId. Without this, delegated work is
+    # invisible and the session total is under-counted. See SKILL.md (F1).
+    sd = subagent_dir_for(parent_path)
+    out = []
+    for jf in sorted(glob.glob(os.path.join(sd, "agent-*.jsonl"))):
+        meta = {}
+        mf = jf[:-5] + "meta.json"
+        if os.path.isfile(mf):
+            try:
+                meta = json.load(open(mf))
+            except ValueError:
+                pass
+        data = extract(jf, override)
+        if not data["turns"]:
+            continue
+        out.append({
+            "toolUseId": meta.get("toolUseId"),
+            "agentType": meta.get("agentType", "?"),
+            "description": meta.get("description", ""),
+            "spawnDepth": meta.get("spawnDepth") or 1,
+            "tokens": dict(data["total"]),
+            "cost_usd": sum((t["cost_usd"] or 0) for t in data["turns"]) if data["priced"] else None,
+            "turns": len(data["turns"]),
+            "priced": data["priced"],
+        })
+    return out
+
+
+def analyze(path, override):
+    # Parent ledger + delegated cost from subagent sidechains, joined back to the
+    # spawning parent turn. Bakes the subagent files into the snapshot here so the
+    # frozen ledger (what --aggregate reads later) already includes them.
+    data = extract(path, override)
+    turns = data["turns"]
+    by_spawn = {}
+    for t in turns:
+        for tid in t["signals"].get("spawns", []):
+            by_spawn.setdefault(tid, t["i"])
+    subs = load_subagents(path, override)
+    sess = _deleg_acc()
+    unattached = 0
+    for s in subs:
+        _merge_deleg(sess, s)
+        ti = by_spawn.get(s["toolUseId"])
+        if not ti:  # nested agent (spawned by another subagent) or missing join key
+            unattached += 1
+            continue
+        turn = turns[ti - 1]
+        acc = turn.setdefault("_deleg", _deleg_acc())
+        _merge_deleg(acc, s)
+    for t in turns:  # finalize per-turn delegated into the public shape
+        acc = t.pop("_deleg", None)
+        if acc:
+            t["delegated"] = {
+                "agents": acc["agents"],
+                "turns": acc["turns"],
+                "tokens": acc["tokens"],
+                "cost_usd": acc["cost"] if acc["priced"] else None,
+                "agent_types": acc["types"],
+            }
+    data["delegated"] = {
+        "agents": sess["agents"],
+        "turns": sess["turns"],
+        "tokens": sess["tokens"],
+        "cost_usd": sess["cost"] if (data["priced"] and sess["priced"]) else None,
+        "unattached": unattached,  # subs counted in the total but not joined to a parent turn
+    }
+    incl = dict(data["total"])
+    for k in incl:
+        incl[k] += sess["tokens"][k]
+    data["total_incl_subagents"] = incl
+    return data
+
+
+def compact_view(data):
+    print(f"session: {data['session']}   turns: {len(data['turns'])} "
+          f"(from {data['raw_lines']} raw lines)   priced: {data['priced']}   "
+          f"models: {', '.join(data['models']) or '?'}")
+    excluded = data.get("excluded") or {}
+    if excluded.get("turns"):
+        print(f"excluded: {excluded['turns']} non-Anthropic turn(s) "
+              f"({', '.join(excluded['models'])})")
+    d = data.get("delegated")
+    if d and d["agents"]:
+        dc = f"${d['cost_usd']:.4f}" if d["cost_usd"] is not None else f"{sum(d['tokens'].values())} tok"
+        extra = (f"   ({d['unattached']} unattached — nested, counted in total not joined to a turn)"
+                 if d["unattached"] else "")
+        print(f"delegated: {d['agents']} agent, {d['turns']} turn, {dc}{extra}")
+    prev_ask = None
+    for t in data["turns"]:
+        if t["ask"] != prev_ask:
+            print(f"\n--- #{t['i']} ask: {t['ask'] or '(no ask)'}")
+            prev_ask = t["ask"]
+        s, tk = t["signals"], t["tokens"]
+        cost = f"${t['cost_usd']:.4f}" if t["cost_usd"] is not None else "-"
+        th = " +thinking" if s["has_thinking"] else ""
+        print(f"  #{t['i']:<3} in {tk['in']:<6} cr {tk['cr']:<7} cc {tk['cc']:<6} "
+              f"out {tk['out']:<6} {cost:>8}  tools={s['tool_details'] or '-'}{th}")
+        if t["preview"]:
+            print(f"        | {t['preview']}")
+        dg = t.get("delegated")
+        if dg:
+            dc = f"${dg['cost_usd']:.4f}" if dg["cost_usd"] is not None else f"{sum(dg['tokens'].values())} tok"
+            print(f"        [+sub {dc}, {dg['agents']} agent ({'/'.join(dg['agent_types'])})]")
+
+
+def write_labels(ledger_path, ranges_path):
+    # Range shorthand -> labels.json with full coverage validation, so the
+    # "every turn labeled, no unlabeled" rule is enforced, not aspirational.
+    data = json.load(open(ledger_path))
+    n = len(data["turns"])
+    covered, labels, problems = [False] * (n + 1), {}, []
+    for ln in open(ranges_path):
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        if ":" not in ln:
+            problems.append(f"bad line (no ':'): {ln!r}")
+            continue
+        spec, label = ln.split(":", 1)
+        label = label.strip()
+        try:
+            if "-" in spec:
+                lo, hi = map(int, spec.split("-"))
+            else:
+                lo = hi = int(spec.strip())
+        except ValueError:
+            problems.append(f"bad range: {ln!r}")
+            continue
+        if lo < 1 or hi > n or lo > hi:
+            problems.append(f"range {lo}-{hi} out of bounds (turns 1..{n})")
+            continue
+        for i in range(lo, hi + 1):
+            if covered[i]:
+                problems.append(f"turn {i} covered more than once")
+            covered[i] = True
+            labels[i] = label
+    missing = [i for i in range(1, n + 1) if not covered[i]]
+    if missing:
+        problems.append(f"turns not covered: {missing}")
+    if problems:
+        print("label errors:", file=sys.stderr)
+        for p in problems:
+            print("  " + p, file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps([{"i": i, "label": labels[i]} for i in range(1, n + 1)], indent=2))
+
+
+def aggregate(ledger, labels_path, ccusage=None):
+    # Operates on a frozen ledger (the saved analyze output), never re-reads the
+    # live JSONL — so a session still being written can't drift the numbers.
+    priced = ledger["priced"]
+    label_of = {}
+    if labels_path is None:
+        labels = []
+    elif isinstance(labels_path, list):
+        labels = labels_path
+    else:
+        labels = json.load(open(labels_path))
+    for row in labels:
+        label_of[int(row["i"])] = row["label"]
+    unlabeled = sum(1 for t in ledger["turns"] if label_of.get(t["i"]) is None)
+    if unlabeled:
+        print(
+            f"note: {unlabeled} turn(s) unlabeled — give every turn index a label "
+            f"from the ledger (labels and ledger must cover the same turns).",
+            file=sys.stderr,
+        )
+    by, sess_w, sess_cost, sess_dcost = {}, 0.0, 0.0, 0.0
+    excluded_turns = 0
+    for t in ledger["turns"]:
+        lab = label_of.get(t["i"], "unlabeled")
+        if lab.upper().startswith("EXCLUDE"):
+            excluded_turns += 1
+            continue
+        toks = sum(t["tokens"].values())
+        sess_w += t["cost_usd"] if (priced and t["cost_usd"]) else toks
+        sess_cost += t["cost_usd"] or 0
+        a = by.setdefault(
+            lab,
+            {"turns": 0, "in": 0, "cc": 0, "cr": 0, "out": 0,
+             "cin": 0.0, "ccc": 0.0, "ccr": 0.0, "cout": 0.0,
+             "cost": 0.0, "w": 0.0, "dcost": 0.0, "dtokens": 0, "dagents": 0},
+        )
+        a["turns"] += 1
+        for k in ("in", "cc", "cr", "out"):
+            a[k] += t["tokens"][k]
+        a["cost"] += t["cost_usd"] or 0
+        for k, dest in (("in", "cin"), ("cc", "ccc"), ("cr", "ccr"), ("out", "cout")):
+            a[dest] += (t.get("costs_usd") or {}).get(k, 0)
+        a["w"] += t["cost_usd"] if (priced and t["cost_usd"]) else toks
+        dg = t.get("delegated")
+        if dg:
+            a["dcost"] += dg["cost_usd"] or 0
+            a["dtokens"] += sum(dg["tokens"].values())
+            a["dagents"] += dg["agents"]
+            sess_dcost += dg["cost_usd"] or 0
+    rows = []
+    for lab, a in by.items():
+        toks = a["in"] + a["cc"] + a["cr"] + a["out"] or 1
+        buckets = ({
+            "fresh-input": a["cin"], "cache-build": a["ccc"],
+            "context-carry": a["ccr"], "generation": a["cout"],
+        } if priced else {
+            "fresh-input": a["in"], "cache-build": a["cc"],
+            "context-carry": a["cr"], "generation": a["out"],
+        })
+        bucket_total = sum(buckets.values()) or 1
+        cr_sh, out_sh = buckets["context-carry"] / bucket_total, buckets["generation"] / bucket_total
+        top_name, top_value = max(buckets.items(), key=lambda item: item[1])
+        driver = top_name if top_value / bucket_total >= 0.55 else "mixed"
+        # delegated-heavy: cheap at the parent level because the work was
+        # offloaded to subagents — the real burn is in `delegated`, not here.
+        heavy = bool(a["dagents"]) and (
+            (a["dcost"] > a["cost"]) if priced else (a["dtokens"] > toks)
+        )
+        rows.append((lab, a, cr_sh, out_sh, driver, heavy))
+    rows.sort(key=lambda r: r[1]["w"], reverse=True)
+    head = f"session: {ledger.get('session', '?')}   models: {', '.join(ledger['models']) or '?'}   turns: {len(ledger['turns'])}"
+    if priced:
+        head += f"   total: ${sess_cost:.4f}"
+        if sess_dcost:
+            head += f"   +delegated: ${sess_dcost:.4f} -> ${sess_cost + sess_dcost:.4f} incl subagents"
+    else:
+        head += "   pricing: unknown — ranked by tokens"
+    print(head)
+    if excluded_turns:
+        print(f"excluded: {excluded_turns} turn(s) labeled EXCLUDE")
+    wcol = "COST" if priced else "TOKENS"
+    dcol = "DELEG" if priced else "DEL-TOK"
+    hdr = (f"{'PROCESS':<20} {'TURN':>4} {wcol:>9} {dcol:>9} {'%SESS':>6} "
+           f"{'CACHE-R':>7} {'OUTPUT':>7} {'COST-SHAPE':<13}")
+    print(hdr)
+    print("-" * len(hdr))
+    for lab, a, cr_sh, out_sh, driver, heavy in rows:
+        wval = a["cost"] if priced else (a["in"] + a["cc"] + a["cr"] + a["out"])
+        dval = a["dcost"] if priced else a["dtokens"]
+        pct = (100 * a["w"] / sess_w) if sess_w else 0
+        wfmt = "{:.4f}".format(wval) if priced else str(wval)
+        dfmt = ("{:.4f}".format(dval) if priced else str(dval)) if dval else "-"
+        flag = " +DELEG" if heavy else ""
+        print(
+            f"{lab:<20} {a['turns']:>4} {wfmt:>9} {dfmt:>9} {pct:>5.1f}% "
+            f"{cr_sh * 100:>6.1f}% {out_sh * 100:>6.1f}% {driver:<13}{flag}"
+        )
+    print("-" * len(hdr))
+    if rows:
+        top = rows[0]
+        a = top[1]
+        amt = f"${a['cost']:.4f}" if priced else f"{a['in'] + a['cc'] + a['cr'] + a['out']} tok"
+        line = (f"\nbiggest sink: {top[0]} — {amt} ({(100 * a['w'] / sess_w) if sess_w else 0:.1f}%), "
+                f"cost shape: {top[4]}")
+        if a["dagents"]:  # don't let the headline understate a delegated-heavy sink
+            if priced:
+                line += f"  (+${a['dcost']:.4f} delegated = ${a['cost'] + a['dcost']:.4f} incl)"
+            else:
+                line += f"  (+{a['dtokens']} tok delegated = {a['in'] + a['cc'] + a['cr'] + a['out'] + a['dtokens']} tok incl)"
+        print(line)
+        if any(r[5] for r in rows):
+            print("note: +DELEG marks a process that looks cheap here because the work was "
+                  "offloaded to subagents — weigh its DELEG column before calling it cheap.")
+    if ccusage:
+        if (ledger.get("excluded") or {}).get("turns") or excluded_turns:
+            print("\nreconcile skipped: session contains excluded turns.")
+        else:
+            incl = ledger.get("total_incl_subagents") or ledger.get("total") or {}
+            reconcile(sess_cost + sess_dcost, sum(incl.values()), ccusage)
+
+
+def reconcile(cost_incl, tokens_incl, ccu):
+    # Use only for Claude-only sessions. ccusage includes sidechains, so its
+    # total lines up with total_incl_subagents; mixed-model totals do not share
+    # this engine's Anthropic-only scope.
+    print("\nreconcile vs ccusage (ccusage folds in subagents — compare to total_incl_subagents):")
+    if ccu["tokens"] is not None and tokens_incl:
+        ratio = ccu["tokens"] / tokens_incl
+        print(f"  tokens: engine {tokens_incl:,}  ccusage {ccu['tokens']:,}  ({ratio * 100 - 100:+.1f}%)")
+        if abs(ratio - 1) > 0.05:
+            print("  >5% token gap — engine and ccusage disagree on usage; worth investigating.")
+    if ccu["cost"] is not None and cost_incl:
+        ratio = cost_incl / ccu["cost"]
+        print(f"  cost:   engine ${cost_incl:.4f}  ccusage ${ccu['cost']:.4f}  ({ratio * 100 - 100:+.1f}%)")
+        if abs(ratio - 1) > 0.05:
+            print("  >5% cost gap at matching tokens -> a rate difference. The engine's FAMILY table is a")
+            print("  prefix match, so a specific model (e.g. sonnet-5 vs sonnet-4) may carry its own price;")
+            print("  check ccusage's --breakdown and correct with --rates (see Pricing).")
+
+
+def list_sessions():
+    import time
+
+    now = time.time()
+    rows = []
+    for f in glob.glob(os.path.join(PROJECTS, "*", "*.jsonl")):
+        mt = os.path.getmtime(f)
+        mtime = datetime.datetime.fromtimestamp(mt).strftime("%Y-%m-%d %H:%M")
+        proj = os.path.basename(os.path.dirname(f))
+        sid = os.path.basename(f)[:-6]
+        sd = os.path.join(os.path.dirname(f), sid, "subagents")
+        has_sub = os.path.isdir(sd) and bool(glob.glob(os.path.join(sd, "agent-*.jsonl")))
+        ask = ""
+        try:
+            for line in open(f):
+                o = json.loads(line)
+                if o.get("type") == "user":
+                    t = user_text(o)
+                    if t:
+                        ask = t[:70].replace("\n", " ")
+                        break
+        except (ValueError, OSError):
+            pass
+        rows.append((mt, mtime, proj, sid, ask, has_sub))
+    rows.sort(reverse=True)
+    print(f"{'MODIFIED':<17} {'PROJECT':<42} {'SESSION':<36} FIRST PROMPT")
+    for mt, mtime, proj, sid, ask, has_sub in rows[:20]:
+        marker = " <- LIVE" if (now - mt) < 60 else ""
+        marker = (" +SUB" if has_sub else "") + marker
+        print(f"{mtime:<17} {proj[:41]:<42} {sid:<36} {ask}{marker}")
+
+
+def warn_if_live(path):
+    import time
+
+    # A subagent sidechain can be mid-write too; treat its files like the parent.
+    now = time.time()
+    paths = [path]
+    sd = subagent_dir_for(path)
+    if os.path.isdir(sd):
+        paths += glob.glob(os.path.join(sd, "agent-*.jsonl"))
+    recent = [p for p in paths if os.path.isfile(p) and now - os.path.getmtime(p) < 60]
+    if recent:
+        print(
+            "note: this session is LIVE. The ledger is a safe snapshot of parent and "
+            "subagent files; later Anthropic turns are outside it, and non-Anthropic "
+            "analysis turns are excluded.",
+            file=sys.stderr,
+        )
+
+
+def _fixture(lines):
+    import tempfile
+    fh = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    fh.write("\n".join(json.dumps(x) for x in lines))
+    fh.close()
+    return fh.name
+
+
+def selfcheck():
+    assert is_anthropic("claude-sonnet-4-6")
+    assert is_anthropic("anthropic/claude-sonnet-4-6")
+    assert not is_anthropic("glm-4.7")
+    assert rates_for("claude-sonnet-5", None)["in"] == 2.0
+    assert rates_for("claude-sonnet-4-6", None)["in"] == 3.0
+
+    # Turn 1 (message.id m1) is split across two lines: thinking+text, then a
+    # Read tool_use — same usage on both. Turn 2 (m2) is a single line. This
+    # proves usage is counted once (max over identical lines == one line) and the
+    # split tool block is merged in.
+    U1 = {"input_tokens": 100, "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 1000, "output_tokens": 50}
+    U2 = {"input_tokens": 120, "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 1200, "output_tokens": 600}
+    base = [
+        {"type": "user", "message": {"content": "How does the cache work?"}},
+        {"type": "assistant", "timestamp": "t1", "message": {
+            "id": "m1", "model": "claude-sonnet-4", "usage": U1,
+            "content": [{"type": "thinking", "thinking": "h"},
+                        {"type": "text", "text": "It reads from the cache."}]}},
+        {"type": "assistant", "timestamp": "t1b", "message": {
+            "id": "m1", "model": "claude-sonnet-4", "usage": U1,
+            "content": [{"type": "tool_use", "name": "Read",
+                         "input": {"file_path": "src/cache.py"}}]}},
+        {"type": "user", "message": {"content": "Now implement it."}},
+        {"type": "assistant", "timestamp": "t2", "message": {
+            "id": "m2", "model": "claude-sonnet-4", "usage": U2,
+            "content": [{"type": "text", "text": "```js\nx()\n```"},
+                        {"type": "tool_use", "name": "Edit",
+                         "input": {"file_path": "src/cache.py"}}]}},
+    ]
+    path = _fixture(base)
+    d = extract(path, None)
+    assert len(d["turns"]) == 2, d                      # deduped from 3 assistant lines
+    assert d["raw_lines"] == 3, d
+    assert d["total"]["out"] == 650, d["total"]        # not 700 (U1 counted once)
+    assert d["total"]["cr"] == 2200, d["total"]        # not 3200
+    assert d["turns"][0]["signals"]["tools"] == ["Read"], d["turns"][0]["signals"]
+    assert d["turns"][0]["signals"]["tool_details"] == ["Read(src/cache.py)"]
+    assert d["turns"][0]["signals"]["has_thinking"] is True
+    assert d["turns"][0]["signals"]["ask_question"] is True
+    assert d["turns"][1]["signals"]["has_code"] is True
+    assert d["priced"] is True and d["turns"][0]["cost_usd"] > 0
+    assert d["turns"][1]["costs_usd"]["out"] > d["turns"][1]["costs_usd"]["cr"]
+
+    proxy = _fixture([
+        {"type": "assistant", "message": {"id": "x", "model": "glm-4.7",
+            "usage": {"input_tokens": 999, "output_tokens": 999},
+            "content": [{"type": "text", "text": "analyzing the session"}]}},
+    ])
+    x = extract(proxy, None)
+    assert not x["turns"] and x["total"]["out"] == 0, x
+    assert x["excluded"] == {"turns": 1, "models": ["glm-4.7"]}, x["excluded"]
+    import io
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        aggregate(x, [], {"cost": 1.0, "tokens": 1998})
+    assert "reconcile skipped" in buf.getvalue(), buf.getvalue()
+
+    # max-per-message.id: one message across two lines whose output grows
+    # (4 -> 5269, as real subagent transcripts do). First-line would grab 4;
+    # max grabs 5269. Sum would over-count.
+    grow = [
+        {"type": "user", "message": {"content": "summarize"}},
+        {"type": "assistant", "message": {"id": "g", "model": "claude-sonnet-4",
+            "usage": {"input_tokens": 2, "cache_read_input_tokens": 60000, "output_tokens": 4},
+            "content": [{"type": "text", "text": "a"}]}},
+        {"type": "assistant", "message": {"id": "g", "model": "claude-sonnet-4",
+            "usage": {"input_tokens": 2, "cache_read_input_tokens": 60000, "output_tokens": 5269},
+            "content": [{"type": "text", "text": "b"}]}},
+    ]
+    gpath = _fixture(grow)
+    g = extract(gpath, None)
+    assert len(g["turns"]) == 1 and g["turns"][0]["tokens"]["out"] == 5269, g
+    assert g["total"]["out"] == 5269, g["total"]
+
+    # subagent capture: a parent turn spawns an Agent (tool_use id T1), and a
+    # sidechain transcript + meta.json sit beside it. analyze() must attach the
+    # subagent's tokens/cost to that turn and add total_incl_subagents.
+    parent = [
+        {"type": "user", "message": {"content": "explore the module system"}},
+        {"type": "assistant", "message": {"id": "p1", "model": "claude-opus-4-8",
+            "usage": {"input_tokens": 10, "cache_read_input_tokens": 5000, "output_tokens": 20},
+            "content": [{"type": "text", "text": "delegating"},
+                        {"type": "tool_use", "id": "T1", "name": "Agent", "input": {}}]}},
+    ]
+    sub_lines = [
+        {"type": "user", "message": {"content": "explore"}},
+        {"type": "assistant", "message": {"id": "s1", "model": "claude-opus-4-8",
+            "usage": {"input_tokens": 5, "cache_read_input_tokens": 40000, "output_tokens": 5269},
+            "content": [{"type": "text", "text": "found it"}]}},
+    ]
+    import shutil
+    tmp = parent_path = _fixture(parent)
+    sd = subagent_dir_for(parent_path)
+    # guard the join path: "<stem>.jsonl" -> "<stem>/subagents", no stray dot
+    assert sd.endswith(os.path.splitext(os.path.basename(parent_path))[0] + "/subagents"), sd
+    os.makedirs(sd)
+    with open(os.path.join(sd, "agent-xyz.jsonl"), "w") as fh:
+        fh.write("\n".join(json.dumps(x) for x in sub_lines))
+    json.dump({"agentType": "Explore", "description": "explore modules",
+               "toolUseId": "T1", "spawnDepth": 1},
+              open(os.path.join(sd, "agent-xyz.meta.json"), "w"))
+    a = analyze(parent_path, None)
+    assert a["delegated"]["agents"] == 1, a["delegated"]
+    assert a["delegated"]["unattached"] == 0, a["delegated"]
+    assert a["turns"][0]["signals"]["spawns"] == ["T1"], a["turns"][0]["signals"]
+    assert a["turns"][0]["delegated"]["tokens"]["out"] == 5269, a["turns"][0]["delegated"]
+    assert a["turns"][0]["delegated"]["agent_types"] == ["Explore"]
+    assert a["total_incl_subagents"]["out"] == 20 + 5269, a["total_incl_subagents"]
+    assert a["total_incl_subagents"]["cr"] == 5000 + 40000, a["total_incl_subagents"]
+    shutil.rmtree(os.path.dirname(sd))
+    for p in (path, gpath, proxy):
+        os.unlink(p)
+
+    # aggregate runs off the frozen ledger, not the JSONL — prove it sums and
+    # flags unlabeled turns, and surfaces a delegated-heavy process.
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        aggregate(d, [{"i": 1, "label": "Q&A"}, {"i": 2, "label": "Implementation"}])
+    out = buf.getvalue()
+    assert "biggest sink" in out and "unlabeled" not in out, out
+    assert "cost shape: generation" in out, out
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        aggregate(d, [{"i": 1, "label": "EXCLUDE session-cost analysis"},
+                      {"i": 2, "label": "Implementation"}])
+    out = buf.getvalue()
+    assert "excluded: 1 turn" in out and "EXCLUDE session-cost" not in out, out
+
+    buf = io.StringIO()
+    err = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+        aggregate(d, [{"i": 1, "label": "Q&A"}])  # turn 2 left unlabeled
+    assert "unlabeled" in err.getvalue(), err.getvalue()
+
+    print("selfcheck ok")
+
+
+def main():
+    argv = sys.argv[1:]
+    override = None
+    if "--rates" in argv:
+        i = argv.index("--rates")
+        override = json.loads(argv[i + 1])
+        del argv[i : i + 2]
+    if "--selfcheck" in argv:
+        selfcheck()
+        return
+    if "--list" in argv:
+        list_sessions()
+        return
+    if "--label" in argv:
+        argv.remove("--label")
+        if len(argv) < 2:
+            die("--label needs <ledger.json> <ranges.txt>")
+        write_labels(argv[0], argv[1])
+        return
+    agg = "--aggregate" in argv
+    if agg:
+        argv.remove("--aggregate")
+        ledger = None
+        if "--ledger" in argv:
+            i = argv.index("--ledger")
+            ledger = argv[i + 1]
+            del argv[i : i + 2]
+        if not ledger:
+            die("--aggregate needs --ledger <file> (the saved output of an extract run)")
+        labels = None
+        if "--labels" in argv:
+            i = argv.index("--labels")
+            labels = argv[i + 1]
+            del argv[i : i + 2]
+        ccusage = None
+        if "--reconcile" in argv:
+            i = argv.index("--reconcile")
+            spec = argv[i + 1]
+            del argv[i : i + 2]
+            ccusage = {"cost": None, "tokens": None}
+            parts = spec.split(":")
+            ccusage["cost"] = float(parts[0])
+            if len(parts) > 1 and parts[1]:
+                ccusage["tokens"] = int(parts[1])
+        aggregate(json.load(open(ledger)), labels, ccusage)
+        return
+    compact = "--compact" in argv
+    if compact:
+        argv.remove("--compact")
+    path = resolve_session(argv[0] if argv else "")
+    warn_if_live(path)
+    data = analyze(path, override)
+    if compact:
+        compact_view(data)
+    else:
+        print(json.dumps(data, indent=2))
+
+
+if __name__ == "__main__":
+    main()
