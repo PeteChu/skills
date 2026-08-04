@@ -16,11 +16,20 @@ agent's job (see SKILL.md).
 
 A <session> is a .jsonl path, a session uuid, a project-dir substring, or
 empty (newest session for the current working directory, else newest overall).
+Session lookup follows CLAUDE_CONFIG_DIR (default ~/.claude), so a non-default
+profile resolves its own projects.
 """
 
 import json, os, re, sys, glob, datetime
 
-PROJECTS = os.path.expanduser("~/.claude/projects")
+def _config_dir():
+    # Claude Code locates its config via CLAUDE_CONFIG_DIR (default ~/.claude).
+    # Honor it so a non-default profile's projects resolve correctly, instead of
+    # silently falling back to the default profile and analyzing the wrong sessions.
+    return os.path.expanduser(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude")
+
+
+PROJECTS = os.path.join(_config_dir(), "projects")
 UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
 )
@@ -639,6 +648,19 @@ def selfcheck():
     assert not is_anthropic("glm-4.7")
     assert rates_for("claude-sonnet-5", None)["in"] == 2.0
     assert rates_for("claude-sonnet-4-6", None)["in"] == 3.0
+
+    # CLAUDE_CONFIG_DIR selects the profile's config dir; unset -> default ~/.claude.
+    saved = os.environ.pop("CLAUDE_CONFIG_DIR", None)
+    try:
+        assert _config_dir() == os.path.expanduser("~/.claude"), _config_dir()
+        os.environ["CLAUDE_CONFIG_DIR"] = "/tmp/work-claude"
+        assert _config_dir() == "/tmp/work-claude", _config_dir()
+        assert os.path.join(_config_dir(), "projects") == "/tmp/work-claude/projects"
+    finally:
+        if saved is None:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        else:
+            os.environ["CLAUDE_CONFIG_DIR"] = saved
 
     # Turn 1 (message.id m1) is split across two lines: thinking+text, then a
     # Read tool_use — same usage on both. Turn 2 (m2) is a single line. This

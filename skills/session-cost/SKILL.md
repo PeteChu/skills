@@ -48,7 +48,7 @@ Three things keep this trustworthy:
 - **A turn is one Anthropic assistant message** (`message.id`). Claude Code may write it across several JSONL lines; the engine merges them and counts usage once. Non-Anthropic messages never become ledger turns.
 - **Delegated cost is folded in.** Anthropic `Agent`/`Task` transcripts are priced with the parent and rolled back to the spawning turn, so `total_incl_subagents` is the full Anthropic cost.
 
-Run the engine with the absolute path to the script in this folder. `<session>` is a `.jsonl` path, a session uuid, a project-dir substring, or empty (newest session for the current directory).
+Run the engine with the absolute path to the script in this folder. `<session>` is a `.jsonl` path, a session uuid, a project-dir substring, or empty (newest session for the current directory). Session lookup follows `CLAUDE_CONFIG_DIR` (default `~/.claude`), so running this skill inside a profile — personal or work — resolves that profile's sessions, not the default's. To analyze one profile's sessions without spending that profile's quota, run this skill under the profile whose quota should pay and prefix the engine command with the other profile's dir: `CLAUDE_CONFIG_DIR=~/.claude-work python3 scripts/session-cost <work-session> --compact` (reading JSONL is free local I/O; only this agent's reasoning is billed, to the running profile). The prefix drives `--list` and every `<session>` form except an explicit `.jsonl` path; once the ledger is frozen, `--label` and `--aggregate` read only that local file.
 
 ### 1. Pick a session
 
