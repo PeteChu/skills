@@ -1,0 +1,59 @@
+{
+  "skill_name": "eli5",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "/eli5 how does git work",
+      "expected_output": "A picture-explainer HTML artifact teaching git through one consistent metaphor (e.g. save points in a game, a photo album, a tree of snapshots), few words per block, a core mechanism diagram (working copy -> staging -> history -> remote), an interactive live moment, and a one-picture summary.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a single self-contained HTML file (doctype, inline CSS/JS, no build step)",
+        "Prose discipline: at least 80% of paragraph blocks are three sentences or fewer",
+        "One central metaphor introduced early and carried through the whole explanation, with real git terms attached to it as they appear",
+        "Core mechanism diagram: an inline SVG figure shows git's actual flow (edit -> stage -> commit -> history/remote), not just labeled boxes",
+        "Every diagram SVG is wrapped in <figure> with a <figcaption> and role=img + aria-label carrying the same claim",
+        "Token-based theming for both themes: :root token block, prefers-color-scheme and/or data-theme handling, explicit body background from a token",
+        "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
+        "Page ends by compressing the topic into one line plus one small visual",
+        "No glossary/definitions section exists",
+        "<title> reads as a specific product-style name (not 'Git Explained', 'What is Git', or containing 'ELI5')"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "ok my kid asked me what DNS is and I realized I genuinely can't explain it. can you do that eli5 thing and make me a simple explainer",
+      "expected_output": "A picture-explainer HTML artifact teaching DNS via a metaphor (phone book, receptionist, postal directory), almost no jargon, a lookup-flow diagram (name -> resolver -> root/TLD/authoritative -> IP), figures with captions, a live demo of a lookup, and a one-line takeaway.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a single self-contained HTML file (doctype, inline CSS/JS, no build step)",
+        "Prose discipline: at least 80% of paragraph blocks are three sentences or fewer",
+        "One central metaphor introduced early and carried through the whole explanation, with real DNS terms (resolver, record, IP address) attached to it as they appear",
+        "Core mechanism diagram: an inline SVG figure shows the lookup chain (browser -> resolver -> root/TLD/authoritative -> IP), not just labeled boxes",
+        "Every diagram SVG is wrapped in <figure> with a <figcaption> and role=img + aria-label carrying the same claim",
+        "Token-based theming for both themes: :root token block, prefers-color-scheme and/or data-theme handling, explicit body background from a token",
+        "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
+        "Page ends by compressing the topic into one line plus one small visual",
+        "No glossary/definitions section exists",
+        "<title> reads as a specific product-style name (not 'DNS Explained', 'What is DNS', or containing 'ELI5')"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "/eli5 how does a mortgage work",
+      "expected_output": "A picture-explainer HTML artifact teaching mortgages with an everyday metaphor, handling a non-software topic: principal/interest/rate/term translated into the metaphor, an amortization or money-flow diagram, a small interactive (e.g. move the rate/term slider), captions carrying definitions, one-picture ending.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a single self-contained HTML file (doctype, inline CSS/JS, no build step)",
+        "Prose discipline: at least 80% of paragraph blocks are three sentences or fewer",
+        "One central metaphor introduced early and carried through the whole explanation, with real mortgage terms (principal, interest, term, rate) attached to it as they appear",
+        "Core mechanism diagram or visual: an inline SVG figure shows how the money actually moves each month (payment split between principal and interest, balance shrinking), not just labeled boxes",
+        "Every diagram SVG is wrapped in <figure> with a <figcaption> and role=img + aria-label carrying the same claim",
+        "Token-based theming for both themes: :root token block, prefers-color-scheme and/or data-theme handling, explicit body background from a token",
+        "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
+        "Page ends by compressing the topic into one line plus one small visual",
+        "No glossary/definitions section exists",
+        "<title> reads as a specific product-style name (not 'Mortgages Explained', 'What is a Mortgage', or containing 'ELI5')"
+      ]
+    }
+  ]
+}
