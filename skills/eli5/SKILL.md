@@ -24,11 +24,11 @@ What follows is the ELI5 layer neither of them provides — the brief itself.
 
 ## Assume zero knowledge; explain by metaphor
 
-The reader has never seen the thing. The job is not "simplified" — it is *translated*.
+The reader has never seen the thing. The job is not "simplified" — it is _translated_.
 Pick one concrete metaphor the reader already lives with (a treehouse with rooms, a mail
 carrier, a puppet and a hand) and let that single metaphor carry the whole mechanism.
 Every real term the topic needs gets introduced inside the metaphor first, real name
-attached second: "The rooms are *channels*. Each room has a `#` name." Never use a real
+attached second: "The rooms are _channels_. Each room has a `#` name." Never use a real
 term the metaphor hasn't earned yet.
 
 The bar is a curious ten-year-old. Five is the idiom; ten is the comprehension target.
@@ -38,7 +38,7 @@ The bar is a curious ten-year-old. Five is the idiom; ten is the comprehension t
 Prose blocks run at most three short sentences. What would be a paragraph becomes a
 caption, a bullet, or a picture. Diagramming's rule — "if a sentence says it faster,
 write the sentence" — runs in reverse here: **if a picture says it faster, delete the
-sentence.** Stronger still, if a *specimen* says it faster, delete both: a fake profile
+sentence.** Stronger still, if a _specimen_ says it faster, delete both: a fake profile
 card carrying a BOT tag, one sample chat message, a three-line rules snippet shown as the
 thing itself teaches more than any description of it. Show the artifact; don't describe
 the artifact.
@@ -48,7 +48,7 @@ specimens.
 
 ## One metaphor, one world
 
-The page doesn't just explain the subject; it *looks like* the subject's own world. The
+The page doesn't just explain the subject; it _looks like_ the subject's own world. The
 Discord explainer is styled as Discord — profile-card hero, `#` channels, the app's own
 accent. This is the metaphor and the design language being one decision. When following
 the design reference's process step, derive the palette and objects from the subject's world,
@@ -57,6 +57,14 @@ forbids.
 
 Emoji may appear only where the subject itself would contain them (inside a chat
 message, on a dice roll) — never as section markers or decoration.
+
+**Contrast is load-bearing inside drawings.** The pictures carry the explanation, so a
+label that melts into its ground kills the page. Text inside a diagram takes its ink
+from the same token set as the surface behind it (`currentColor` or a token — never a
+default black). When a colored panel or pill needs text on it, choose the ink against
+that fill — a dark fill needs a light ink and vice versa — then check the drawing in
+_both_ themes: what reads in dark often dies in light, and the reader cannot recover
+what they cannot see.
 
 ## The story arc
 

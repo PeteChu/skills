@@ -16,7 +16,8 @@
         "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
         "Page ends by compressing the topic into one line plus one small visual",
         "No glossary/definitions section exists",
-        "<title> reads as a specific product-style name (not 'Git Explained', 'What is Git', or containing 'ELI5')"
+        "<title> reads as a specific product-style name (not 'Git Explained', 'What is Git', or containing 'ELI5')",
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)"
       ]
     },
     {
@@ -34,7 +35,8 @@
         "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
         "Page ends by compressing the topic into one line plus one small visual",
         "No glossary/definitions section exists",
-        "<title> reads as a specific product-style name (not 'DNS Explained', 'What is DNS', or containing 'ELI5')"
+        "<title> reads as a specific product-style name (not 'DNS Explained', 'What is DNS', or containing 'ELI5')",
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)"
       ]
     },
     {
@@ -52,7 +54,8 @@
         "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
         "Page ends by compressing the topic into one line plus one small visual",
         "No glossary/definitions section exists",
-        "<title> reads as a specific product-style name (not 'Mortgages Explained', 'What is a Mortgage', or containing 'ELI5')"
+        "<title> reads as a specific product-style name (not 'Mortgages Explained', 'What is a Mortgage', or containing 'ELI5')",
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)"
       ]
     }
   ]
