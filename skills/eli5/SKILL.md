@@ -11,10 +11,16 @@ disable-model-invocation: true
 Produce a picture explainer: one HTML artifact that teaches a mechanism to someone who
 knows nothing about it. Big pictures, few words.
 
-**Load the `artifact-design` skill before writing any HTML** — it is mandatory for every
-artifact and owns the design pass, theming, type, and publishing. Load
-`artifact-diagramming` too: a few-words page leans on its rules for most sections. What
-follows is the layer neither of those provides — the ELI5 brief itself.
+**Before writing any HTML, read the two bundled references shipped with this skill** —
+they are local files, not platform skills; do not search the filesystem beyond this
+folder for them:
+
+- `references/artifact-design.md` — the design pass: palette, type, both-theme tokens,
+  layout, and publishing. Mandatory for every artifact.
+- `references/artifact-diagramming.md` — when a picture earns its place, and the
+  inline-SVG mechanics that keep it legible in both themes.
+
+What follows is the ELI5 layer neither of them provides — the brief itself.
 
 ## Assume zero knowledge; explain by metaphor
 
@@ -45,7 +51,7 @@ specimens.
 The page doesn't just explain the subject; it *looks like* the subject's own world. The
 Discord explainer is styled as Discord — profile-card hero, `#` channels, the app's own
 accent. This is the metaphor and the design language being one decision. When following
-artifact-design's process step, derive the palette and objects from the subject's world,
+the design reference's process step, derive the palette and objects from the subject's world,
 not a generic scheme, and run its editorial review against the AI-default looks it
 forbids.
 
@@ -84,5 +90,5 @@ put the explainer sentence in the publish `description`. Start the file with
 `<!doctype html>` so the saved page stands alone in any browser, save it as
 `<slug>.html` (or the user's path), and publish it. Reply with the path and one sentence.
 
-A reference implementation sits next to this file: `clubhouse-robot.html`, with its
-build trace in `worked-example-eli5.md`. Read them when a page isn't landing.
+Two bundled exemplars live in this folder: `clubhouse-robot.html` (a finished page) and
+`worked-example-eli5.md` (its build trace). Read them when a page isn't landing.
