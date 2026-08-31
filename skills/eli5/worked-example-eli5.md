@@ -69,10 +69,3 @@ a paragraph explaining what a BOT tag means — the tag in the fake message _is_
   figure's caption; three words didn't need a fourth section
 - A theme toggle button → viewer's own theme controls it; the three-state token pattern handles
   the un-stamped default, so no JS toggle to maintain
-
-## 5 · Publishing note
-
-The `Artifact` publish failed in this session: the session authenticates with `ANTHROPIC_AUTH_TOKEN`,
-and publishing requires a claude.ai login (`/login`). The file stands alone — open
-`../clubhouse-robot.html` in a browser; it has no build step and no external dependency beyond the
-Google Fonts link.
