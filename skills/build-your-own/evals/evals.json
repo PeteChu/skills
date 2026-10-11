@@ -1,0 +1,90 @@
+{
+  "skill_name": "build-your-own",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "build-your-own-git",
+      "prompt": "I want to truly understand how git works under the hood. I learn best by building things myself — help me build my own git from scratch in Python. Where do I start?",
+      "expected_output": "Introduces the mental model, curates focused reading, and plans the incremental build. Provides the first reading and build brief without waiting for a teach-back.",
+      "files": [],
+      "assertions": [
+        "Explains a core Git mechanism in plain language with a concrete example",
+        "Creates BUILD-PLAN.md with a status table and Concept/Read/Build/Verify details for every milestone when filesystem tools are available; otherwise discloses the limitation",
+        "Provides focused reading before a tiny content-hashing build task and its runnable check",
+        "Includes full URLs for reading and does not claim unperformed resource verification",
+        "Does not require a teach-back, readiness confirmation, or quiz answer before writing",
+        "Does not supply the learner's implementation or pseudocode"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "toy-redis-clone",
+      "prompt": "I keep using redis at work but have no idea what's actually happening inside. I want to build my own mini redis as a learning project this month. I'll use Go. Can you plan it out for me?",
+      "expected_output": "Introduces the client/server model, provides focused resources and a full ladder, and assigns reading followed by a tiny PONG-server exercise without a verbal gate.",
+      "files": [],
+      "assertions": [
+        "Explains a concrete client request, server action, and response before the build brief",
+        "Includes RESP reading with a full URL and is honest about whether it was verified",
+        "Plans a tiny PONG-style first server and records limits compared to real Redis",
+        "Provides Concept/Read/Build/Verify details for all milestones",
+        "Does not demand an explanation from the user before they can implement",
+        "Does not provide implementation code"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "resume-mid-build-review",
+      "prompt": "Resume context: BUILD-PLAN.md says milestone 2 is in progress: extend the tokenizer to operators, parentheses, and whitespace while preserving multi-digit integers. Its verify check expects tokenize('12+3') to produce NUM(12), PLUS, NUM(3). My actual output is NUM(1), NUM(2), PLUS, NUM(3). The digit branch emits a token immediately for each character. Can we call it done and move on to parsing?",
+      "expected_output": "Identifies the multi-digit bug, keeps milestone 2 incomplete, and explains the concept needed for the user to fix and recheck it. No routine teach-back.",
+      "files": [],
+      "assertions": [
+        "Uses supplied plan and output without claiming unperformed checks or file reads",
+        "Explains that emitting immediately splits a multi-digit number",
+        "Directs the user to fix grouping and rerun the failing check without writing the fix",
+        "Keeps milestone 2 incomplete because of the bug, not because verbal evidence is absent",
+        "Does not require a quiz answer before the user can work on the fix"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "correct-misconception-without-gate",
+      "prompt": "I'm about to write my toy Redis server. I think TCP preserves requests, so every send becomes exactly one read on the server. If I send two requests together, the server always reads them separately. What should I read and build first?",
+      "expected_output": "Corrects the stream-versus-message misconception, gives focused reading and a small task with a check, and lets the user proceed without answering an oral exam.",
+      "files": [],
+      "assertions": [
+        "Corrects the claim that one send guarantees one read and explains splitting or combining ordered bytes",
+        "Provides relevant reading before the build brief",
+        "Gives a small implementation task and observable check without supplying the code",
+        "Does not pause for a mandatory teach-back or readiness confirmation"
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "advance-after-successful-review",
+      "prompt": "We have just finished reviewing milestone 1 of my toy Git. Context from BUILD-PLAN.md: hash a file with the Git blob header, preserving exact bytes. The implementation passed the empty-file and binary-file checks, a rename kept the identifier, and an edit changed it. Your code review found no remaining issues. There are no verbal explanation notes. Milestone 2 stores the zlib-compressed object under its hash. Let's move on.",
+      "expected_output": "Accepts the completed checks and review, then introduces object storage with focused reading, a build brief, and verification. Does not require retrospective teach-back.",
+      "files": [],
+      "assertions": [
+        "Accepts the supplied successful review and check results as sufficient to complete milestone 1",
+        "Does not block advancement because explanation notes are absent",
+        "Introduces object storage and supplies focused reading before the milestone 2 task",
+        "Includes a storage or round-trip check without supplying implementation code",
+        "Does not claim file updates unless actually performed"
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "review-reveals-conceptual-gap",
+      "prompt": "My tokenizer checks pass: tokenize('2+3') returns 5 and tokenize('2*3') returns 6. The milestone spec says to turn numbers and operators into separate tokens. Let's start writing the parser now.",
+      "expected_output": "Explains that the implementation and checks test evaluation rather than the tokenizer contract. Directs the learner to revise them and rerun verification, without a mandatory verbal loop.",
+      "files": [],
+      "assertions": [
+        "Explains tokenization versus evaluation using the supplied behavior",
+        "Points out that passing checks do not satisfy the milestone's specified output",
+        "Gives expected token behavior and directs the user to fix the implementation and checks themselves",
+        "Does not mark the milestone complete or start parser implementation",
+        "Does not supply the implementation or require a teach-back before making corrections"
+      ]
+    }
+  ]
+}

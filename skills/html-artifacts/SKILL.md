@@ -2,6 +2,7 @@
 name: html-artifacts
 description: >-
   Generate polished, self-contained HTML artifacts instead of Markdown. Use whenever the user asks for a substantial report, plan, spec, code review, PR write-up, code explainer, research summary, status or incident report, design exploration, prototype, diagram, slide deck, comparison, or one-off editing UI that should be easy to read, share, or interact with in a browser. Prefer this skill for rich deliverables even if the user says “doc”, “report”, “summary”, “plan”, “show me options”, or “write this up” and does not explicitly say HTML.
+disable-model-invocation: true
 ---
 
 # html-artifacts
