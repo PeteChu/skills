@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Module map — packages/sync-engine in acme-notes</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .kw { color: #d97757; }
+      .str { color: #a3b37f; }
+      .fn { color: #c9b98a; }
+      .cm { color: #87867f; }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; display: inline-block; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+      .map a:hover rect, .map a:focus rect { stroke: #141413; }
+      .map a:focus { outline: none; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1180px]">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">acme-notes · packages/sync-engine · module map</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          How <span class="font-mono text-[0.78em]">sync-engine</span> fits together
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px] mb-5">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          I'm picking up the sync engine next sprint and have never opened it. Draw me the shape of it: which modules exist,
+          how they connect, where a single keystroke actually goes, and where I should start reading.
+        </div>
+        <p class="m-0 mb-3">
+          The package turns local edits into an append-only <strong class="text-[#141413]">operation log</strong>, persists
+          them to IndexedDB, and streams them to the server over one socket. Everything flows through
+          <code class="font-mono text-[13px]">Session</code>: it is the only module that touches both storage and the network,
+          so it is the one file worth reading end to end.
+        </p>
+        <p class="font-mono text-xs text-[#87867f] m-0">Read at 4e1c9a2 · 23 files · 3,140 LOC · runtime deps: idb-keyval, nanoid</p>
+      </header>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Modules</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">10</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">3 layers, no cycles</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Entry points</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">3</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">hook · worker · CLI</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Hot path</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">6<span class="text-base text-[#87867f]"> hops</span></p>
+          <p class="font-mono text-xs text-clay-dark m-0">1.8 ms p50 local apply</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Test coverage</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">81<span class="text-base text-[#87867f]"> %</span></p>
+          <p class="font-mono text-xs text-rust m-0">rebase/ only 54%</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-10">
+        <div class="min-w-0">
+          <!-- 01 map -->
+          <section class="mb-14 scroll-mt-6" id="map">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">The map</h2>
+            </div>
+            <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Boxes are modules, arrows are imports in call direction. The numbered clay route is what runs on every keystroke. Click a box to jump to its row in the index.</p>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-4 overflow-x-auto">
+              <svg class="map min-w-[760px] w-full h-auto" viewBox="0 0 960 410" role="img" aria-label="Module map of sync-engine: three layers of entry points, core modules, and adapters, with the keystroke hot path highlighted">
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#87867f" /></marker>
+                  <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d97757" /></marker>
+                </defs>
+                <!-- lanes -->
+                <rect x="20" y="24" width="920" height="96" rx="10" fill="#faf9f5" stroke="#f0eee6" />
+                <rect x="20" y="150" width="920" height="106" rx="10" fill="#faf9f5" stroke="#f0eee6" />
+                <rect x="20" y="290" width="920" height="106" rx="10" fill="#faf9f5" stroke="#f0eee6" />
+                <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f" letter-spacing="1">
+                  <text x="34" y="40">ENTRY POINTS</text>
+                  <text x="34" y="166">CORE</text>
+                  <text x="34" y="306">ADAPTERS</text>
+                </g>
+
+                <!-- secondary arrows -->
+                <g stroke="#87867f" stroke-width="1.5" fill="none">
+                  <line x1="145" y1="106" x2="145" y2="178" marker-end="url(#arrow)" />
+                  <line x1="790" y1="106" x2="655" y2="178" marker-end="url(#arrow)" />
+                  <line x1="375" y1="236" x2="375" y2="318" stroke-dasharray="4 4" marker-end="url(#arrow)" />
+                </g>
+                <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f">
+                  <text x="153" y="146">replay</text>
+                  <text x="690" y="142" text-anchor="end">flush on online</text>
+                  <text x="383" y="282">stamp HLC</text>
+                </g>
+
+                <!-- hot path arrows -->
+                <g stroke="#d97757" stroke-width="2.5" fill="none">
+                  <line x1="375" y1="106" x2="375" y2="178" marker-end="url(#arrow-hot)" />
+                  <line x1="290" y1="208" x2="232" y2="208" marker-end="url(#arrow-hot)" />
+                  <line x1="110" y1="236" x2="110" y2="318" marker-end="url(#arrow-hot)" />
+                  <line x1="460" y1="208" x2="518" y2="208" marker-end="url(#arrow-hot)" />
+                  <line x1="625" y1="236" x2="690" y2="318" marker-end="url(#arrow-hot)" />
+                  <line x1="770" y1="318" x2="822" y2="238" marker-end="url(#arrow-hot)" />
+                </g>
+                <!-- step badges -->
+                <g font-family="ui-monospace, monospace" font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">
+                  <circle cx="375" cy="142" r="10" fill="#d97757" /><text x="375" y="146">1</text>
+                  <circle cx="261" cy="190" r="10" fill="#d97757" /><text x="261" y="194">2</text>
+                  <circle cx="110" cy="277" r="10" fill="#d97757" /><text x="110" y="281">3</text>
+                  <circle cx="489" cy="190" r="10" fill="#d97757" /><text x="489" y="194">4</text>
+                  <circle cx="644" cy="285" r="10" fill="#d97757" /><text x="644" y="289">5</text>
+                  <circle cx="810" cy="280" r="10" fill="#d97757" /><text x="810" y="284">6</text>
+                </g>
+                <text x="826" y="300" font-family="ui-monospace, monospace" font-size="10" fill="#b85c3e">ack + remote ops</text>
+
+                <!-- entry boxes -->
+                <a href="#m-cli"><rect x="60" y="50" width="170" height="56" rx="10" fill="#ffffff" stroke="#d1cfc5" stroke-width="1.5" />
+                  <text x="145" y="74" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">notes-sync CLI</text>
+                  <text x="145" y="92" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">bin/notes-sync.ts</text></a>
+                <a href="#m-hook"><rect x="290" y="50" width="170" height="56" rx="10" fill="rgba(217,119,87,0.10)" stroke="#d97757" stroke-width="1.5" />
+                  <text x="375" y="74" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">useDocument()</text>
+                  <text x="375" y="92" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">react/useDocument.ts</text></a>
+                <a href="#m-worker"><rect x="750" y="50" width="170" height="56" rx="10" fill="#ffffff" stroke="#d1cfc5" stroke-width="1.5" />
+                  <text x="835" y="74" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">SyncWorker</text>
+                  <text x="835" y="92" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">worker/index.ts</text></a>
+
+                <!-- core boxes -->
+                <a href="#m-oplog"><rect x="60" y="180" width="170" height="56" rx="10" fill="rgba(217,119,87,0.10)" stroke="#d97757" stroke-width="1.5" />
+                  <text x="145" y="204" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">OpLog</text>
+                  <text x="145" y="222" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">oplog/OpLog.ts</text></a>
+                <a href="#m-session"><rect x="290" y="180" width="170" height="56" rx="10" fill="rgba(217,119,87,0.18)" stroke="#d97757" stroke-width="2.5" />
+                  <text x="375" y="204" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" font-weight="600" fill="#141413">Session</text>
+                  <text x="375" y="222" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">session.ts · hub</text></a>
+                <a href="#m-outbox"><rect x="520" y="180" width="170" height="56" rx="10" fill="rgba(217,119,87,0.10)" stroke="#d97757" stroke-width="1.5" />
+                  <text x="605" y="204" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">Outbox</text>
+                  <text x="605" y="222" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">outbox.ts</text></a>
+                <a href="#m-rebase"><rect x="750" y="180" width="170" height="56" rx="10" fill="rgba(217,119,87,0.10)" stroke="#d97757" stroke-width="1.5" />
+                  <text x="835" y="204" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">Rebaser</text>
+                  <text x="835" y="222" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">rebase/rebase.ts</text></a>
+
+                <!-- adapter boxes -->
+                <a href="#m-idb"><rect x="60" y="320" width="170" height="56" rx="10" fill="rgba(217,119,87,0.10)" stroke="#d97757" stroke-width="1.5" />
+                  <text x="145" y="344" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">IdbStore</text>
+                  <text x="145" y="362" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">storage/idb.ts</text></a>
+                <a href="#m-clock"><rect x="290" y="320" width="170" height="56" rx="10" fill="#ffffff" stroke="#d1cfc5" stroke-width="1.5" />
+                  <text x="375" y="344" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">HybridClock</text>
+                  <text x="375" y="362" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">clock/hlc.ts</text></a>
+                <a href="#m-socket"><rect x="635" y="320" width="170" height="56" rx="10" fill="rgba(217,119,87,0.10)" stroke="#d97757" stroke-width="1.5" />
+                  <text x="720" y="344" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12.5" fill="#141413">SocketTransport</text>
+                  <text x="720" y="362" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">transport/socket.ts</text></a>
+              </svg>
+            </div>
+            <div class="flex flex-wrap gap-x-6 gap-y-2 mt-3 font-mono text-[11.5px] text-[#87867f]">
+              <span class="inline-flex items-center gap-2"><span class="inline-block w-6 h-[3px] bg-clay rounded"></span>hot path (per keystroke)</span>
+              <span class="inline-flex items-center gap-2"><span class="inline-block w-6 h-[2px] bg-[#87867f] rounded"></span>other import / call</span>
+              <span class="inline-flex items-center gap-2"><span class="inline-block w-6 border-t-2 border-dashed border-[#87867f]"></span>pure helper, no I/O</span>
+              <span class="inline-flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 rounded border-2 border-clay bg-[rgba(217,119,87,0.18)]"></span>hub: read this first</span>
+            </div>
+          </section>
+
+          <!-- 02 entry points -->
+          <section class="mb-14 scroll-mt-6" id="entry">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Entry points</h2>
+            </div>
+            <p class="text-[#87867f] max-w-[720px] m-0 mb-6">The three ways code outside the package gets in. Everything else is internal and not re-exported from <code class="font-mono text-[13px]">index.ts</code>.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <article id="m-hook" class="scroll-mt-6 bg-white border-2 border-clay rounded-xl p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between gap-2">
+                  <h3 class="m-0 font-mono text-[14px] text-[#141413]">useDocument(id)</h3>
+                  <span class="font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2 py-0.5">hot</span>
+                </div>
+                <p class="font-mono text-xs text-[#87867f] m-0">src/react/useDocument.ts:12</p>
+                <p class="text-sm m-0">React hook the editor calls once per open note. Returns <code class="font-mono text-[12.5px]">{ doc, apply }</code>; every keystroke goes through <code class="font-mono text-[12.5px]">apply</code>.</p>
+                <p class="font-mono text-[11.5px] text-clay-dark m-0 mt-auto">Called from 14 components in apps/web</p>
+              </article>
+              <article id="m-worker" class="scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl p-5 flex flex-col gap-3">
+                <h3 class="m-0 font-mono text-[14px] text-[#141413]">SyncWorker</h3>
+                <p class="font-mono text-xs text-[#87867f] m-0">src/worker/index.ts:1</p>
+                <p class="text-sm m-0">SharedWorker that owns the socket so five open tabs share one connection. Wakes the <code class="font-mono text-[12.5px]">Outbox</code> on <code class="font-mono text-[12.5px]">online</code> and every 15 s.</p>
+                <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-auto">Booted by apps/web/src/main.tsx</p>
+              </article>
+              <article id="m-cli" class="scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl p-5 flex flex-col gap-3">
+                <h3 class="m-0 font-mono text-[14px] text-[#141413]">notes-sync replay</h3>
+                <p class="font-mono text-xs text-[#87867f] m-0">bin/notes-sync.ts:30</p>
+                <p class="text-sm m-0">Support tool: loads an exported op log and replays it into a fresh <code class="font-mono text-[12.5px]">OpLog</code> to reproduce a corrupted note. Never touches the network.</p>
+                <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-auto">Used by support, ~3 runs/week</p>
+              </article>
+            </div>
+          </section>
+
+          <!-- 03 hot path -->
+          <section class="mb-14 scroll-mt-6" id="path">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">One keystroke, hop by hop</h2>
+            </div>
+            <p class="text-[#87867f] max-w-[720px] m-0 mb-6">The numbers match the clay arrows. Steps 1–3 are synchronous with the keystroke; 4–6 happen whenever the socket is free.</p>
+
+            <ol class="list-none m-0 p-0 divide-y divide-[#f0eee6] border-y border-[#f0eee6]">
+              <li class="grid grid-cols-[40px_1fr] gap-4 py-5">
+                <span class="w-8 h-8 rounded-full bg-oat border border-[#d1cfc5] font-mono text-sm font-semibold text-[#141413] flex items-center justify-center">1</span>
+                <div class="min-w-0">
+                  <p class="font-mono text-[13px] text-[#141413] m-0 mb-1.5">react/useDocument.ts <span class="text-[#87867f]">:31–44</span></p>
+                  <p class="m-0">The editor's <code class="font-mono text-[13px]">onChange</code> converts the ProseMirror step into an <code class="font-mono text-[13px]">Op</code> and calls <code class="font-mono text-[13px]">session.apply(op)</code>. The hook re-renders from the <code class="font-mono text-[13px]">change</code> event, never from its own state.</p>
+                </div>
+              </li>
+              <li class="grid grid-cols-[40px_1fr] gap-4 py-5">
+                <span class="w-8 h-8 rounded-full bg-[rgba(217,119,87,0.14)] border border-clay font-mono text-sm font-semibold text-clay-dark flex items-center justify-center">2</span>
+                <div class="min-w-0">
+                  <p class="font-mono text-[13px] text-[#141413] m-0 mb-1.5">session.ts <span class="text-[#87867f]">:58–91</span> <span class="ml-1 inline-flex items-center border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2 py-0.5 text-[11px] text-clay-dark">the hub</span></p>
+                  <p class="m-0 mb-2">This is the function to understand. <code class="font-mono text-[13px]">apply</code> stamps the op with a hybrid logical clock, appends it to the log, applies it to the in-memory doc, and enqueues it for sending, in that order. If the append throws, nothing else happens.</p>
+                  <details class="fold mt-2" open>
+                    <summary class="cursor-pointer inline-flex items-center gap-2 font-mono text-xs text-[#87867f] py-1">source</summary>
+                    <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto mt-2">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// packages/sync-engine/src/session.ts</span>
+<span class="kw">async</span> <span class="fn">apply</span>(op: LocalOp): <span class="kw">Promise</span>&lt;<span class="kw">void</span>&gt; {
+  <span class="kw">const</span> stamped = { ...op, ts: <span class="kw">this</span>.clock.<span class="fn">now</span>(), actor: <span class="kw">this</span>.actorId };
+  <span class="kw">await</span> <span class="kw">this</span>.log.<span class="fn">append</span>(stamped);        <span class="cm">// 3 · durable first</span>
+  <span class="kw">this</span>.doc = <span class="fn">applyOp</span>(<span class="kw">this</span>.doc, stamped);
+  <span class="kw">this</span>.<span class="fn">emit</span>(<span class="str">'change'</span>, <span class="kw">this</span>.doc);
+  <span class="kw">this</span>.outbox.<span class="fn">enqueue</span>(stamped);           <span class="cm">// 4 · fire and forget</span>
+}</pre>
+                    </div>
+                  </details>
+                </div>
+              </li>
+              <li class="grid grid-cols-[40px_1fr] gap-4 py-5">
+                <span class="w-8 h-8 rounded-full bg-oat border border-[#d1cfc5] font-mono text-sm font-semibold text-[#141413] flex items-center justify-center">3</span>
+                <div class="min-w-0">
+                  <p class="font-mono text-[13px] text-[#141413] m-0 mb-1.5">oplog/OpLog.ts <span class="text-[#87867f]">:22–40</span> → storage/idb.ts <span class="text-[#87867f]">:15</span></p>
+                  <p class="m-0 mb-2"><code class="font-mono text-[13px]">OpLog.append</code> batches writes into one IndexedDB transaction per animation frame. The await resolves when the batch commits, which is where most of the 1.8 ms goes.</p>
+                  <details class="fold mt-2">
+                    <summary class="cursor-pointer inline-flex items-center gap-2 font-mono text-xs text-[#87867f] py-1">source</summary>
+                    <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto mt-2">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// packages/sync-engine/src/oplog/OpLog.ts</span>
+<span class="fn">append</span>(op: StampedOp): <span class="kw">Promise</span>&lt;<span class="kw">void</span>&gt; {
+  <span class="kw">this</span>.pending.<span class="fn">push</span>(op);
+  <span class="kw">this</span>.flushing ??= <span class="fn">nextFrame</span>().<span class="fn">then</span>(() =&gt; {
+    <span class="kw">const</span> batch = <span class="kw">this</span>.pending.<span class="fn">splice</span>(<span class="str">0</span>);
+    <span class="kw">this</span>.flushing = <span class="kw">null</span>;
+    <span class="kw">return</span> <span class="kw">this</span>.store.<span class="fn">putMany</span>(<span class="str">'ops'</span>, batch);
+  });
+  <span class="kw">return</span> <span class="kw">this</span>.flushing;
+}</pre>
+                    </div>
+                  </details>
+                </div>
+              </li>
+              <li class="grid grid-cols-[40px_1fr] gap-4 py-5">
+                <span class="w-8 h-8 rounded-full bg-oat border border-[#d1cfc5] font-mono text-sm font-semibold text-[#141413] flex items-center justify-center">4</span>
+                <div class="min-w-0">
+                  <p class="font-mono text-[13px] text-[#141413] m-0 mb-1.5">outbox.ts <span class="text-[#87867f]">:18–52</span></p>
+                  <p class="m-0">The outbox coalesces adjacent text inserts (typing "hello" becomes one op, not five) and keeps at most one batch in flight. Unacked ops stay in IndexedDB, so a crash re-sends them on the next boot.</p>
+                </div>
+              </li>
+              <li class="grid grid-cols-[40px_1fr] gap-4 py-5">
+                <span class="w-8 h-8 rounded-full bg-oat border border-[#d1cfc5] font-mono text-sm font-semibold text-[#141413] flex items-center justify-center">5</span>
+                <div class="min-w-0">
+                  <p class="font-mono text-[13px] text-[#141413] m-0 mb-1.5">transport/socket.ts <span class="text-[#87867f]">:40–77</span></p>
+                  <p class="m-0">Messages are posted to the <code class="font-mono text-[13px]">SyncWorker</code> port, which owns the real socket. Reconnect uses 0.5 s → 30 s backoff and replays everything after the last acked clock value.</p>
+                </div>
+              </li>
+              <li class="grid grid-cols-[40px_1fr] gap-4 py-5">
+                <span class="w-8 h-8 rounded-full bg-oat border border-[#d1cfc5] font-mono text-sm font-semibold text-[#141413] flex items-center justify-center">6</span>
+                <div class="min-w-0">
+                  <p class="font-mono text-[13px] text-[#141413] m-0 mb-1.5">rebase/rebase.ts <span class="text-[#87867f]">:9–120</span></p>
+                  <p class="m-0 mb-2">The server ack carries any remote ops that landed first. <code class="font-mono text-[13px]">rebase()</code> transforms the still-pending local ops over them and tells <code class="font-mono text-[13px]">Session</code> to emit a fresh doc. This is the least-tested file in the package.</p>
+                  <details class="fold mt-2">
+                    <summary class="cursor-pointer inline-flex items-center gap-2 font-mono text-xs text-[#87867f] py-1">source</summary>
+                    <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto mt-2">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// packages/sync-engine/src/rebase/rebase.ts</span>
+<span class="kw">export function</span> <span class="fn">rebase</span>(pending: StampedOp[], remote: StampedOp[]) {
+  <span class="kw">let</span> out = pending;
+  <span class="kw">for</span> (<span class="kw">const</span> r <span class="kw">of</span> remote) {
+    out = out.<span class="fn">map</span>((p) =&gt; <span class="fn">transform</span>(p, r, p.ts &lt; r.ts ? <span class="str">'left'</span> : <span class="str">'right'</span>));
+  }
+  <span class="kw">return</span> out.<span class="fn">filter</span>((p) =&gt; !<span class="fn">isNoop</span>(p));  <span class="cm">// deletes of deleted text vanish</span>
+}</pre>
+                    </div>
+                  </details>
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <!-- 04 module index -->
+          <section class="mb-6 scroll-mt-6" id="index">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Module index</h2>
+            </div>
+            <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Fan-in is the number of other modules that import it. A high fan-in means a change there spreads widely.</p>
+            <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+              <table class="w-full text-sm border-collapse min-w-[640px]">
+                <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+                  <tr><th class="px-4 py-2.5 font-medium">Module</th><th class="px-4 py-2.5 font-medium">Responsibility</th><th class="px-4 py-2.5 font-medium text-right">LOC</th><th class="px-4 py-2.5 font-medium text-right">Fan-in</th><th class="px-4 py-2.5 font-medium">Imports</th></tr>
+                </thead>
+                <tbody class="divide-y divide-[#f0eee6]">
+                  <tr id="m-session" class="scroll-mt-6 bg-[rgba(217,119,87,0.06)]"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">session.ts</td><td class="px-4 py-3 align-top">Orchestrates apply, emit, enqueue; owns the in-memory doc</td><td class="px-4 py-3 align-top text-right font-mono text-xs">412</td><td class="px-4 py-3 align-top text-right font-mono text-xs text-clay-dark">4</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">oplog, outbox, rebase, clock</td></tr>
+                  <tr id="m-oplog" class="scroll-mt-6"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">oplog/OpLog.ts</td><td class="px-4 py-3 align-top">Append-only log, frame-batched writes, compaction at 5k ops</td><td class="px-4 py-3 align-top text-right font-mono text-xs">286</td><td class="px-4 py-3 align-top text-right font-mono text-xs">3</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">storage</td></tr>
+                  <tr id="m-outbox" class="scroll-mt-6"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">outbox.ts</td><td class="px-4 py-3 align-top">Coalesce, one batch in flight, re-send unacked on boot</td><td class="px-4 py-3 align-top text-right font-mono text-xs">198</td><td class="px-4 py-3 align-top text-right font-mono text-xs">2</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">transport, storage</td></tr>
+                  <tr id="m-rebase" class="scroll-mt-6"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">rebase/</td><td class="px-4 py-3 align-top">Operational transform of pending ops over remote ops</td><td class="px-4 py-3 align-top text-right font-mono text-xs">734</td><td class="px-4 py-3 align-top text-right font-mono text-xs">1</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">— (pure)</td></tr>
+                  <tr id="m-idb" class="scroll-mt-6"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">storage/idb.ts</td><td class="px-4 py-3 align-top">Thin idb-keyval wrapper; two stores: ops, snapshots</td><td class="px-4 py-3 align-top text-right font-mono text-xs">94</td><td class="px-4 py-3 align-top text-right font-mono text-xs">3</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">idb-keyval</td></tr>
+                  <tr id="m-socket" class="scroll-mt-6"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">transport/socket.ts</td><td class="px-4 py-3 align-top">MessagePort client for the worker-owned socket; backoff</td><td class="px-4 py-3 align-top text-right font-mono text-xs">221</td><td class="px-4 py-3 align-top text-right font-mono text-xs">2</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">—</td></tr>
+                  <tr id="m-clock" class="scroll-mt-6"><td class="px-4 py-3 align-top font-mono text-[12.5px] text-[#141413]">clock/hlc.ts</td><td class="px-4 py-3 align-top">Hybrid logical clock: wall time + counter, total order</td><td class="px-4 py-3 align-top text-right font-mono text-xs">61</td><td class="px-4 py-3 align-top text-right font-mono text-xs">2</td><td class="px-4 py-3 align-top font-mono text-xs text-[#87867f]">— (pure)</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- sidebar -->
+        <aside class="lg:sticky lg:top-6 self-start flex flex-col gap-5">
+          <nav class="bg-white border border-[#d1cfc5] rounded-xl p-5" aria-label="On this page">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-3">On this page</p>
+            <ul class="list-none m-0 p-0 text-sm space-y-1">
+              <li><a href="#map" class="block border-l-2 border-[#d1cfc5] pl-3 py-0.5 hover:border-[#141413] hover:text-[#141413]">01 The map</a></li>
+              <li><a href="#entry" class="block border-l-2 border-[#d1cfc5] pl-3 py-0.5 hover:border-[#141413] hover:text-[#141413]">02 Entry points</a></li>
+              <li><a href="#path" class="block border-l-2 border-[#d1cfc5] pl-3 py-0.5 hover:border-[#141413] hover:text-[#141413]">03 Keystroke path</a></li>
+              <li><a href="#index" class="block border-l-2 border-[#d1cfc5] pl-3 py-0.5 hover:border-[#141413] hover:text-[#141413]">04 Module index</a></li>
+            </ul>
+          </nav>
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-3">Read in this order</p>
+            <ol class="list-decimal m-0 pl-5 text-sm space-y-2.5 marker:font-mono marker:text-[#87867f]">
+              <li><span class="font-mono text-xs text-[#141413] block break-all">src/session.ts</span><span class="text-[13px] text-[#87867f]">The whole flow in 412 lines.</span></li>
+              <li><span class="font-mono text-xs text-[#141413] block break-all">src/types.ts</span><span class="text-[13px] text-[#87867f]"><code class="font-mono">Op</code>, <code class="font-mono">StampedOp</code>, <code class="font-mono">Ack</code>.</span></li>
+              <li><span class="font-mono text-xs text-[#141413] block break-all">src/outbox.ts</span><span class="text-[13px] text-[#87867f]">Where "offline" really lives.</span></li>
+              <li><span class="font-mono text-xs text-[#141413] block break-all">test/rebase.spec.ts</span><span class="text-[13px] text-[#87867f]">Cases explain rebase better than its code.</span></li>
+            </ol>
+          </div>
+          <div class="border border-clay rounded-xl bg-[rgba(217,119,87,0.06)] p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-clay-dark font-semibold m-0 mb-3">Gotchas</p>
+            <ul class="list-none m-0 p-0 text-[13px] space-y-2.5">
+              <li class="pl-3 border-l-2 border-clay">The doc updates <em>after</em> the IndexedDB commit. A slow disk shows up as typing lag, not as a sync delay.</li>
+              <li class="pl-3 border-l-2 border-clay">Safari private mode has no IndexedDB. <code class="font-mono text-[12px]">IdbStore</code> silently falls back to memory, so notes vanish on reload.</li>
+              <li class="pl-3 border-l-2 border-clay">The tie-break in <code class="font-mono text-[12px]">rebase()</code> compares clock values with <code class="font-mono text-[12px]">&lt;</code>. Equal stamps from two actors fall to <code class="font-mono text-[12px]">'right'</code> on both sides, which is only safe because <code class="font-mono text-[12px]">actor</code> is folded into <code class="font-mono text-[12px]">ts</code>.</li>
+            </ul>
+          </div>
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-3">Boundaries</p>
+            <ul class="list-none m-0 p-0 text-[13px] space-y-2">
+              <li class="flex gap-2"><span class="text-olive font-mono">✓</span><span>Only <code class="font-mono text-[12px]">session.ts</code> imports both storage and transport.</span></li>
+              <li class="flex gap-2"><span class="text-olive font-mono">✓</span><span><code class="font-mono text-[12px]">rebase/</code> and <code class="font-mono text-[12px]">clock/</code> are pure: no I/O, no timers.</span></li>
+              <li class="flex gap-2"><span class="text-rust font-mono">✕</span><span><code class="font-mono text-[12px]">react/</code> reaches into <code class="font-mono text-[12px]">oplog/</code> once (debug panel). Lint rule pending.</span></li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/module-map.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

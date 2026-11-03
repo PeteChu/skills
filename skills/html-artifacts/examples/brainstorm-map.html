@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brainstorm — 10 ways to cut acme/platform CI time</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .dot:focus { outline: none; }
+      .dot:focus-visible circle { stroke: #141413; stroke-width: 3; }
+    </style>
+    <script>
+      function brainstorm() {
+        return {
+          ideas: [
+            { n: 1, short: 'cache pnpm store', effort: 'S', e: 0, mins: 3.5 },
+            { n: 2, short: 'skip e2e on docs-only PRs', effort: 'S', e: 0, mins: 8 },
+            { n: 3, short: 'turn on Turbo remote cache', effort: 'S', e: 0, mins: 6 },
+            { n: 4, short: 'quarantine flaky tests', effort: 'M', e: 1, mins: 4 },
+            { n: 5, short: 'shard unit tests 4 ways', effort: 'M', e: 1, mins: 10 },
+            { n: 6, short: 'per-worker Postgres schemas for Playwright', effort: 'M', e: 1, mins: 12 },
+            { n: 7, short: 'incremental typecheck with project references', effort: 'L', e: 2, mins: 5 },
+            { n: 8, short: 'Docker layer caching', effort: 'M', e: 1, mins: 3.5 },
+            { n: 9, short: 'affected-only test runs', effort: 'L', e: 2, mins: 15 },
+            { n: 10, short: 'merge queue with e2e moved to merge group', effort: 'XL', e: 3, mins: 19 },
+          ],
+          picked: { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 7: false, 8: false, 9: false, 10: false },
+          lead: '',
+          note: '',
+          hover: 0,
+          sort: 'num',
+          copied: '',
+          toggle(n) { this.picked[n] = !this.picked[n]; },
+          get picks() { return this.ideas.filter(i => this.picked[i.n]); },
+          get totalMins() { return this.picks.reduce((a, i) => a + i.mins, 0); },
+          rank(n) {
+            const list = [...this.ideas];
+            if (this.sort === 'impact') list.sort((a, b) => b.mins - a.mins || a.n - b.n);
+            if (this.sort === 'effort') list.sort((a, b) => a.e - b.e || b.mins - a.mins);
+            return list.findIndex(i => i.n === n);
+          },
+          get reply() {
+            if (!this.picks.length) return '';
+            const names = this.picks.map(i => '#' + i.n + ' (' + i.short + ')');
+            const leadN = this.lead && this.picked[this.lead] ? this.lead : String(this.picks[0].n);
+            let r = 'These resonate: ' + names.join(', ') + '. Start with #' + leadN + ' and write a short plan for it before touching the workflow files.';
+            if (this.note.trim()) r += ' ' + this.note.trim();
+            return r;
+          },
+          get hovered() { return this.ideas.find(i => i.n === this.hover); },
+          copy(t, k) { navigator.clipboard.writeText(t).then(() => { this.copied = k; setTimeout(() => { if (this.copied === k) this.copied = ''; }, 1400); }); },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 pt-14 pb-48 lg:pt-16">
+    <main class="mx-auto max-w-[1100px]" x-data="brainstorm()">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Brainstorm · acme/platform · CI pipeline</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Ten places to cut CI time, from a one-line fix to a quarter-long bet
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <div class="flex items-center justify-between gap-3 mb-1.5">
+            <span class="font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+            <button type="button" @click="copy($refs.ask.textContent.trim(), 'ask')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-2.5 py-1 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="copied !== 'ask'">Copy</span><span x-show="copied === 'ask'" x-cloak class="text-olive">Copied ✓</span>
+            </button>
+          </div>
+          <p x-ref="ask" class="m-0">Our PR checks take forever and people have started merging without waiting. Look through the repo and CI config and brainstorm
+          ten ways to speed it up, from cheapest to most ambitious. I'll tell you which ones resonate.</p>
+        </div>
+        <p class="m-0 mt-5 max-w-[760px]">I read <code class="font-mono text-[13px]">.github/workflows/</code>, <code class="font-mono text-[13px]">turbo.json</code>, the Jest and Playwright configs, and 30 days of run timings. A pattern showed up: <strong class="text-[#141413]">most of the speed-ups are already half-built and just not switched on.</strong> The cheap ideas below are mostly configuration, not new engineering.</p>
+      </header>
+
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12" aria-label="Current CI numbers">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">p50 PR check</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">38<span class="text-base text-[#87867f]"> min</span></p>
+          <p class="font-mono text-xs text-rust m-0">▲ 11 min since March</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">p90</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">52<span class="text-base text-[#87867f]"> min</span></p>
+          <p class="font-mono text-xs text-[#87867f] m-0">long tail = e2e retries</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Runs / day</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">142</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">≈ 90 runner-hours</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Manual re-runs</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">17<span class="text-base text-[#87867f]">%</span></p>
+          <p class="font-mono text-xs text-rust m-0">flaky e2e, mostly</p>
+        </div>
+      </section>
+
+      <!-- Where the time goes -->
+      <section class="mb-14" id="pipeline">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Where the 38 minutes go</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">This is a median run of <code class="font-mono text-[13px]">ci.yml</code>. The critical path is shown in clay. Only speed-ups on that path shorten the time people wait.</p>
+        <div class="overflow-x-auto bg-white border border-[#d1cfc5] rounded-xl p-4">
+          <svg viewBox="0 0 760 230" class="w-full min-w-[680px]" role="img" aria-label="Gantt chart of the median CI run; the critical path is queue, install, build, docker image, and e2e">
+            <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f">
+              <line x1="140" y1="20" x2="140" y2="196" stroke="#f0eee6" /><text x="140" y="212" text-anchor="middle">0</text>
+              <line x1="290" y1="20" x2="290" y2="196" stroke="#f0eee6" /><text x="290" y="212" text-anchor="middle">10</text>
+              <line x1="440" y1="20" x2="440" y2="196" stroke="#f0eee6" /><text x="440" y="212" text-anchor="middle">20</text>
+              <line x1="590" y1="20" x2="590" y2="196" stroke="#f0eee6" /><text x="590" y="212" text-anchor="middle">30</text>
+              <line x1="740" y1="20" x2="740" y2="196" stroke="#f0eee6" /><text x="740" y="212" text-anchor="middle">40 min</text>
+            </g>
+            <g font-family="ui-monospace, monospace" font-size="11" fill="#3d3d3a">
+              <text x="10" y="36">queue + checkout</text>
+              <rect x="140" y="24" width="38" height="16" rx="3" fill="#d97757" />
+              <text x="10" y="60">pnpm install</text>
+              <rect x="178" y="48" width="63" height="16" rx="3" fill="#d97757" /><text x="248" y="60" fill="#87867f">4.2 · 1</text>
+              <text x="10" y="84">turbo build</text>
+              <rect x="241" y="72" width="92" height="16" rx="3" fill="#d97757" /><text x="340" y="84" fill="#87867f">6.1 · 3</text>
+              <text x="10" y="108">typecheck</text>
+              <rect x="241" y="96" width="113" height="16" rx="3" fill="#d1cfc5" /><text x="361" y="108" fill="#87867f">7.5 · 7</text>
+              <text x="10" y="132">unit (jest)</text>
+              <rect x="241" y="120" width="210" height="16" rx="3" fill="#d1cfc5" /><text x="458" y="132" fill="#87867f">14.0 · 4, 5, 9</text>
+              <text x="10" y="156">docker image</text>
+              <rect x="333" y="144" width="63" height="16" rx="3" fill="#d97757" /><text x="403" y="156" fill="#87867f">4.2 · 8</text>
+              <text x="10" y="180">e2e (playwright)</text>
+              <rect x="396" y="168" width="315" height="16" rx="3" fill="#d97757" /><text x="553" y="180" text-anchor="middle" fill="#fff">21.0 · workers: 1 · 2, 6, 10</text>
+            </g>
+          </svg>
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-2 mb-0">Numbers after each bar are minutes, then the ideas below that target that stage.</p>
+      </section>
+
+      <!-- Map -->
+      <section class="mb-14" id="map">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Effort vs. minutes saved</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Each dot is an idea. Click a dot (or press Enter on it) to mark it as resonating, and hover over it to see its name. The savings are estimated separately for each idea and overlap, so they don't add up.</p>
+        <div class="grid lg:grid-cols-[1fr_280px] gap-6 items-start">
+          <div class="overflow-x-auto bg-white border border-[#d1cfc5] rounded-xl p-4">
+            <svg viewBox="0 0 760 430" class="w-full min-w-[620px]" role="group" aria-label="Scatter plot of ten ideas by effort and estimated minutes saved">
+              <!-- quadrant tint -->
+              <rect x="70" y="30" width="240" height="165" fill="rgba(120,140,93,0.08)" />
+              <rect x="450" y="195" width="280" height="165" fill="rgba(176,74,63,0.05)" />
+              <g font-family="ui-serif, Georgia, serif" font-size="14" fill="#87867f" font-style="italic">
+                <text x="82" y="52">Quick wins</text>
+                <text x="718" y="188" text-anchor="end">Big bets</text>
+                <text x="82" y="350">Fill-ins</text>
+                <text x="718" y="350" text-anchor="end">Money pits</text>
+              </g>
+              <!-- axes -->
+              <line x1="70" y1="360" x2="730" y2="360" stroke="#87867f" />
+              <line x1="70" y1="30" x2="70" y2="360" stroke="#87867f" />
+              <g stroke="#d1cfc5" stroke-dasharray="3 4">
+                <line x1="230" y1="30" x2="230" y2="360" /><line x1="450" y1="30" x2="450" y2="360" /><line x1="620" y1="30" x2="620" y2="360" />
+                <line x1="70" y1="200" x2="730" y2="200" /><line x1="70" y1="40" x2="730" y2="40" />
+              </g>
+              <g font-family="ui-monospace, monospace" font-size="11" fill="#3d3d3a" text-anchor="middle">
+                <text x="150" y="380">S · hours</text><text x="340" y="380">M · days</text><text x="535" y="380">L · 1–2 weeks</text><text x="675" y="380">XL · quarter</text>
+                <text x="400" y="410" fill="#87867f">effort →</text>
+              </g>
+              <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f" text-anchor="end">
+                <text x="62" y="364">0</text><text x="62" y="204">10</text><text x="62" y="44">20 min</text>
+              </g>
+              <text x="22" y="200" font-family="ui-monospace, monospace" font-size="11" fill="#87867f" transform="rotate(-90 22 200)" text-anchor="middle">minutes saved on p50 →</text>
+              <!-- dots: y = 360 - mins*16 -->
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 1, cache pnpm store, S, 3.5 min" @click="toggle(1)" @keydown.enter.prevent="toggle(1)" @keydown.space.prevent="toggle(1)" @mouseenter="hover=1" @mouseleave="hover=0" @focus="hover=1" @blur="hover=0">
+                <circle cx="110" cy="304" r="15" :fill="picked[1] ? '#d97757' : '#ffffff'" stroke="#d97757" stroke-width="2" /><text x="110" y="308" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[1] ? '#fff' : '#141413'">1</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 2, skip e2e on docs-only PRs, S, 8 min" @click="toggle(2)" @keydown.enter.prevent="toggle(2)" @keydown.space.prevent="toggle(2)" @mouseenter="hover=2" @mouseleave="hover=0" @focus="hover=2" @blur="hover=0">
+                <circle cx="165" cy="232" r="15" :fill="picked[2] ? '#d97757' : '#ffffff'" stroke="#d97757" stroke-width="2" /><text x="165" y="236" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[2] ? '#fff' : '#141413'">2</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 3, Turbo remote cache, S, 6 min" @click="toggle(3)" @keydown.enter.prevent="toggle(3)" @keydown.space.prevent="toggle(3)" @mouseenter="hover=3" @mouseleave="hover=0" @focus="hover=3" @blur="hover=0">
+                <circle cx="200" cy="264" r="15" :fill="picked[3] ? '#d97757' : '#ffffff'" stroke="#d97757" stroke-width="2" /><text x="200" y="268" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[3] ? '#fff' : '#141413'">3</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 4, quarantine flaky tests, M, 4 min" @click="toggle(4)" @keydown.enter.prevent="toggle(4)" @keydown.space.prevent="toggle(4)" @mouseenter="hover=4" @mouseleave="hover=0" @focus="hover=4" @blur="hover=0">
+                <circle cx="350" cy="296" r="15" :fill="picked[4] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="350" y="300" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[4] ? '#fff' : '#141413'">4</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 5, shard unit tests, M, 10 min" @click="toggle(5)" @keydown.enter.prevent="toggle(5)" @keydown.space.prevent="toggle(5)" @mouseenter="hover=5" @mouseleave="hover=0" @focus="hover=5" @blur="hover=0">
+                <circle cx="310" cy="200" r="15" :fill="picked[5] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="310" y="204" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[5] ? '#fff' : '#141413'">5</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 6, per-worker Postgres schemas, M, 12 min" @click="toggle(6)" @keydown.enter.prevent="toggle(6)" @keydown.space.prevent="toggle(6)" @mouseenter="hover=6" @mouseleave="hover=0" @focus="hover=6" @blur="hover=0">
+                <circle cx="415" cy="168" r="15" :fill="picked[6] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="415" y="172" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[6] ? '#fff' : '#141413'">6</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 7, incremental typecheck, L, 5 min" @click="toggle(7)" @keydown.enter.prevent="toggle(7)" @keydown.space.prevent="toggle(7)" @mouseenter="hover=7" @mouseleave="hover=0" @focus="hover=7" @blur="hover=0">
+                <circle cx="520" cy="280" r="15" :fill="picked[7] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="520" y="284" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[7] ? '#fff' : '#141413'">7</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 8, Docker layer caching, M, 3.5 min" @click="toggle(8)" @keydown.enter.prevent="toggle(8)" @keydown.space.prevent="toggle(8)" @mouseenter="hover=8" @mouseleave="hover=0" @focus="hover=8" @blur="hover=0">
+                <circle cx="270" cy="304" r="15" :fill="picked[8] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="270" y="308" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[8] ? '#fff' : '#141413'">8</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 9, affected-only test runs, L, 15 min" @click="toggle(9)" @keydown.enter.prevent="toggle(9)" @keydown.space.prevent="toggle(9)" @mouseenter="hover=9" @mouseleave="hover=0" @focus="hover=9" @blur="hover=0">
+                <circle cx="565" cy="120" r="15" :fill="picked[9] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="565" y="124" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" :fill="picked[9] ? '#fff' : '#141413'">9</text>
+              </g>
+              <g class="dot cursor-pointer" tabindex="0" role="button" aria-label="Idea 10, merge queue, XL, 19 min" @click="toggle(10)" @keydown.enter.prevent="toggle(10)" @keydown.space.prevent="toggle(10)" @mouseenter="hover=10" @mouseleave="hover=0" @focus="hover=10" @blur="hover=0">
+                <circle cx="675" cy="56" r="15" :fill="picked[10] ? '#d97757' : '#ffffff'" stroke="#87867f" stroke-width="2" /><text x="675" y="60" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10.5" :fill="picked[10] ? '#fff' : '#141413'">10</text>
+              </g>
+            </svg>
+          </div>
+          <aside class="bg-white border border-[#d1cfc5] rounded-xl p-5 lg:sticky lg:top-6">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Pointing at</p>
+            <template x-if="hovered">
+              <div>
+                <p class="font-serif text-[19px] leading-snug text-[#141413] m-0 mb-2"><span class="font-mono text-xs text-[#87867f]" x-text="'#' + hovered.n"></span> <span x-text="hovered.short"></span></p>
+                <p class="font-mono text-xs m-0">Effort <b class="text-[#141413]" x-text="hovered.effort"></b> · saves ~<b class="text-[#141413]" x-text="hovered.mins"></b> min</p>
+              </div>
+            </template>
+            <p x-show="!hovered" class="text-sm text-[#87867f] m-0">Hover over or tab to a dot.</p>
+            <hr class="border-[#f0eee6] my-4">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Legend</p>
+            <ul class="list-none m-0 p-0 space-y-1.5 text-[13px]">
+              <li class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 rounded-full border-2 border-clay bg-white"></span> config-only change</li>
+              <li class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 rounded-full border-2 border-[#87867f] bg-white"></span> needs code or process change</li>
+              <li class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 rounded-full bg-clay"></span> marked as resonating</li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <!-- Cards -->
+      <section class="mb-14" id="ideas">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">The ten ideas</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">Each idea points to what already exists in the repo. Tick the ones that resonate, and mark one with ★ to say where to start.</p>
+        <div class="flex flex-wrap items-center gap-2 mb-6 font-mono text-xs">
+          <span class="text-[#87867f] mr-1">Sort by</span>
+          <template x-for="s in [['num','cheapest first'],['impact','most minutes'],['effort','least effort']]" :key="s[0]">
+            <button type="button" @click="sort = s[0]" :aria-pressed="sort === s[0]"
+              :class="sort === s[0] ? 'bg-[#141413] text-ivory border-[#141413]' : 'bg-white border-[#d1cfc5] hover:border-[#141413]'"
+              class="border rounded-full px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-clay" x-text="s[1]"></button>
+          </template>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-5">
+          <!-- 1 -->
+          <article id="iv-1" :style="{ order: rank(1) }" :class="picked[1] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#1</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Cache the pnpm store</h3>
+              <span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5">S</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">.github/workflows/ci.yml:24</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> <code class="font-mono text-[13px]">actions/setup-node</code> runs without <code class="font-mono text-[13px]">cache: 'pnpm'</code>, so all six jobs download about 1.1 GB of packages from scratch. The lockfile hasn't changed in 82% of runs.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> −3.5 min on every job, plus about 6 runner-hours a day. It's a two-line change.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[1]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[1]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="1" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 2 -->
+          <article id="iv-2" :style="{ order: rank(2) }" :class="picked[2] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#2</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Skip e2e on docs- and config-only PRs</h3>
+              <span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5">S</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">.github/workflows/e2e.yml · on.pull_request</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> there's no <code class="font-mono text-[13px]">paths</code> filter. In the last 30 days, 22% of PRs touched only <code class="font-mono text-[13px]">docs/**</code>, <code class="font-mono text-[13px]">*.md</code>, or <code class="font-mono text-[13px]">.changeset/</code>, and each one waited the full 21-minute Playwright run.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −8 min on the average PR. Branch protection needs a no-op "e2e" job so the required check still reports.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[2]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[2]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="2" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 3 -->
+          <article id="iv-3" :style="{ order: rank(3) }" :class="picked[3] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#3</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Turn on the Turborepo remote cache that's already configured</h3>
+              <span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5">S</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">turbo.json · .github/workflows/ci.yml:41</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> <code class="font-mono text-[13px]">turbo.json</code> declares correct <code class="font-mono text-[13px]">outputs</code> for all 31 packages, but <code class="font-mono text-[13px]">TURBO_TOKEN</code> is never set in CI, so every run rebuilds every package. Local builds already get 74% cache hits.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −6 min on the build stage, which is on the critical path. Needs one secret and an env line.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[3]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[3]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="3" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 4 -->
+          <article id="iv-4" :style="{ order: rank(4) }" :class="picked[4] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#4</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Quarantine the 41 flaky tests instead of retrying everything</h3>
+              <span class="font-mono text-[11px] border border-[#d1cfc5] bg-white rounded-full px-2 py-0.5">M</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">jest.setup.ts:3 · playwright.config.ts:12</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> <code class="font-mono text-[13px]">jest.retryTimes(3)</code> is set globally and Playwright has <code class="font-mono text-[13px]">retries: 2</code>. Run logs show 41 tests that retry in more than 5% of runs. Every other test pays the retry overhead and real failures take 3× as long to report.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −4 min p50, more at p90. It also attacks the 17% manual re-run rate.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[4]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[4]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="4" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 5 -->
+          <article id="iv-5" :style="{ order: rank(5) }" :class="picked[5] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#5</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Shard unit tests four ways</h3>
+              <span class="font-mono text-[11px] border border-[#d1cfc5] bg-white rounded-full px-2 py-0.5">M</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">jest.config.ts · package.json "jest": "^29.7"</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> Jest 29 supports <code class="font-mono text-[13px]">--shard=i/n</code>, but the unit job runs 6,200 tests on one runner for 14 minutes. Two suites (<code class="font-mono text-[13px]">billing/</code> and <code class="font-mono text-[13px]">search/</code>) account for 40% of that, so the shards will need balancing.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> Unit stage drops to about 4 min. This only helps wall-clock time once e2e is shorter too (see #6).</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[5]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[5]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="5" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 6 -->
+          <article id="iv-6" :style="{ order: rank(6) }" :class="picked[6] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#6</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Give each Playwright worker its own Postgres schema</h3>
+              <span class="font-mono text-[11px] border border-[#d1cfc5] bg-white rounded-full px-2 py-0.5">M</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">playwright.config.ts:8 · packages/db/testing/createSchema.ts</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> e2e runs with <code class="font-mono text-[13px]">workers: 1</code> and a comment <code class="font-mono text-[13px]">// TODO: parallelize once DB is isolated</code>. The API integration tests already isolate data with <code class="font-mono text-[13px]">createSchema(workerId)</code>. Nobody has wired it into Playwright fixtures.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −12 min. It's the biggest item on the critical path that doesn't need new infrastructure.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[6]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[6]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="6" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 7 -->
+          <article id="iv-7" :style="{ order: rank(7) }" :class="picked[7] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#7</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Finish the move to TypeScript project references</h3>
+              <span class="font-mono text-[11px] border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-2 py-0.5">L</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">tsconfig.json · packages/*/tsconfig.json</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> typecheck runs <code class="font-mono text-[13px]">tsc --noEmit</code> across the whole repo. 9 of 31 packages already have <code class="font-mono text-[13px]">composite: true</code> from an abandoned migration, but the remaining 22 have circular imports between <code class="font-mono text-[13px]">ui</code> and <code class="font-mono text-[13px]">forms</code> that need untangling first.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −5 min on typecheck, but typecheck isn't on the critical path. The real benefit is faster editors.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[7]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[7]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="7" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 8 -->
+          <article id="iv-8" :style="{ order: rank(8) }" :class="picked[8] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#8</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Reorder the API Dockerfile and cache its layers</h3>
+              <span class="font-mono text-[11px] border border-[#d1cfc5] bg-white rounded-full px-2 py-0.5">M</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">apps/api/Dockerfile:6 · docker/build-push-action</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> the Dockerfile runs <code class="font-mono text-[13px]">COPY . .</code> before <code class="font-mono text-[13px]">pnpm install</code>, so any change busts the install layer. The build step also sets no <code class="font-mono text-[13px]">cache-from</code>, so even unchanged layers rebuild.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −3.5 min, on the critical path. The reorder also speeds up local <code class="font-mono text-[12px]">docker compose up</code>.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[8]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[8]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="8" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 9 -->
+          <article id="iv-9" :style="{ order: rank(9) }" :class="picked[9] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#9</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Run only the tests affected by the diff</h3>
+              <span class="font-mono text-[11px] border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-2 py-0.5">L</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">turbo run test --filter=...[origin/main]</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> Turbo already knows the package graph, so affected filtering is a flag. The risk is the e2e suite, which has no package boundaries. It would need a test-to-route mapping, and <code class="font-mono text-[13px]">e2e/</code> doesn't have one yet.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> About −15 min on the median PR. In exchange, main has to run the full suite and a few breakages will only show up after merge.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[9]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[9]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="9" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+          <!-- 10 -->
+          <article id="iv-10" :style="{ order: rank(10) }" :class="picked[10] ? 'border-clay ring-1 ring-clay' : 'border-[#d1cfc5]'" class="bg-white border rounded-xl p-5 flex flex-col gap-3 scroll-mt-6">
+            <div class="flex items-start gap-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg mt-1">#10</span>
+              <h3 class="flex-1 font-serif font-medium text-[19px] leading-snug text-[#141413] m-0">Adopt a merge queue and run e2e only there</h3>
+              <span class="font-mono text-[11px] border border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust rounded-full px-2 py-0.5">XL</span>
+            </div>
+            <p class="font-mono text-[11.5px] text-[#87867f] m-0 break-all">branch protection · on.merge_group</p>
+            <p class="m-0 text-[14.5px]"><span class="text-clay-dark font-medium">Found in the repo:</span> PRs wait on the full suite because main has no other safety net. With a merge queue, PR checks become lint, typecheck, and affected unit tests, while e2e runs once per merge group. That changes how the team works, not just the YAML.</p>
+            <p class="m-0 text-sm bg-[#f0eee6] rounded-lg px-3 py-2"><b class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">Impact</b> PR feedback in about 9 min. It also fixes the real complaint, people merging before checks finish. It needs buy-in from the 6 team leads.</p>
+            <div class="flex flex-wrap items-center gap-4 mt-auto pt-1 font-mono text-xs">
+              <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="picked[10]" class="accent-clay w-4 h-4"> This resonates</label>
+              <label x-show="picked[10]" x-cloak class="inline-flex items-center gap-1.5 cursor-pointer text-clay-dark"><input type="radio" name="lead" value="10" x-model="lead" class="accent-clay"> ★ start here</label>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <aside class="border-l-4 border-clay bg-white rounded-r-xl px-6 py-5 mb-6">
+        <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">If you only pick two</p>
+        <p class="m-0">#3 and #6 together shorten the critical path by about 18 minutes and need no new infrastructure. Everything else either sits off the critical path or is a team decision.</p>
+      </aside>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/brainstorm-map.md</span>
+      </footer>
+
+      <!-- Reply bar -->
+      <div class="fixed inset-x-0 bottom-0 z-20 px-4 pb-4">
+        <div class="mx-auto max-w-[1100px] bg-white border border-[#141413] rounded-xl shadow-lg p-4">
+          <div class="flex flex-wrap items-center gap-3 mb-2">
+            <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">Your reply</span>
+            <span class="font-mono text-xs"><b class="text-[#141413]" x-text="picks.length"></b> resonate<span x-show="picks.length"> · ~<span x-text="totalMins"></span> min if they didn't overlap</span></span>
+            <span class="flex-1"></span>
+            <button type="button" @click="picked = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 7: false, 8: false, 9: false, 10: false }; lead = ''; note = ''" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Reset</button>
+            <button type="button" :disabled="!picks.length" @click="copy(reply, 'reply')" class="bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3 py-1.5 hover:bg-clay-dark disabled:opacity-40 disabled:hover:bg-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="copied !== 'reply'">Copy reply</span><span x-show="copied === 'reply'" x-cloak>Copied ✓</span>
+            </button>
+          </div>
+          <div class="grid md:grid-cols-[1fr_280px] gap-3">
+            <p class="m-0 font-mono text-[12.5px] bg-[#f0eee6] rounded-lg px-3 py-2 min-h-[44px]" :class="picks.length ? 'text-[#141413]' : 'text-[#87867f]'" x-text="picks.length ? reply : 'Tick the ideas that resonate. Your reply builds here.'"></p>
+            <input type="text" x-model="note" placeholder="Add a note (optional)…" aria-label="Optional note appended to the reply" class="hidden md:block font-mono text-[12.5px] border border-[#d1cfc5] rounded-lg px-3 py-2 bg-white focus:outline-2 focus:outline-clay">
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PR #1184 project trash — merge readiness quiz</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      code { font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace; font-size: 0.88em; background: #f0eee6; border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+      :target { animation: flash 1.6s ease-out; }
+      @keyframes flash { 0% { box-shadow: 0 0 0 4px rgba(217,119,87,.55); } 100% { box-shadow: 0 0 0 4px rgba(217,119,87,0); } }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[960px]">
+      <header class="mb-10">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Merge readiness · acme-boards · PR #1184</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Project trash: what changed, and a quiz before you merge
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px] mb-4">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          I didn't write most of this soft-delete PR and I'm the one approving it. Give me a report on the diff with the context,
+          the non-obvious behavior, and a short quiz at the end that I have to pass before I merge.
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1">feat/project-trash → main</span>
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1">11 files · 7 commits</span>
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1"><strong class="text-olive">+486</strong> <strong class="text-rust">−112</strong></span>
+          <span class="font-mono text-[11.5px] bg-[rgba(120,140,93,0.12)] border border-[rgba(120,140,93,0.45)] text-olive rounded-lg px-2.5 py-1">CI green · 1,284 tests</span>
+        </div>
+      </header>
+
+      <!-- 01 Mental model -->
+      <section id="model" class="mb-14 scroll-mt-6">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">The mental model</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">Deleting a project used to be one irreversible step. Now it is a lifecycle with two new states and a 30-day window.</p>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <div class="overflow-x-auto">
+            <svg viewBox="0 0 760 262" class="w-full min-w-[680px]" role="img" aria-label="Before: Active, then DELETE hard-deletes the row and cascades to tasks. After: Active, DELETE moves to Trashed, after 30 days a nightly job moves it to Purging, then Purged. Restore goes from Trashed back to Active and fails with 409 if the slug is taken. Restore from Purging returns 410.">
+              <defs>
+                <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#87867f" /></marker>
+                <marker id="arc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97757" /></marker>
+              </defs>
+              <!-- before -->
+              <text x="20" y="24" font-family="ui-monospace, monospace" font-size="10.5" letter-spacing="1" fill="#87867f">BEFORE</text>
+              <rect x="20" y="36" width="140" height="48" rx="8" fill="#f0eee6" stroke="#d1cfc5" />
+              <text x="90" y="57" text-anchor="middle" font-family="ui-serif, Georgia, serif" font-size="15" fill="#141413">Active</text>
+              <text x="90" y="73" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">projects row</text>
+              <line x1="160" y1="60" x2="258" y2="60" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar)" />
+              <text x="209" y="53" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#3d3d3a">DELETE</text>
+              <rect x="262" y="36" width="210" height="48" rx="8" fill="#b04a3f" fill-opacity="0.08" stroke="#b04a3f" stroke-opacity="0.5" />
+              <text x="367" y="57" text-anchor="middle" font-family="ui-serif, Georgia, serif" font-size="15" fill="#b04a3f">Hard-deleted</text>
+              <text x="367" y="73" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">row + tasks cascade, no undo</text>
+              <line x1="20" y1="104" x2="740" y2="104" stroke="#f0eee6" />
+              <!-- after -->
+              <text x="20" y="126" font-family="ui-monospace, monospace" font-size="10.5" letter-spacing="1" fill="#d97757">AFTER · PR #1184</text>
+              <rect x="20" y="138" width="140" height="52" rx="8" fill="#f0eee6" stroke="#d1cfc5" />
+              <text x="90" y="160" text-anchor="middle" font-family="ui-serif, Georgia, serif" font-size="15" fill="#141413">Active</text>
+              <text x="90" y="177" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">deleted_at IS NULL</text>
+              <line x1="160" y1="164" x2="226" y2="164" stroke="#d97757" stroke-width="1.5" marker-end="url(#arc)" />
+              <text x="193" y="157" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#3d3d3a">DELETE</text>
+              <rect x="230" y="138" width="170" height="52" rx="8" fill="#d97757" fill-opacity="0.12" stroke="#d97757" stroke-width="1.5" />
+              <text x="315" y="160" text-anchor="middle" font-family="ui-serif, Georgia, serif" font-size="15" fill="#141413">Trashed</text>
+              <text x="315" y="177" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#b85c3e">deleted_at = now()</text>
+              <line x1="400" y1="164" x2="456" y2="164" stroke="#d97757" stroke-width="1.5" marker-end="url(#arc)" />
+              <text x="428" y="157" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#3d3d3a">day 30</text>
+              <rect x="460" y="138" width="150" height="52" rx="8" fill="#d97757" fill-opacity="0.12" stroke="#d97757" stroke-width="1.5" />
+              <text x="535" y="160" text-anchor="middle" font-family="ui-serif, Georgia, serif" font-size="15" fill="#141413">Purging</text>
+              <text x="535" y="177" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#b85c3e">purge_started_at set</text>
+              <line x1="610" y1="164" x2="636" y2="164" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar)" />
+              <rect x="640" y="138" width="100" height="52" rx="8" fill="#f0eee6" stroke="#d1cfc5" />
+              <text x="690" y="160" text-anchor="middle" font-family="ui-serif, Georgia, serif" font-size="15" fill="#141413">Purged</text>
+              <text x="690" y="177" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">row gone</text>
+              <!-- restore -->
+              <path d="M300,190 C300,240 90,240 90,194" fill="none" stroke="#788c5d" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar)" />
+              <text x="195" y="252" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#788c5d">restore · 409 if slug taken</text>
+              <text x="535" y="208" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#b04a3f">restore → 410 Gone</text>
+              <text x="428" y="230" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">PurgeTrashedProjectsJob · nightly 02:00 UTC</text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- 02 Behaviors -->
+      <section id="behaviors" class="mb-10 scroll-mt-6">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Three non-obvious behaviors</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">You won't get these from skimming the diff. Each one is deliberate, and each one will come up in a support ticket.</p>
+
+        <div class="space-y-5">
+          <article id="beh-1" class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden scroll-mt-6">
+            <header class="flex items-baseline gap-3 px-5 pt-4 pb-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">B1</span>
+              <h3 class="m-0 font-serif font-medium text-[19px] text-[#141413]">A default scope hides trashed projects everywhere, including from <code>Project.find</code></h3>
+            </header>
+            <dl class="m-0 divide-y divide-[#f0eee6] text-[14.5px] border-t border-[#f0eee6]">
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">What</dt><dd class="m-0"><code>default_scope { where(deleted_at: nil) }</code> means every existing query skips trashed rows, and <code>Project.find(id)</code> raises <code>RecordNotFound</code> for them. Admin and restore code must use <code>Project.with_deleted</code>.</dd></div>
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Why</dt><dd class="m-0">There are 140+ call sites that load projects. A scope hides trashed rows from all of them without touching each one. The cost: background jobs enqueued before the delete now raise, and <code>ApplicationJob</code>'s <code>discard_on ActiveRecord::RecordNotFound</code> silently drops them.</dd></div>
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Where</dt><dd class="m-0 flex flex-wrap gap-1.5"><code>app/models/project.rb:8</code> <code>app/controllers/trash_controller.rb:21</code> <code>app/jobs/application_job.rb:4</code></dd></div>
+            </dl>
+          </article>
+
+          <article id="beh-2" class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden scroll-mt-6">
+            <header class="flex items-baseline gap-3 px-5 pt-4 pb-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">B2</span>
+              <h3 class="m-0 font-serif font-medium text-[19px] text-[#141413]">Trashing a project frees its slug, so restore can collide</h3>
+            </header>
+            <dl class="m-0 divide-y divide-[#f0eee6] text-[14.5px] border-t border-[#f0eee6]">
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">What</dt><dd class="m-0">The unique index on <code>(workspace_id, slug)</code> is now partial: <code>WHERE deleted_at IS NULL</code>. Someone can create a new project with a trashed project's slug. Restoring the old one then returns <code>409 slug_taken</code>, and the UI asks for a new slug.</dd></div>
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Why</dt><dd class="m-0">Holding slugs for 30 days blocked the common "delete and recreate" flow in usability testing. A collision on restore is rarer and easy to explain.</dd></div>
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Where</dt><dd class="m-0 flex flex-wrap gap-1.5"><code>db/migrate/20261028_partial_slug_index.rb</code> <code>app/services/projects/restore.rb:34</code></dd></div>
+            </dl>
+          </article>
+
+          <article id="beh-3" class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden scroll-mt-6">
+            <header class="flex items-baseline gap-3 px-5 pt-4 pb-3">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">B3</span>
+              <h3 class="m-0 font-serif font-medium text-[19px] text-[#141413]">Purge deletes attachments first, rows last, and is safe to rerun</h3>
+            </header>
+            <dl class="m-0 divide-y divide-[#f0eee6] text-[14.5px] border-t border-[#f0eee6]">
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">What</dt><dd class="m-0">The nightly job sets <code>purge_started_at</code>, deletes S3 attachments, then deletes the row. If S3 times out halfway, the row stays and the job picks it up again the next night. Once <code>purge_started_at</code> is set, restore returns <code>410 Gone</code>.</dd></div>
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Why</dt><dd class="m-0">The row is the retry handle. If the row were deleted first, a failure would leave orphaned files with nothing pointing at them. A project may therefore sit in trash for 31+ days, but it is never half-restorable.</dd></div>
+              <div class="grid sm:grid-cols-[80px_1fr] gap-x-4 gap-y-1 px-5 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Where</dt><dd class="m-0 flex flex-wrap gap-1.5"><code>app/jobs/purge_trashed_projects_job.rb:15</code> <code>config/schedule.yml:42</code></dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <aside id="sec-leans" class="border-l-4 border-rust bg-white rounded-r-xl px-6 py-5 mb-16 scroll-mt-6">
+        <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-1">Existing behavior this leans on</p>
+        <p class="m-0"><strong class="text-[#141413]">Search visibility depends on the <code>after_commit :reindex</code> callback.</strong> Trashing uses <code>update!(deleted_at: Time.current)</code>, which fires the callback, and <code>SearchIndexer</code> drops the project's tasks from results. Anything that uses <code>update_all</code> or <code>update_column</code> skips callbacks and leaves trashed tasks searchable. The planned bulk-trash ticket <strong>BRD-877</strong> does exactly that.</p>
+      </aside>
+
+      <!-- 03 Quiz -->
+      <section id="quiz" class="scroll-mt-4" x-data="quiz()"
+        @keydown="onKey($event)">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="flex-1 h-px bg-[#d1cfc5]"></span>
+          <span class="font-mono text-[11px] uppercase tracking-[0.1em] text-clay-dark">Part 2 · prove it</span>
+          <span class="flex-1 h-px bg-[#d1cfc5]"></span>
+        </div>
+        <div class="sticky top-0 z-10 -mx-6 px-6 py-3 mb-6 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5] flex flex-wrap gap-x-4 gap-y-2 items-center">
+          <h2 class="m-0 font-serif font-medium text-[22px] text-[#141413] mr-auto">Six questions before you merge</h2>
+          <span class="font-mono text-xs">Score <strong class="text-[#141413]" x-text="score"></strong> / <span x-text="qs.length"></span></span>
+          <span class="font-mono text-xs text-[#87867f]"><span x-text="answered"></span> answered</span>
+          <span class="w-28 h-1.5 bg-[#e3dacc] rounded-full overflow-hidden" aria-hidden="true"><span class="block h-full bg-clay transition-all" :style="'width:' + (answered / qs.length * 100) + '%'"></span></span>
+        </div>
+        <p class="text-[#87867f] text-sm m-0 mb-6 max-w-[720px]">Each question is a decision you'd have to get right during an incident or a review. Tab to an option and press Enter, or press <kbd class="font-mono text-xs border border-[#d1cfc5] rounded px-1 bg-white">A</kbd>–<kbd class="font-mono text-xs border border-[#d1cfc5] rounded px-1 bg-white">D</kbd> while a question is focused. Answers lock once picked.</p>
+
+        <div class="space-y-5">
+          <template x-for="(q, qi) in qs" :key="qi">
+            <fieldset :data-q="qi" class="bg-white border rounded-xl px-5 py-5 min-w-0"
+              :class="picks[qi] === null ? 'border-[#d1cfc5]' : (picks[qi] === q.correct ? 'border-[rgba(120,140,93,0.6)]' : 'border-[rgba(176,74,63,0.55)]')">
+              <legend class="sr-only" x-text="'Question ' + (qi + 1)"></legend>
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-1" x-text="'Question ' + (qi + 1) + ' of ' + qs.length"></p>
+              <p class="font-serif text-[18px] leading-snug text-[#141413] m-0 mb-4" x-text="q.q"></p>
+              <div class="grid gap-2">
+                <template x-for="(o, oi) in q.opts" :key="oi">
+                  <button type="button" @click="pick(qi, oi)" :disabled="picks[qi] !== null" :class="optClass(qi, oi)"
+                    class="text-left flex gap-3 items-start border rounded-lg px-3.5 py-2.5 text-[14.5px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay disabled:cursor-default">
+                    <span class="font-mono text-[11px] shrink-0 w-6 h-6 rounded-md grid place-items-center bg-[#f0eee6] text-[#141413]" x-text="'ABCD'[oi]"></span>
+                    <span class="pt-0.5" x-text="o"></span>
+                  </button>
+                </template>
+              </div>
+              <div x-show="picks[qi] !== null" x-cloak class="mt-4">
+                <div x-show="picks[qi] === q.correct" class="border-l-4 border-olive bg-[rgba(120,140,93,0.10)] rounded-r-lg px-4 py-3 text-[14px]">
+                  <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-1">✓ Correct</p>
+                  <p class="m-0" x-text="q.why"></p>
+                </div>
+                <div x-show="picks[qi] !== q.correct" class="border-l-4 border-rust bg-[rgba(176,74,63,0.08)] rounded-r-lg px-4 py-3 text-[14px]">
+                  <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-1" x-text="'Not quite. The answer is ' + 'ABCD'[q.correct] + '.'"></p>
+                  <p class="m-0 mb-2">From the report:</p>
+                  <blockquote class="m-0 mb-2 border-l-2 border-[#d1cfc5] pl-3 text-[#3d3d3a] italic" x-text="q.excerpt"></blockquote>
+                  <a :href="'#' + q.anchor" class="font-mono text-xs text-clay-dark underline underline-offset-2" x-text="'Re-read: ' + q.label + ' ↑'"></a>
+                </div>
+              </div>
+            </fieldset>
+          </template>
+        </div>
+
+        <!-- Result -->
+        <div x-show="done && passed" x-cloak class="mt-8 bg-white border-2 border-olive rounded-xl px-6 py-5">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="w-8 h-8 rounded-full bg-olive text-white grid place-items-center">✓</span>
+            <h3 class="m-0 font-serif font-medium text-[22px] text-[#141413]">Cleared to merge</h3>
+          </div>
+          <p class="m-0 mb-3 text-[#87867f]">6/6. You can explain this change to whoever gets paged for it.</p>
+          <ul class="m-0 p-0 list-none space-y-1.5 text-[14.5px]">
+            <li class="flex gap-2"><span class="text-olive">✓</span>Understanding verified (this quiz, 6/6)</li>
+            <li class="flex gap-2"><span class="text-olive">✓</span>CI green on feat/project-trash · 1,284 tests</li>
+            <li class="flex gap-2"><span class="text-olive">✓</span>Partial slug index is built <code>CONCURRENTLY</code>, so no table lock</li>
+            <li class="flex gap-2"><span class="text-[#87867f]">○</span>Squash-merge with sections 01–02 as the commit body</li>
+            <li class="flex gap-2"><span class="text-[#87867f]">○</span>Comment on BRD-877: bulk trash must not use <code>update_all</code></li>
+            <li class="flex gap-2"><span class="text-[#87867f]">○</span>Check the first purge run on Dec 3, 02:00 UTC</li>
+          </ul>
+        </div>
+        <div x-show="done && !passed" x-cloak class="mt-8 bg-white border-2 border-rust rounded-xl px-6 py-5">
+          <h3 class="m-0 mb-1 font-serif font-medium text-[22px] text-[#141413]" x-text="'Not yet: ' + score + '/' + qs.length + '. Re-read these, then retry'"></h3>
+          <p class="m-0 mb-3 text-[#87867f] text-[14.5px]">Each miss maps back to one section of the report.</p>
+          <ul class="m-0 mb-4 pl-4 list-disc marker:text-rust space-y-1">
+            <template x-for="m in missed" :key="m.anchor">
+              <li><a :href="'#' + m.anchor" class="text-clay-dark underline underline-offset-2" x-text="m.label"></a></li>
+            </template>
+          </ul>
+          <button type="button" @click="reset()" class="font-mono text-xs bg-[#141413] text-ivory rounded-lg px-3 py-1.5 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay">Reset quiz and try again</button>
+        </div>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/change-quiz.md</span>
+      </footer>
+    </main>
+
+    <script>
+      function quiz() {
+        return {
+          qs: [
+            {
+              q: "A support engineer runs Project.find(4182) in the console for a project a customer trashed yesterday and gets RecordNotFound. What's going on?",
+              opts: [
+                "The default scope hides trashed rows; they need Project.with_deleted.find(4182)",
+                "The project was already purged; trash only lasts 24 hours",
+                "The console connects to a read replica that lags by a day",
+                "Trashed projects move to a separate archived_projects table"
+              ],
+              correct: 0,
+              why: "Right. default_scope filters deleted_at IS NULL everywhere, including find. Admin and restore paths use with_deleted.",
+              excerpt: "Project.find(id) raises RecordNotFound for them. Admin and restore code must use Project.with_deleted.",
+              anchor: "beh-1",
+              label: "B1: default scope hides trashed projects"
+            },
+            {
+              q: "A webhook-delivery job for project 4182 was enqueued one second before the project was trashed. What happens when it runs?",
+              opts: [
+                "It delivers normally; jobs snapshot the project when enqueued",
+                "It retries 25 times with backoff, then lands in the dead set",
+                "It raises RecordNotFound and ApplicationJob's discard_on drops it silently",
+                "It waits in the queue until the project is restored"
+              ],
+              correct: 2,
+              why: "Yes. The job's Project.find hits the default scope, raises, and discard_on drops it. No retry, no alert.",
+              excerpt: "Background jobs enqueued before the delete now raise, and ApplicationJob's discard_on ActiveRecord::RecordNotFound silently drops them.",
+              anchor: "beh-1",
+              label: "B1: queued jobs for trashed projects are discarded"
+            },
+            {
+              q: "Maya trashes q4-roadmap. Later that day, Tom creates a new project called q4-roadmap. Maya clicks Restore. What happens?",
+              opts: [
+                "The restore succeeds and Tom's project is renamed q4-roadmap-2",
+                "The restore succeeds and both projects share the slug",
+                "Restore returns 409 slug_taken and the UI asks Maya for a new slug",
+                "Tom could not have created it; trashed slugs are reserved for 30 days"
+              ],
+              correct: 2,
+              why: "Correct. The partial unique index frees the slug on trash, so the collision shows up at restore time as a 409.",
+              excerpt: "Someone can create a new project with a trashed project's slug. Restoring the old one then returns 409 slug_taken, and the UI asks for a new slug.",
+              anchor: "beh-2",
+              label: "B2: freed slugs and restore collisions"
+            },
+            {
+              q: "Last night's purge deleted 400 of a project's 900 attachments, then S3 timed out. This morning the owner clicks Restore. What do they get?",
+              opts: [
+                "A restored project with 500 attachments",
+                "410 Gone. purge_started_at is set, and the rest is deleted tonight",
+                "A restored project; the deleted files come back from S3 versioning",
+                "500 Internal Server Error until an engineer cleans up manually"
+              ],
+              correct: 1,
+              why: "Right. Once purge starts, restore is closed with 410. The row is the retry handle, so tonight's run finishes the job.",
+              excerpt: "If S3 times out halfway, the row stays and the job picks it up again the next night. Once purge_started_at is set, restore returns 410 Gone.",
+              anchor: "beh-3",
+              label: "B3: purge order and the 410 window"
+            },
+            {
+              q: "BRD-877 adds bulk trash with Project.where(id: ids).update_all(deleted_at: Time.current). What breaks?",
+              opts: [
+                "Nothing; update_all is just a faster update!",
+                "The partial slug index rejects the batch",
+                "The trashed projects' tasks stay in search results, because update_all skips after_commit :reindex",
+                "The purge job will never pick these rows up"
+              ],
+              correct: 2,
+              why: "Exactly. Search hiding depends on the callback, and update_all bypasses callbacks. Flag it on BRD-877 before it ships.",
+              excerpt: "Anything that uses update_all or update_column skips callbacks and leaves trashed tasks searchable. BRD-877 does exactly that.",
+              anchor: "sec-leans",
+              label: "Callout: search relies on the after_commit callback"
+            },
+            {
+              q: "Why does the purge job delete S3 attachments before deleting the database row?",
+              opts: [
+                "S3 deletes are faster, so the slow part goes last",
+                "Because ON DELETE CASCADE would also delete the S3 objects",
+                "It doesn't matter; the order was arbitrary",
+                "So a failure never leaves orphaned files with no row pointing at them; the row is what makes the job retryable"
+              ],
+              correct: 3,
+              why: "Yes. Row-last means a crash leaves something the job can find again tomorrow. Row-first would leak files forever.",
+              excerpt: "The row is the retry handle. If the row were deleted first, a failure would leave orphaned files with nothing pointing at them.",
+              anchor: "beh-3",
+              label: "B3: why rows are deleted last"
+            }
+          ],
+          picks: [],
+          init() { this.picks = this.qs.map(() => null) },
+          pick(qi, oi) { if (this.picks[qi] === null && oi < this.qs[qi].opts.length) this.picks[qi] = oi },
+          get answered() { return this.picks.filter(p => p !== null).length },
+          get score() { return this.picks.filter((p, i) => p === this.qs[i].correct).length },
+          get done() { return this.answered === this.qs.length },
+          get passed() { return this.score === this.qs.length },
+          get missed() {
+            const seen = new Set();
+            return this.qs.filter((q, i) => {
+              if (this.picks[i] === null || this.picks[i] === q.correct || seen.has(q.anchor)) return false;
+              seen.add(q.anchor);
+              return true;
+            });
+          },
+          onKey(e) {
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            const k = 'abcd'.indexOf(e.key.toLowerCase());
+            const card = e.target.closest('[data-q]');
+            if (k > -1 && card) this.pick(Number(card.dataset.q), k);
+          },
+          optClass(qi, oi) {
+            const p = this.picks[qi], c = this.qs[qi].correct;
+            if (p === null) return 'border-[#d1cfc5] bg-white hover:border-[#141413] hover:bg-[#faf9f5] cursor-pointer';
+            if (oi === p && p === c) return 'border-olive bg-[rgba(120,140,93,0.12)] text-[#141413]';
+            if (oi === p) return 'border-rust bg-[rgba(176,74,63,0.10)] text-[#141413] line-through decoration-[rgba(176,74,63,0.5)]';
+            if (oi === c) return 'border-olive border-dashed bg-white text-[#141413]';
+            return 'border-[#f0eee6] bg-white text-[#87867f]';
+          },
+          reset() {
+            this.picks = this.qs.map(() => null);
+            this.$nextTick(() => this.$root.scrollIntoView({ behavior: 'smooth' }));
+          }
+        };
+      }
+    </script>
+  </body>
+</html>

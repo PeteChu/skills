@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spec interview — offline mode for Acme Field</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .qdot { cursor: pointer; }
+      .qdot:focus { outline: none; }
+      .qdot:focus-visible circle { stroke-width: 3.5; }
+    </style>
+    <script>
+      function interview() {
+        return {
+          radii: {
+            arch: { label: 'Architecture', color: '#d97757' },
+            data: { label: 'Data model', color: '#b85c3e' },
+            ux: { label: 'UX', color: '#788c5d' },
+            pol: { label: 'Polish', color: '#87867f' },
+          },
+          qs: [
+            { r: 'arch', short: 'Sync model', topic: 'Sync model',
+              q: 'How should edits made offline reach the server?',
+              why: 'This decides whether we add a sync engine, a local schema that mirrors Postgres, and a change feed on the API, or none of those. Every later answer builds on it.',
+              lean: 0,
+              opts: [
+                { t: 'Outbox of API calls, replayed on reconnect', d: 'Reuses the existing REST endpoints and the expo-sqlite drafts table. Ordering and partial failure become our problem.' },
+                { t: 'Local SQLite replica with row-level sync', d: 'Adopt a sync library (PowerSync or WatermelonDB). Most robust, but adds a new dependency and a server-side change feed.' },
+                { t: 'Read-only offline; edits need a connection', d: 'Smallest change. Inspectors in basements can view checklists but still cannot finish one.' },
+              ] },
+            { r: 'arch', short: 'Conflicts', topic: 'Conflict resolution',
+              q: 'Two inspectors edit the same inspection while offline. Who wins?',
+              why: 'Field-level merges need per-field timestamps in the payload and in the inspections table. Record-level merges do not. This choice fixes the wire format.',
+              lean: 0,
+              opts: [
+                { t: 'Last write wins, per field', d: 'Edits to different checklist items both survive. Needs updated_at per answer; the API already sends ETags per record only.' },
+                { t: 'Last write wins, whole record', d: 'Simple. Silently discards a colleague\'s answers when two people overlap, which happens on ~4% of multi-inspector sites.' },
+                { t: 'Keep both, flag for supervisor', d: 'Nothing is lost. Adds a conflict queue screen to the supervisor web app.' },
+              ] },
+            { r: 'arch', short: 'Offline auth', topic: 'Offline auth window',
+              q: 'How long can a device stay offline before the inspector must sign in again?',
+              why: 'Access tokens expire after 12 h today. Anything longer needs a device-bound refresh grant and a decision about what happens to local data when it lapses.',
+              lean: 1,
+              opts: [
+                { t: '12 hours, same as today', d: 'No auth changes. Multi-day remote jobs (wind farms, rail) will lock out mid-trip.' },
+                { t: '7 days with a device-bound refresh token', d: 'Covers the longest trips in last quarter\'s schedule. Needs a revoke path for lost devices.' },
+                { t: '72 hours, then wipe local data', d: 'Conservative for security. Risk of wiping unsynced work, so the outbox must warn first.' },
+              ] },
+            { r: 'data', short: 'Offline scope', topic: 'What is downloaded',
+              q: 'Which data does the app keep on the device for offline use?',
+              why: 'Scope drives local storage size and the shape of the download query. Region-wide data means paging and a background job.',
+              lean: 0,
+              opts: [
+                { t: 'My assigned inspections for the next 7 days', d: 'About 30 sites and 15 MB per inspector. Misses ad-hoc jobs added on site.' },
+                { t: 'Every site in my region', d: 'About 2,300 sites and 400 MB including floor plans. Handles surprises, slow first sync.' },
+                { t: 'Assigned, plus sites I pin by hand', d: 'Small by default, with an escape hatch. Needs a pin button and a storage meter.' },
+              ] },
+            { r: 'data', short: 'Photos', topic: 'Photo storage',
+              q: 'Where do photos live until they are uploaded?',
+              why: 'A typical inspection has 40–120 photos at 4–6 MB each. Storage location decides cleanup, privacy, and whether uploads can resume.',
+              lean: 2,
+              opts: [
+                { t: 'App sandbox, full resolution', d: 'Private and resumable. A busy day can use 2 GB on the device.' },
+                { t: 'Device camera roll', d: 'Survives app reinstall. Mixes client photos with personal ones, which legal has flagged before.' },
+                { t: 'App sandbox, resized to 2048 px before queueing', d: 'About 600 KB each. Matches what the report PDF uses anyway; originals are not kept.' },
+              ] },
+            { r: 'ux', short: 'Sync status', topic: 'Sync status visibility',
+              q: 'How visible should sync state be to the inspector?',
+              why: 'Inspectors close the app as soon as they leave a site. If they cannot see what is still queued, unsynced work gets lost when phones are swapped.',
+              lean: 2,
+              opts: [
+                { t: 'A global banner when offline', d: 'Minimal. Says nothing about which inspections are still waiting.' },
+                { t: 'Badges on each inspection', d: 'Shows exactly what is pending, but only on list screens.' },
+                { t: 'Badges plus an Outbox screen', d: 'Per-item state, retry and error detail in one place. One more screen to build.' },
+              ] },
+            { r: 'pol', short: 'Wording', topic: 'Status wording',
+              q: 'What should the status say when work is saved but not uploaded?',
+              why: 'Pure copy, but it shows up hundreds of times a day. The first support ticket will quote it.',
+              lean: 1,
+              opts: [
+                { t: '"Offline"', d: 'Short, but describes the network rather than the work.' },
+                { t: '"Saved on this phone, will upload"', d: 'Says what is safe and what is pending. Longer.' },
+                { t: '"Pending sync"', d: 'Familiar to engineers, vague to inspectors.' },
+              ] },
+          ],
+          answers: [null, null, null, null, null, null, null],
+          current: 0,
+          other: '',
+          copied: false,
+          get total() { return this.qs.length; },
+          get summary() { return this.current >= this.qs.length; },
+          get q() { return this.qs[Math.min(this.current, this.qs.length - 1)]; },
+          get done() { return this.answers.filter(a => a).length; },
+          go(i) {
+            this.current = i;
+            const a = this.answers[i];
+            this.other = a && a.custom ? a.text : '';
+            this.$nextTick(() => { if (this.$refs.stage) this.$refs.stage.focus({ preventScroll: true }); });
+          },
+          advance() {
+            const next = this.answers.findIndex((a, i) => !a && i > this.current);
+            this.go(next === -1 ? this.qs.length : next);
+          },
+          pick(oi) {
+            this.answers[this.current] = { text: this.q.opts[oi].t, custom: false };
+            setTimeout(() => this.advance(), 220);
+          },
+          isPicked(oi) {
+            const a = this.answers[this.current];
+            return !!a && !a.custom && a.text === this.q.opts[oi].t;
+          },
+          submitOther() {
+            const v = this.other.trim();
+            if (!v) { this.$refs.other.focus(); return; }
+            this.answers[this.current] = { text: v, custom: true };
+            this.advance();
+          },
+          key(e) {
+            if (this.summary) return;
+            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            const n = parseInt(e.key, 10);
+            if (n >= 1 && n <= this.q.opts.length) { e.preventDefault(); this.pick(n - 1); }
+            else if (e.key === 'ArrowLeft' && this.current > 0) this.go(this.current - 1);
+          },
+          dotFill(i) { return this.answers[i] ? this.radii[this.qs[i].r].color : '#ffffff'; },
+          dotStroke(i) { return this.current === i ? '#141413' : (this.answers[i] ? this.radii[this.qs[i].r].color : '#87867f'); },
+          line(i) {
+            const a = this.answers[i];
+            const val = a ? a.text + (a.custom ? ' [my wording; ask if unclear]' : '') : '(not decided; propose a default and tell me)';
+            return (i + 1) + '. ' + this.qs[i].topic + ': ' + val;
+          },
+          get prompt() {
+            const L = ['Implement offline mode for acme/field-app using these decisions from our interview.', '', 'Architecture (fixed):'];
+            [0, 1, 2].forEach(i => L.push(this.line(i)));
+            L.push('', 'Data model (fixed):');
+            [3, 4].forEach(i => L.push(this.line(i)));
+            L.push('', 'UX and polish (flexible; flag any conflict with 1-5 before coding):');
+            [5, 6].forEach(i => L.push(this.line(i)));
+            L.push('', 'Settled from the code, not up for debate: expo-sqlite for local storage, ETags on /v2/inspections for change detection, presigned S3 uploads for photos.');
+            L.push('Start with a short plan covering the local schema, the sync loop, and the API changes. Stop for review before writing code.');
+            return L.join('\n');
+          },
+          copyPrompt() {
+            navigator.clipboard.writeText(this.prompt).then(() => { this.copied = true; setTimeout(() => this.copied = false, 1400); });
+          },
+          restart() { this.answers = [null, null, null, null, null, null, null]; this.go(0); },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]" x-data="interview()" @keydown.window="key($event)">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Spec interview · acme/field-app · pre-implementation</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Seven decisions to make before building offline mode
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Inspectors keep losing work in basements and on remote sites. Interview me one question at a time about anything still
+          ambiguous in offline mode for the Field app. Ask the questions whose answers would change the architecture first.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">Read: apps/mobile (React Native 0.76, Expo) · services/api/v2/inspections · 7 open questions, ordered by blast radius</p>
+      </header>
+
+      <!-- Already settled -->
+      <section class="mb-8 bg-white border border-[#d1cfc5] rounded-xl p-6 grid md:grid-cols-[170px_1fr] gap-4">
+        <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-olive m-0">Settled from the code, not asking</p>
+        <ul class="list-disc m-0 pl-4 space-y-1.5 text-[14.5px] marker:text-olive">
+          <li><code class="font-mono text-[13px]">expo-sqlite</code> is already used for drafts in <code class="font-mono text-[13px]">apps/mobile/src/db/drafts.ts</code>, so local storage is decided.</li>
+          <li><code class="font-mono text-[13px]">GET /v2/inspections</code> returns ETags, so change detection per record exists today.</li>
+          <li>Photos upload straight to S3 through presigned URLs from <code class="font-mono text-[13px]">POST /v2/uploads</code>, so no API proxying is needed.</li>
+        </ul>
+      </section>
+
+      <!-- Interview shell -->
+      <section class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden mb-8" aria-label="Interview">
+        <div class="flex flex-wrap items-center gap-3 px-5 py-3 bg-[#f0eee6] border-b border-[#d1cfc5]">
+          <span class="font-serif text-[17px] text-[#141413]">Offline mode: spec interview</span>
+          <span class="flex-1"></span>
+          <span class="font-mono text-xs"><b class="text-[#141413]" x-text="done"></b> of 7 answered</span>
+          <div class="w-28 h-1.5 bg-[#d1cfc5] rounded-full overflow-hidden" aria-hidden="true"><div class="h-full bg-clay transition-all" :style="'width:' + (done / total * 100) + '%'"></div></div>
+        </div>
+
+        <div class="grid lg:grid-cols-[260px_1fr]">
+          <!-- Rail -->
+          <nav class="border-b lg:border-b-0 lg:border-r border-[#d1cfc5] p-5" aria-label="Interview progress">
+            <svg viewBox="0 0 240 240" class="w-full max-w-[220px] mx-auto block mb-4" role="group" aria-label="Blast radius rings: architecture at the core, polish at the edge">
+              <circle cx="120" cy="120" r="112" fill="#faf9f5" stroke="#d1cfc5" />
+              <circle cx="120" cy="120" r="88" fill="rgba(120,140,93,0.06)" stroke="#d1cfc5" />
+              <circle cx="120" cy="120" r="64" fill="rgba(184,92,62,0.07)" stroke="#d1cfc5" />
+              <circle cx="120" cy="120" r="36" fill="rgba(217,119,87,0.14)" stroke="#d97757" />
+              <g font-family="ui-monospace, monospace" font-size="8.5" fill="#87867f" text-anchor="middle">
+                <text x="120" y="227">polish</text><text x="120" y="203">ux</text><text x="120" y="180">data</text><text x="120" y="152" fill="#b85c3e">arch</text>
+              </g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 1, sync model" @click="go(0)" @keydown.enter.prevent="go(0)"><circle cx="120" cy="100" r="9" :fill="dotFill(0)" :stroke="dotStroke(0)" stroke-width="2" /><text x="120" y="103" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[0] ? '#fff' : '#141413'">1</text></g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 2, conflicts" @click="go(1)" @keydown.enter.prevent="go(1)"><circle cx="138" cy="130" r="9" :fill="dotFill(1)" :stroke="dotStroke(1)" stroke-width="2" /><text x="138" y="133" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[1] ? '#fff' : '#141413'">2</text></g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 3, offline auth" @click="go(2)" @keydown.enter.prevent="go(2)"><circle cx="102" cy="130" r="9" :fill="dotFill(2)" :stroke="dotStroke(2)" stroke-width="2" /><text x="102" y="133" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[2] ? '#fff' : '#141413'">3</text></g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 4, offline scope" @click="go(3)" @keydown.enter.prevent="go(3)"><circle cx="163" cy="95" r="9" :fill="dotFill(3)" :stroke="dotStroke(3)" stroke-width="2" /><text x="163" y="98" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[3] ? '#fff' : '#141413'">4</text></g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 5, photos" @click="go(4)" @keydown.enter.prevent="go(4)"><circle cx="77" cy="95" r="9" :fill="dotFill(4)" :stroke="dotStroke(4)" stroke-width="2" /><text x="77" y="98" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[4] ? '#fff' : '#141413'">5</text></g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 6, sync status" @click="go(5)" @keydown.enter.prevent="go(5)"><circle cx="186" cy="158" r="9" :fill="dotFill(5)" :stroke="dotStroke(5)" stroke-width="2" /><text x="186" y="161" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[5] ? '#fff' : '#141413'">6</text></g>
+              <g class="qdot" tabindex="0" role="button" aria-label="Question 7, wording" @click="go(6)" @keydown.enter.prevent="go(6)"><circle cx="44" cy="56" r="9" :fill="dotFill(6)" :stroke="dotStroke(6)" stroke-width="2" /><text x="44" y="59" text-anchor="middle" font-family="ui-monospace, monospace" font-size="8.5" :fill="answers[6] ? '#fff' : '#141413'">7</text></g>
+            </svg>
+            <ol class="list-none m-0 p-0 space-y-1 hidden lg:block">
+              <template x-for="(item, i) in qs" :key="i">
+                <li>
+                  <button type="button" @click="go(i)" :aria-current="current === i ? 'step' : null"
+                    :class="current === i ? 'bg-[#f0eee6] text-[#141413]' : 'text-[#3d3d3a] hover:bg-[#faf9f5]'"
+                    class="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13.5px] focus-visible:outline-2 focus-visible:outline-clay">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="'background:' + radii[item.r].color"></span>
+                    <span class="flex-1" x-text="item.short"></span>
+                    <span x-show="answers[i]" class="font-mono text-xs text-olive">✓</span>
+                  </button>
+                </li>
+              </template>
+              <li class="pt-2 mt-2 border-t border-[#f0eee6]">
+                <button type="button" @click="go(total)" :class="summary ? 'bg-[#141413] text-ivory' : 'text-[#3d3d3a] hover:bg-[#faf9f5]'"
+                  class="w-full rounded-lg px-2.5 py-1.5 text-left font-mono text-xs focus-visible:outline-2 focus-visible:outline-clay">Decisions table →</button>
+              </li>
+            </ol>
+            <div class="flex flex-wrap gap-x-3 gap-y-1 mt-4 font-mono text-[11px] text-[#87867f]">
+              <template x-for="(v, k) in radii" :key="k">
+                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" :style="'background:' + v.color"></span><span x-text="v.label.toLowerCase()"></span></span>
+              </template>
+            </div>
+          </nav>
+
+          <!-- Stage -->
+          <div class="p-6 md:p-8 min-h-[520px] outline-none" x-ref="stage" tabindex="-1">
+            <!-- Question -->
+            <div x-show="!summary" x-transition.opacity.duration.150ms>
+              <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-white rounded-full px-2.5 py-0.5" :style="'background:' + radii[q.r].color" x-text="radii[q.r].label"></span>
+                <span class="font-mono text-xs text-[#87867f]" x-text="'Question ' + (Math.min(current, total - 1) + 1) + ' of ' + total"></span>
+              </div>
+              <h2 class="font-serif font-medium text-[clamp(24px,3.2vw,30px)] leading-tight text-[#141413] m-0 mb-3" x-text="q.q"></h2>
+              <p class="text-[#87867f] m-0 mb-6 max-w-[640px]"><span class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark mr-1">Why this matters</span> <span x-text="q.why"></span></p>
+              <div class="grid gap-3 mb-5">
+                <template x-for="(o, oi) in q.opts" :key="current + '-' + oi">
+                  <button type="button" @click="pick(oi)"
+                    :class="isPicked(oi) ? 'border-clay bg-[rgba(217,119,87,0.08)] ring-1 ring-clay' : 'border-[#d1cfc5] bg-white hover:border-[#141413]'"
+                    class="text-left border rounded-xl px-4 py-3.5 grid grid-cols-[28px_1fr] gap-x-3 focus-visible:outline-2 focus-visible:outline-clay">
+                    <span class="font-mono text-xs bg-oat text-[#141413] rounded-md w-6 h-6 grid place-items-center mt-0.5" x-text="oi + 1"></span>
+                    <span>
+                      <span class="flex flex-wrap items-center gap-2 mb-0.5">
+                        <span class="font-medium text-[#141413]" x-text="o.t"></span>
+                        <span x-show="q.lean === oi" class="font-mono text-[10.5px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-px">my lean</span>
+                      </span>
+                      <span class="block text-sm text-[#3d3d3a]" x-text="o.d"></span>
+                    </span>
+                  </button>
+                </template>
+              </div>
+              <form @submit.prevent="submitOther()" class="flex gap-2 mb-6">
+                <input type="text" x-ref="other" x-model="other" placeholder="Something else? Type your own answer…" aria-label="Your own answer"
+                  class="flex-1 min-w-0 border border-[#d1cfc5] rounded-lg px-3 py-2 text-sm bg-white focus:outline-2 focus:outline-clay">
+                <button type="submit" class="font-mono text-xs bg-[#141413] text-ivory rounded-lg px-3 py-2 hover:bg-clay-dark focus-visible:outline-2 focus-visible:outline-clay">Answer ↵</button>
+              </form>
+              <div class="flex flex-wrap items-center gap-3 font-mono text-xs">
+                <button type="button" @click="go(current - 1)" :disabled="current === 0" class="border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-clay">← Previous</button>
+                <button type="button" @click="advance()" class="border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Skip for now →</button>
+                <span class="text-[#87867f] hidden sm:inline">Keys: 1–3 to pick · ← back</span>
+                <button type="button" @click="go(total)" class="lg:hidden border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Decisions table →</button>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div x-show="summary" x-cloak x-transition.opacity.duration.150ms>
+              <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-white bg-olive rounded-full px-2.5 py-0.5" x-text="done === total ? 'Interview complete' : done + ' of ' + total + ' decided'"></span>
+              <h2 class="font-serif font-medium text-[28px] leading-tight text-[#141413] mt-3 mb-2">Decisions table</h2>
+              <p class="text-[#87867f] m-0 mb-5">Each row would otherwise have been a silent guess during implementation. Click edit to revisit an answer.</p>
+              <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white mb-6">
+                <table class="w-full text-sm border-collapse">
+                  <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+                    <tr><th class="px-4 py-2.5 font-medium">Radius</th><th class="px-4 py-2.5 font-medium">Question</th><th class="px-4 py-2.5 font-medium">Decision</th><th class="px-4 py-2.5"></th></tr>
+                  </thead>
+                  <tbody class="divide-y divide-[#f0eee6]">
+                    <template x-for="(item, i) in qs" :key="i">
+                      <tr>
+                        <td class="px-4 py-3 align-top"><span class="font-mono text-[10.5px] text-white rounded-full px-2 py-0.5 whitespace-nowrap" :style="'background:' + radii[item.r].color" x-text="radii[item.r].label"></span></td>
+                        <td class="px-4 py-3 align-top text-[#141413]" x-text="item.topic"></td>
+                        <td class="px-4 py-3 align-top">
+                          <span x-show="answers[i]" class="font-medium text-[#141413]" x-text="answers[i] ? answers[i].text : ''"></span>
+                          <span x-show="answers[i] && answers[i].custom" class="text-[#87867f]"> (your wording)</span>
+                          <span x-show="!answers[i]" class="text-rust font-mono text-xs">not decided</span>
+                        </td>
+                        <td class="px-4 py-3 align-top text-right"><button type="button" @click="go(i)" class="font-mono text-xs text-clay-dark hover:underline">edit</button></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 mb-2">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Ready-to-paste implementation prompt</p>
+                <span class="flex-1"></span>
+                <button type="button" @click="copyPrompt()" class="bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3 py-1.5 hover:bg-clay-dark focus-visible:outline-2 focus-visible:outline-clay">
+                  <span x-show="!copied">Copy prompt</span><span x-show="copied" x-cloak>Copied ✓</span>
+                </button>
+              </div>
+              <pre class="m-0 mb-5 bg-[#141413] text-[#e8e6de] rounded-xl p-5 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap break-words" x-text="prompt"></pre>
+              <button type="button" @click="restart()" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">↺ Start over</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="border-l-4 border-clay bg-white rounded-r-xl px-6 py-5">
+        <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Why this order</p>
+        <p class="m-0">Questions 1–3 change the server, the wire format, and auth, so getting one wrong means rewriting the sync loop. Questions 4–5 change what lives on the device.
+        Questions 6–7 can change after launch for the cost of a release. If you run out of time, answer the first three and let me propose defaults for the rest.</p>
+      </aside>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/interview.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

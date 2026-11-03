@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>INC-2026-1027 — Storefront oversold 1,842 orders</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .diff .row { display: grid; grid-template-columns: 40px 18px 1fr; white-space: pre; padding-right: 14px; }
+      .diff .ln { text-align: right; padding-right: 12px; color: #87867f; user-select: none; }
+      .diff .mk { text-align: center; color: #87867f; }
+      .diff .bd { color: #e8e6dc; }
+      .diff .ctx .bd { color: #b8b6ac; }
+      .diff .add { background: rgba(120,140,93,.18); } .diff .add .mk { color: #a3b37f; }
+      .diff .del { background: rgba(176,74,63,.18); }  .diff .del .mk { color: #e08a7f; }
+      .diff .hunk { background: rgba(255,255,255,.05); } .diff .hunk .bd { color: #87867f; }
+      .log .row { white-space: pre; padding: 0 14px; color: #b8b6ac; }
+      .log .hot { background: rgba(217,119,87,.16); color: #f0d2c4; box-shadow: inset 3px 0 0 #d97757; }
+      .log .ts { color: #87867f; }
+      .log .lvl-w { color: #d9a557; } .log .lvl-e { color: #e08a7f; } .log .lvl-i { color: #a3b37f; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <div class="mx-auto max-w-[1180px] lg:grid lg:grid-cols-[170px_minmax(0,1fr)] lg:gap-12">
+      <!-- TOC -->
+      <nav class="hidden lg:block" aria-label="On this page">
+        <div class="sticky top-8 font-mono text-xs">
+          <p class="uppercase tracking-[0.08em] text-[11px] text-[#87867f] m-0 mb-3">On this page</p>
+          <ol class="m-0 p-0 list-none space-y-2 border-l border-[#d1cfc5]">
+            <li><a href="#tldr" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">TL;DR</a></li>
+            <li><a href="#impact" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">Impact</a></li>
+            <li><a href="#timeline" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">Timeline</a></li>
+            <li><a href="#root-cause" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">Root cause</a></li>
+            <li><a href="#logs" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">Log excerpts</a></li>
+            <li><a href="#review" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">What went well / not</a></li>
+            <li><a href="#actions" class="block pl-3 -ml-px border-l-2 border-transparent hover:border-clay hover:text-[#141413]">Action items</a></li>
+          </ol>
+        </div>
+      </nav>
+
+      <main class="min-w-0 max-w-[900px]">
+        <header class="mb-10">
+          <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Post-incident review · INC-2026-1027 · acme-shop</p>
+          <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-4">
+            Inventory consumer stalled; storefront oversold 1,842 orders
+          </h1>
+          <div class="flex flex-wrap gap-2 mb-5">
+            <span class="inline-flex items-center border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-1 font-mono text-[11.5px] text-rust">SEV-2</span>
+            <span class="inline-flex items-center border border-[rgba(120,140,93,0.45)] rounded-full bg-[rgba(120,140,93,0.12)] px-2.5 py-1 font-mono text-[11.5px] text-olive">Resolved</span>
+            <span class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px]">Customer impact <strong class="text-[#141413]">37 min</strong></span>
+            <span class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px]">Detected <strong class="text-[#141413]">Oct 27 · 14:26 UTC</strong></span>
+            <span class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px]">IC <strong class="text-[#141413]">Lena Vogel</strong></span>
+          </div>
+          <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+            <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+            Write up Tuesday's oversell incident from #inc-1027, the consumer logs and the deploy history. Blameless, minute by
+            minute, and end with action items that have owners.
+          </div>
+        </header>
+
+        <!-- TL;DR -->
+        <section id="tldr" class="scroll-mt-6 bg-white border border-[#d1cfc5] border-l-4 border-l-rust rounded-xl px-6 py-5 mb-14">
+          <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-rust m-0 mb-2">TL;DR</p>
+          <p class="m-0">
+            A deploy of <code class="font-mono text-[13px]">inventory-consumer</code> raised <code class="font-mono text-[13px]">max_poll_records</code> from 100 to 2,000
+            while the batched-upsert code path it depended on was still flagged off in production. Each poll then took ~320 s,
+            longer than Kafka's 300 s poll limit, so consumers were evicted and rebalanced in a loop. Stock counts froze for
+            37 minutes and the storefront kept selling items that were already gone. We stopped the oversell with the
+            <code class="font-mono text-[13px]">inventory.strict_reserve</code> flag, rolled back, and drained the backlog. No stock data was lost.
+          </p>
+        </section>
+
+        <!-- Impact -->
+        <section id="impact" class="scroll-mt-6 mb-14">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Impact</h2>
+          </div>
+          <p class="text-[#87867f] m-0 mb-6 text-sm">Window: 14:04–14:41 UTC for oversell; backlog fully drained at 15:12.</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+            <div class="bg-white border border-[rgba(176,74,63,0.45)] rounded-xl p-5">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0">Oversold orders</p>
+              <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">1,842</p>
+              <p class="font-mono text-xs text-[#87867f] m-0">1,790 customers</p>
+            </div>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Refunded</p>
+              <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">$96.4<span class="text-base text-[#87867f]">k</span></p>
+              <p class="font-mono text-xs text-[#87867f] m-0">+ $18 goodwill credit each</p>
+            </div>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Peak consumer lag</p>
+              <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">290<span class="text-base text-[#87867f]">k msgs</span></p>
+              <p class="font-mono text-xs text-[#87867f] m-0">at 14:56</p>
+            </div>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Time to detect</p>
+              <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">22<span class="text-base text-[#87867f]"> min</span></p>
+              <p class="font-mono text-xs text-clay-dark m-0">support saw it first</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+            <table class="w-full text-sm border-collapse">
+              <tbody class="divide-y divide-[#f0eee6]">
+                <tr><th class="text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] font-medium px-4 py-2.5 w-[120px] sm:w-[200px] bg-[#f0eee6]">Support tickets</th><td class="px-4 py-2.5">312 in 4 h (normal Tuesday: ~40)</td></tr>
+                <tr><th class="text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] font-medium px-4 py-2.5 bg-[#f0eee6]">Data loss</th><td class="px-4 py-2.5">None. Kafka retained every stock event; replay was complete.</td></tr>
+                <tr><th class="text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] font-medium px-4 py-2.5 bg-[#f0eee6]">Checkout availability</th><td class="px-4 py-2.5">Up throughout. <span class="text-clay-dark">That was the problem.</span></td></tr>
+                <tr><th class="text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] font-medium px-4 py-2.5 bg-[#f0eee6]">Regions</th><td class="px-4 py-2.5">EU and US storefronts; APAC uses a separate consumer group and was unaffected.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Timeline -->
+        <section id="timeline" class="scroll-mt-6 mb-14">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Timeline</h2>
+          </div>
+          <p class="text-[#87867f] m-0 mb-6 text-sm">All times UTC, Tue Oct 27. Shaded band on the chart is the customer-impact window.</p>
+
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5 mb-8">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-3">Consumer lag, inventory-sync group (messages)</p>
+            <div class="overflow-x-auto">
+              <svg viewBox="0 0 720 220" class="w-full min-w-[640px]" role="img" aria-label="Line chart of consumer lag from 13:50 to 15:20. Lag is zero until 14:03, climbs to a 290 thousand message peak at 14:56, then drains to zero by 15:12. Impact window 14:04 to 14:41 is shaded.">
+                <!-- impact window -->
+                <rect x="158" y="34" width="259" height="156" fill="#b04a3f" fill-opacity="0.08" />
+                <text x="164" y="48" font-family="ui-monospace, monospace" font-size="10" fill="#b04a3f">oversell window · 37 min</text>
+                <!-- grid -->
+                <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f" text-anchor="end">
+                  <line x1="60" y1="40" x2="690" y2="40" stroke="#f0eee6" /><text x="52" y="43">300k</text>
+                  <line x1="60" y1="90" x2="690" y2="90" stroke="#f0eee6" /><text x="52" y="93">200k</text>
+                  <line x1="60" y1="140" x2="690" y2="140" stroke="#f0eee6" /><text x="52" y="143">100k</text>
+                  <line x1="60" y1="190" x2="690" y2="190" stroke="#d1cfc5" stroke-width="1.5" /><text x="52" y="193">0</text>
+                </g>
+                <!-- alert threshold -->
+                <line x1="60" y1="165" x2="690" y2="165" stroke="#87867f" stroke-dasharray="4 4" />
+                <text x="64" y="160" font-family="ui-monospace, monospace" font-size="9.5" fill="#87867f">alert: ≥ 50k for 10 min</text>
+                <!-- event markers -->
+                <g stroke="#3d3d3a" stroke-width="1" stroke-dasharray="2 3">
+                  <line x1="116" y1="22" x2="116" y2="190" />
+                  <line x1="312" y1="22" x2="312" y2="190" />
+                  <line x1="473" y1="22" x2="473" y2="190" />
+                </g>
+                <line x1="417" y1="10" x2="417" y2="190" stroke="#788c5d" stroke-width="1.5" />
+                <line x1="634" y1="22" x2="634" y2="190" stroke="#788c5d" stroke-width="1" stroke-dasharray="2 3" />
+                <g font-family="ui-monospace, monospace" font-size="10" text-anchor="middle">
+                  <text x="116" y="16" fill="#3d3d3a">13:58 deploy</text>
+                  <text x="312" y="16" fill="#3d3d3a">14:26 alert</text>
+                  <text x="417" y="7" fill="#788c5d" font-weight="600">14:41 flag on</text>
+                  <text x="483" y="16" fill="#3d3d3a">14:49 rollback</text>
+                  <text x="634" y="16" fill="#788c5d">15:12 drained</text>
+                </g>
+                <!-- lag line -->
+                <polyline fill="none" stroke="#d97757" stroke-width="2.5" stroke-linejoin="round"
+                  points="60,190 151,190 200,170 270,137.5 340,107.5 410,77.5 473,55 522,45 550,62.5 585,110 620,167.5 634,190 690,190" />
+                <circle cx="522" cy="45" r="3.5" fill="#d97757" />
+                <text x="530" y="42" font-family="ui-monospace, monospace" font-size="10" fill="#141413">peak 290k</text>
+                <!-- x labels -->
+                <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f" text-anchor="middle">
+                  <text x="130" y="207">14:00</text><text x="270" y="207">14:20</text><text x="410" y="207">14:40</text><text x="550" y="207">15:00</text><text x="680" y="207">15:20</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <ol class="m-0 p-0 list-none relative border-l-2 border-[#d1cfc5] ml-[74px] sm:ml-[84px]">
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-[#87867f]">13:58</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-[#87867f]"></span>
+              <p class="m-0"><strong class="text-[#141413]">Trigger.</strong> <span class="font-mono text-[13px]">inventory-consumer v4.18.0</span> deployed (PR #3127, "Batch stock upserts to cut DB round-trips"). Canary passed; canary traffic is 2% and never filled a 2,000-record batch.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-rust">14:04</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-rust"></span>
+              <p class="m-0"><strong class="text-rust">Impact starts.</strong> First consumer exceeds <span class="font-mono text-[13px]">max.poll.interval.ms</span> and leaves the group. Rebalance revokes all partitions; Redis stock cache stops updating. Storefront keeps reading stale counts.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-[#87867f]">14:19</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-[#87867f]"></span>
+              <p class="m-0">Support flags a cluster of "your order was cancelled, item out of stock" complaints in #support-escalations.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-clay-dark">14:26</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-clay"></span>
+              <p class="m-0"><strong class="text-[#141413]">Detected.</strong> <span class="font-mono text-[13px]">KafkaConsumerLagHigh</span> pages on-call (Lena Vogel), 22 min after impact. Lena declares SEV-2 and opens #inc-1027.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-[#87867f]">14:31</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-[#87867f]"></span>
+              <p class="m-0">First hypothesis: broker trouble. Broker health, ISR and disk all green. <span class="text-[#87867f]">(~7 min spent here.)</span></p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-[#87867f]">14:38</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-[#87867f]"></span>
+              <p class="m-0">Marcus Lee spots the <span class="font-mono text-[13px]">poll timeout has expired</span> / <span class="font-mono text-[13px]">LeaveGroup</span> loop in consumer logs (<a href="#logs" class="text-clay-dark underline underline-offset-2">excerpt</a>) and links it to the 13:58 deploy.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-olive">14:41</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-olive"></span>
+              <p class="m-0"><strong class="text-olive">Mitigated.</strong> <span class="font-mono text-[13px]">inventory.strict_reserve</span> turned on: checkout now reserves stock with a synchronous DB check. Oversell stops; checkout p95 rises from 410 ms to 780 ms.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-[#87867f]">14:49</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-[#87867f]"></span>
+              <p class="m-0">Rollback to <span class="font-mono text-[13px]">v4.17.2</span> starts. Consumers rejoin and stay in the group.</p>
+            </li>
+            <li class="relative pl-6 pb-5">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-[#87867f]">14:56</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-[#87867f]"></span>
+              <p class="m-0">Lag peaks at 290k and begins draining at ~18k msgs/min.</p>
+            </li>
+            <li class="relative pl-6">
+              <span class="absolute -left-[74px] sm:-left-[84px] top-0.5 w-[60px] sm:w-[70px] text-right font-mono text-xs text-olive">15:12</span>
+              <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-olive"></span>
+              <p class="m-0"><strong class="text-olive">Resolved.</strong> Lag at zero; stock counts reconciled against the warehouse DB. <span class="font-mono text-[13px]">strict_reserve</span> turned back off at 15:30.</p>
+            </li>
+          </ol>
+        </section>
+
+        <!-- Root cause -->
+        <section id="root-cause" class="scroll-mt-6 mb-14">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Root cause</h2>
+          </div>
+          <div class="max-w-[760px] mb-6">
+            <p class="m-0 mb-3">
+              PR #3127 had two halves: a new batched upsert in <span class="font-mono text-[13px]">stock/writer.go</span>, guarded by
+              <span class="font-mono text-[13px]">inventory.batch_upserts</span>, and a config bump so each poll returns enough records to batch.
+              The flag was on in staging and the load test, but <strong class="text-[#141413]">off in production</strong>. The config shipped with the deploy; the flag did not.
+            </p>
+            <p class="m-0">
+              With the flag off, each record still costs one round-trip (~160 ms under afternoon load). 2,000 records × 160 ms ≈ 320 s,
+              which is longer than the 300 s <span class="font-mono text-[13px]">max.poll.interval.ms</span>. Kafka treats the consumer as dead, revokes its partitions,
+              and the rebalance hands the same oversized batch to the next consumer. Nothing commits, so nothing progresses.
+            </p>
+          </div>
+          <div class="bg-[#141413] rounded-xl overflow-hidden">
+            <p class="font-mono text-[11px] text-[#87867f] m-0 px-4 pt-3 pb-2">deploy/inventory-consumer/values-prod.yaml · PR #3127</p>
+            <div class="diff font-mono text-[12.5px] leading-[1.7] overflow-x-auto pb-2">
+              <div class="row hunk"><span class="ln"></span><span class="mk"></span><span class="bd">@@ -14,7 +14,7 @@ consumer:</span></div>
+              <div class="row ctx"><span class="ln">14</span><span class="mk"> </span><span class="bd">  group_id: inventory-sync</span></div>
+              <div class="row ctx"><span class="ln">15</span><span class="mk"> </span><span class="bd">  auto_offset_reset: earliest</span></div>
+              <div class="row del"><span class="ln">16</span><span class="mk">−</span><span class="bd">  max_poll_records: 100</span></div>
+              <div class="row add"><span class="ln">16</span><span class="mk">+</span><span class="bd">  max_poll_records: 2000      # pairs with inventory.batch_upserts</span></div>
+              <div class="row ctx"><span class="ln">17</span><span class="mk"> </span><span class="bd">  max_poll_interval_ms: 300000</span></div>
+              <div class="row ctx"><span class="ln">18</span><span class="mk"> </span><span class="bd">  session_timeout_ms: 45000</span></div>
+            </div>
+          </div>
+          <aside class="border-l-4 border-clay bg-white rounded-r-xl px-6 py-5 mt-6">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Contributing factors</p>
+            <ul class="m-0 pl-4 list-disc marker:text-[#87867f] space-y-1.5">
+              <li>The lag alert needs 50k for 10 minutes. Lag passed 50k at ~14:16, so the page could not fire before 14:26.</li>
+              <li>The storefront trusts the Redis stock cache with no staleness check. A frozen cache looks exactly like a healthy one.</li>
+              <li>The canary's 2% traffic never produced a full batch, so it could not reproduce the timeout.</li>
+            </ul>
+          </aside>
+        </section>
+
+        <!-- Logs -->
+        <section id="logs" class="scroll-mt-6 mb-14">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Log excerpts</h2>
+          </div>
+          <p class="text-[#87867f] m-0 mb-6 text-sm">Trimmed from <span class="font-mono">kubectl logs -l app=inventory-consumer --since=2h</span>. Highlighted lines are the loop.</p>
+          <div class="bg-[#141413] rounded-xl overflow-hidden">
+            <p class="font-mono text-[11px] text-[#87867f] m-0 px-4 pt-3 pb-2">inventory-consumer-7c9f4-k2x8p</p>
+            <div class="log font-mono text-[12px] leading-[1.75] overflow-x-auto pb-3">
+              <div class="row"><span class="ts">13:58:41</span> <span class="lvl-i">INFO</span>  consumer started version=4.18.0 max_poll_records=2000 batch_upserts=false</div>
+              <div class="row"><span class="ts">13:58:44</span> <span class="lvl-i">INFO</span>  assigned partitions=[stock-events-3, stock-events-4, stock-events-5]</div>
+              <div class="row"><span class="ts">13:58:45</span> <span class="lvl-i">INFO</span>  poll returned records=2000 lag=1184</div>
+              <div class="row hot"><span class="ts">14:03:46</span> <span class="lvl-w">WARN</span>  consumer poll timeout has expired. time between poll() &gt; max.poll.interval.ms (300000)</div>
+              <div class="row hot"><span class="ts">14:03:46</span> <span class="lvl-w">WARN</span>  member consumer-7-a41e sending LeaveGroup request to coordinator</div>
+              <div class="row"><span class="ts">14:03:51</span> <span class="lvl-e">ERROR</span> commit failed: CommitFailedException: group has already rebalanced</div>
+              <div class="row"><span class="ts">14:03:52</span> <span class="lvl-i">INFO</span>  (re)joining group inventory-sync generation=212</div>
+              <div class="row"><span class="ts">14:03:58</span> <span class="lvl-i">INFO</span>  poll returned records=2000 lag=31207</div>
+              <div class="row hot"><span class="ts">14:09:19</span> <span class="lvl-w">WARN</span>  consumer poll timeout has expired. time between poll() &gt; max.poll.interval.ms (300000)</div>
+              <div class="row"><span class="ts">14:09:24</span> <span class="lvl-i">INFO</span>  (re)joining group inventory-sync generation=219</div>
+              <div class="row text-[#87867f]">          … same three lines repeat every ~5m20s on all 6 pods until 14:49 …</div>
+              <div class="row"><span class="ts">14:51:02</span> <span class="lvl-i">INFO</span>  consumer started version=4.17.2 max_poll_records=100</div>
+              <div class="row"><span class="ts">14:51:03</span> <span class="lvl-i">INFO</span>  poll returned records=100 lag=271940 elapsed=1.6s</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Went well / not -->
+        <section id="review" class="scroll-mt-6 mb-14">
+          <div class="flex items-baseline gap-3 mb-6">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">What went well, what didn't</h2>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="bg-white border border-[#d1cfc5] border-t-4 border-t-olive rounded-xl px-5 py-4">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-2">Went well</p>
+              <ul class="m-0 pl-4 list-disc marker:text-[#87867f] space-y-1.5 text-sm">
+                <li>The <span class="font-mono text-[12.5px]">strict_reserve</span> kill switch existed, was documented in the runbook and stopped the bleeding in one click.</li>
+                <li>Kafka retention meant zero stock events were lost; replay was automatic after rollback.</li>
+                <li>Support escalated within 15 minutes with concrete order IDs.</li>
+              </ul>
+            </div>
+            <div class="bg-white border border-[#d1cfc5] border-t-4 border-t-rust rounded-xl px-5 py-4">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-2">Didn't go well</p>
+              <ul class="m-0 pl-4 list-disc marker:text-[#87867f] space-y-1.5 text-sm">
+                <li>Customers noticed before monitoring did.</li>
+                <li>The deploy annotation was not on the lag dashboard, so the 13:58 change was not obvious for 12 minutes.</li>
+                <li>Config that depends on a flag shipped without checking the flag's prod state.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Actions -->
+        <section id="actions" class="scroll-mt-6 mb-4">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">06</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Action items</h2>
+            <span class="font-mono text-xs text-[#87867f]">2 of 6 done</span>
+          </div>
+          <p class="text-[#87867f] m-0 mb-6 text-sm">Each item has one owner and a date. Tracked in Linear under <span class="font-mono">INC-1027</span>.</p>
+          <ul class="m-0 p-0 list-none border border-[#d1cfc5] rounded-xl bg-white divide-y divide-[#f0eee6]">
+            <li class="grid grid-cols-[22px_34px_minmax(0,1fr)] sm:grid-cols-[22px_34px_minmax(0,1fr)_90px_70px] gap-x-3 gap-y-1 items-start px-4 py-3">
+              <span class="mt-0.5 w-[18px] h-[18px] rounded-[5px] bg-olive text-white text-[11px] grid place-items-center" aria-label="done">✓</span>
+              <span class="w-[30px] h-[30px] rounded-full bg-oat font-mono text-[11px] text-[#141413] grid place-items-center" title="Lena Vogel">LV</span>
+              <span class="text-sm text-[#87867f] line-through decoration-[#d1cfc5]">Roll back to v4.17.2 and pin <span class="font-mono text-[12.5px]">max_poll_records: 100</span> until the flag ships</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f]">SHOP-4410</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f] sm:text-right">Oct 27</span>
+            </li>
+            <li class="grid grid-cols-[22px_34px_minmax(0,1fr)] sm:grid-cols-[22px_34px_minmax(0,1fr)_90px_70px] gap-x-3 gap-y-1 items-start px-4 py-3">
+              <span class="mt-0.5 w-[18px] h-[18px] rounded-[5px] bg-olive text-white text-[11px] grid place-items-center" aria-label="done">✓</span>
+              <span class="w-[30px] h-[30px] rounded-full bg-oat font-mono text-[11px] text-[#141413] grid place-items-center" title="Marcus Lee">ML</span>
+              <span class="text-sm text-[#87867f] line-through decoration-[#d1cfc5]">Add deploy and flag-change annotations to the "Inventory / Kafka" dashboard</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f]">SHOP-4411</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f] sm:text-right">Oct 29</span>
+            </li>
+            <li class="grid grid-cols-[22px_34px_minmax(0,1fr)] sm:grid-cols-[22px_34px_minmax(0,1fr)_90px_70px] gap-x-3 gap-y-1 items-start px-4 py-3">
+              <span class="mt-0.5 w-[18px] h-[18px] rounded-[5px] border-2 border-[#d1cfc5]" aria-label="open"></span>
+              <span class="w-[30px] h-[30px] rounded-full bg-oat font-mono text-[11px] text-[#141413] grid place-items-center" title="Marcus Lee">ML</span>
+              <span class="text-sm">Alert on <em>rebalance rate</em> (&gt; 3 per 5 min) and lag growth rate, not just absolute lag</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-clay-dark">SHOP-4412</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f] sm:text-right">Nov 6</span>
+            </li>
+            <li class="grid grid-cols-[22px_34px_minmax(0,1fr)] sm:grid-cols-[22px_34px_minmax(0,1fr)_90px_70px] gap-x-3 gap-y-1 items-start px-4 py-3">
+              <span class="mt-0.5 w-[18px] h-[18px] rounded-[5px] border-2 border-[#d1cfc5]" aria-label="open"></span>
+              <span class="w-[30px] h-[30px] rounded-full bg-oat font-mono text-[11px] text-[#141413] grid place-items-center" title="Sofia Marchetti">SM</span>
+              <span class="text-sm">Storefront: treat stock cache older than 60 s as unknown and fall back to <span class="font-mono text-[12.5px]">strict_reserve</span> automatically</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-clay-dark">SHOP-4413</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f] sm:text-right">Nov 13</span>
+            </li>
+            <li class="grid grid-cols-[22px_34px_minmax(0,1fr)] sm:grid-cols-[22px_34px_minmax(0,1fr)_90px_70px] gap-x-3 gap-y-1 items-start px-4 py-3">
+              <span class="mt-0.5 w-[18px] h-[18px] rounded-[5px] border-2 border-[#d1cfc5]" aria-label="open"></span>
+              <span class="w-[30px] h-[30px] rounded-full bg-oat font-mono text-[11px] text-[#141413] grid place-items-center" title="Jun Park">JP</span>
+              <span class="text-sm">Deploy check: fail if a config key annotated <span class="font-mono text-[12.5px]"># pairs with &lt;flag&gt;</span> ships while that flag is off in the target env</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-clay-dark">SHOP-4414</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f] sm:text-right">Nov 20</span>
+            </li>
+            <li class="grid grid-cols-[22px_34px_minmax(0,1fr)] sm:grid-cols-[22px_34px_minmax(0,1fr)_90px_70px] gap-x-3 gap-y-1 items-start px-4 py-3">
+              <span class="mt-0.5 w-[18px] h-[18px] rounded-[5px] border-2 border-[#d1cfc5]" aria-label="open"></span>
+              <span class="w-[30px] h-[30px] rounded-full bg-oat font-mono text-[11px] text-[#141413] grid place-items-center" title="Lena Vogel">LV</span>
+              <span class="text-sm">Canary for consumers: run one pod at full partition load for 15 min before fleet rollout</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-clay-dark">SHOP-4415</span>
+              <span class="col-start-3 sm:col-start-auto font-mono text-[11px] text-[#87867f] sm:text-right">Nov 27</span>
+            </li>
+          </ul>
+          <p class="font-mono text-[11px] text-[#87867f] mt-4 mb-0">Sources: #inc-1027 transcript · PagerDuty incident P8K2Q1 · consumer logs · deploy history · reviewed by Lena Vogel, Marcus Lee</p>
+        </section>
+
+        <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+          Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/incident-report.md</span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

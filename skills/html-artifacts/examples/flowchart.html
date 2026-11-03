@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Refund flow — annotated flowchart</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      svg.flow g[role="button"] { transition: opacity 160ms ease; }
+      svg.flow g[role="button"]:focus { outline: none; }
+      svg.flow path, svg.flow line { transition: opacity 160ms ease; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]" x-data="flow()">
+      <header class="mb-9 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Flowchart · acme-payments / services/refunds</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          What happens after a customer clicks “Refund”
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Support keeps asking why some refunds take days. Draw the refund flow in
+          <code class="font-mono text-[13px]">services/refunds</code> as a real flowchart. I want to click a step and see what
+          runs, how long it takes, and where it can fail.
+        </div>
+      </header>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">p50 end to end</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">4.2<span class="text-base text-[#87867f]"> s</span></p>
+          <p class="font-mono text-xs text-olive m-0">auto path, 94% of refunds</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Manual review</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">6<span class="text-base text-[#87867f]"> %</span></p>
+          <p class="font-mono text-xs text-clay-dark m-0">p95 38 min weekdays</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Retried at Stripe</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">1.9<span class="text-base text-[#87867f]"> %</span></p>
+          <p class="font-mono text-xs text-[#87867f] m-0">98% recover by try 2</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Dead-lettered</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">0.04<span class="text-base text-[#87867f]"> %</span></p>
+          <p class="font-mono text-xs text-rust m-0">~7 per week</p>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-8 items-start">
+        <div class="min-w-0">
+          <div class="flex flex-wrap gap-2 items-center mb-4" role="group" aria-label="Highlight paths">
+            <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] mr-1">Highlight</span>
+            <template x-for="m in modes" :key="m.id">
+              <button type="button" @click="mode = m.id" :aria-pressed="mode === m.id"
+                :class="mode === m.id ? 'bg-[#141413] text-ivory border-[#141413]' : 'bg-white text-[#3d3d3a] border-[#d1cfc5] hover:border-[#141413]'"
+                class="font-mono text-xs border rounded-full px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-clay" x-text="m.label"></button>
+            </template>
+            <span class="flex-1"></span>
+            <button type="button" @click="copyMermaid()"
+              class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="!copied">Copy as Mermaid</span><span x-show="copied" x-cloak class="text-olive">Copied ✓</span>
+            </button>
+          </div>
+
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-4 sm:p-6 overflow-x-auto">
+            <svg class="flow block w-full h-auto min-w-[520px]" viewBox="0 0 650 996" role="img" aria-label="Refund flowchart from button click to refund complete, with eligibility, manual review, processor retry, and dead-letter branches.">
+              <defs>
+                <marker id="ar-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#87867f"/></marker>
+                <marker id="ar-olive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#788c5d"/></marker>
+                <marker id="ar-rust" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b04a3f"/></marker>
+                <marker id="ar-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97757"/></marker>
+              </defs>
+              <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+                <!-- lanes -->
+                <rect x="4" y="76" width="642" height="388" rx="12" fill="#faf9f5" stroke="#f0eee6" stroke-width="1.5"/>
+                <text x="16" y="94" fill="#87867f" font-size="10" letter-spacing="1">SYNC · INSIDE POST /refunds</text>
+                <rect x="4" y="472" width="642" height="448" rx="12" fill="#faf9f5" stroke="#f0eee6" stroke-width="1.5"/>
+                <text x="16" y="490" fill="#87867f" font-size="10" letter-spacing="1">ASYNC · refunds.process WORKER</text>
+
+                <!-- edges -->
+                <g font-size="10">
+                  <path d="M320,56 L320,96" fill="none" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar-gray)" :opacity="eo('happy slow fail')"/>
+                  <path d="M320,144 L320,180" fill="none" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar-gray)" :opacity="eo('happy slow fail')"/>
+                  <path d="M320,228 L320,260" fill="none" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar-gray)" :opacity="eo('happy slow fail')"/>
+                  <g :opacity="eo('fail')">
+                    <path d="M264,296 L194,296" fill="none" stroke="#b04a3f" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar-rust)"/>
+                    <text x="229" y="288" text-anchor="middle" fill="#b04a3f">no</text>
+                  </g>
+                  <g :opacity="eo('happy slow')">
+                    <path d="M320,332 L320,380" fill="none" stroke="#788c5d" stroke-width="1.5" marker-end="url(#ar-olive)"/>
+                    <text x="328" y="360" fill="#788c5d">yes</text>
+                  </g>
+                  <g :opacity="eo('slow')">
+                    <path d="M376,416 L541,416 L541,488" fill="none" stroke="#d97757" stroke-width="1.5" marker-end="url(#ar-clay)"/>
+                    <text x="458" y="408" text-anchor="middle" fill="#b85c3e">yes · &gt; $500</text>
+                  </g>
+                  <g :opacity="eo('happy')">
+                    <path d="M320,452 L320,560" fill="none" stroke="#788c5d" stroke-width="1.5" marker-end="url(#ar-olive)"/>
+                    <text x="328" y="512" fill="#788c5d">no</text>
+                  </g>
+                  <g :opacity="eo('slow')">
+                    <path d="M541,536 L541,584 L430,584" fill="none" stroke="#d97757" stroke-width="1.5" marker-end="url(#ar-clay)"/>
+                    <text x="549" y="566" fill="#b85c3e">approved</text>
+                  </g>
+                  <path d="M320,608 L320,644" fill="none" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar-gray)" :opacity="eo('happy slow fail')"/>
+                  <g :opacity="eo('fail')">
+                    <path d="M264,680 L194,680" fill="none" stroke="#b04a3f" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar-rust)"/>
+                    <text x="229" y="672" text-anchor="middle" fill="#b04a3f">retryable</text>
+                    <path d="M109,656 L109,584 L210,584" fill="none" stroke="#87867f" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar-gray)"/>
+                    <text x="117" y="624" fill="#87867f">retry</text>
+                    <path d="M109,704 L109,764" fill="none" stroke="#b04a3f" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar-rust)"/>
+                    <text x="117" y="736" fill="#b04a3f">after 5</text>
+                    <path d="M292,701 C250,730 200,730 172,760" fill="none" stroke="#b04a3f" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar-rust)"/>
+                    <text x="206" y="758" fill="#b04a3f">permanent</text>
+                  </g>
+                  <g :opacity="eo('happy slow')">
+                    <path d="M320,716 L320,764" fill="none" stroke="#788c5d" stroke-width="1.5" marker-end="url(#ar-olive)"/>
+                    <text x="328" y="744" fill="#788c5d">ok</text>
+                    <path d="M320,812 L320,848" fill="none" stroke="#87867f" stroke-width="1.5" marker-end="url(#ar-gray)"/>
+                    <path d="M320,896 L320,932" fill="none" stroke="#788c5d" stroke-width="1.5" marker-end="url(#ar-olive)"/>
+                  </g>
+                </g>
+
+                <!-- nodes -->
+                <g role="button" tabindex="0" aria-label="Customer clicks Refund" class="cursor-pointer" @click="pick('start')" @focus="pick('start')" :opacity="op('start')">
+                  <rect x="230" y="12" width="180" height="44" rx="22" fill="#f0eee6" :stroke="st('start', '#d1cfc5')" :stroke-width="sw('start')"/>
+                  <text x="320" y="38" text-anchor="middle" fill="#141413">Customer clicks Refund</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="POST /refunds" class="cursor-pointer" @click="pick('api')" @focus="pick('api')" :opacity="op('api')">
+                  <rect x="210" y="96" width="220" height="48" rx="8" fill="#ffffff" :stroke="st('api', '#d1cfc5')" :stroke-width="sw('api')"/>
+                  <text x="320" y="116" text-anchor="middle" fill="#141413">POST /refunds</text>
+                  <text x="320" y="132" text-anchor="middle" fill="#87867f" font-size="10">api · 38 ms</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Check eligibility" class="cursor-pointer" @click="pick('elig')" @focus="pick('elig')" :opacity="op('elig')">
+                  <rect x="210" y="180" width="220" height="48" rx="8" fill="#ffffff" :stroke="st('elig', '#d1cfc5')" :stroke-width="sw('elig')"/>
+                  <text x="320" y="200" text-anchor="middle" fill="#141413">Check eligibility</text>
+                  <text x="320" y="216" text-anchor="middle" fill="#87867f" font-size="10">age · prior refunds · risk</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Decision: eligible?" class="cursor-pointer" @click="pick('g1')" @focus="pick('g1')" :opacity="op('g1')">
+                  <path d="M320,260 L376,296 L320,332 L264,296 Z" fill="#ffffff" :stroke="st('g1', '#87867f')" :stroke-width="sw('g1')"/>
+                  <text x="320" y="300" text-anchor="middle" fill="#141413">eligible?</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Reject with reason" class="cursor-pointer" @click="pick('reject')" @focus="pick('reject')" :opacity="op('reject')">
+                  <rect x="24" y="272" width="170" height="48" rx="8" fill="#b04a3f" fill-opacity="0.10" :stroke="st('reject', '#b04a3f')" :stroke-width="sw('reject')"/>
+                  <text x="109" y="292" text-anchor="middle" fill="#141413">Reject with reason</text>
+                  <text x="109" y="308" text-anchor="middle" fill="#87867f" font-size="10">~4% · email sent</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Decision: over 500 dollars?" class="cursor-pointer" @click="pick('g2')" @focus="pick('g2')" :opacity="op('g2')">
+                  <path d="M320,380 L376,416 L320,452 L264,416 Z" fill="#ffffff" :stroke="st('g2', '#87867f')" :stroke-width="sw('g2')"/>
+                  <text x="320" y="420" text-anchor="middle" fill="#141413">&gt; $500?</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Manual review queue" class="cursor-pointer" @click="pick('review')" @focus="pick('review')" :opacity="op('review')">
+                  <rect x="456" y="488" width="170" height="48" rx="8" fill="#e3dacc" :stroke="st('review', '#87867f')" :stroke-width="sw('review')"/>
+                  <text x="541" y="508" text-anchor="middle" fill="#141413">Manual review</text>
+                  <text x="541" y="524" text-anchor="middle" fill="#b85c3e" font-size="10">weekdays 08–18 ET</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Call Stripe refund API" class="cursor-pointer" @click="pick('proc')" @focus="pick('proc')" :opacity="op('proc')">
+                  <rect x="210" y="560" width="220" height="48" rx="8" fill="#ffffff" :stroke="st('proc', '#d1cfc5')" :stroke-width="sw('proc')"/>
+                  <text x="320" y="580" text-anchor="middle" fill="#141413">Call Stripe refund API</text>
+                  <text x="320" y="596" text-anchor="middle" fill="#87867f" font-size="10">idempotent · 640 ms</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Decision: processor ok?" class="cursor-pointer" @click="pick('g3')" @focus="pick('g3')" :opacity="op('g3')">
+                  <path d="M320,644 L376,680 L320,716 L264,680 Z" fill="#ffffff" :stroke="st('g3', '#87867f')" :stroke-width="sw('g3')"/>
+                  <text x="320" y="684" text-anchor="middle" fill="#141413">ok?</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Retry with backoff" class="cursor-pointer" @click="pick('retry')" @focus="pick('retry')" :opacity="op('retry')">
+                  <rect x="24" y="656" width="170" height="48" rx="8" fill="#ffffff" :stroke="st('retry', '#b04a3f')" :stroke-width="sw('retry')" stroke-dasharray="5 3"/>
+                  <text x="109" y="676" text-anchor="middle" fill="#141413">Retry w/ backoff</text>
+                  <text x="109" y="692" text-anchor="middle" fill="#87867f" font-size="10">up to 5 · ×3 delay</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Dead-letter and page" class="cursor-pointer" @click="pick('dlq')" @focus="pick('dlq')" :opacity="op('dlq')">
+                  <rect x="24" y="764" width="170" height="48" rx="8" fill="#b04a3f" fill-opacity="0.10" :stroke="st('dlq', '#b04a3f')" :stroke-width="sw('dlq')"/>
+                  <text x="109" y="784" text-anchor="middle" fill="#141413">Dead-letter + page</text>
+                  <text x="109" y="800" text-anchor="middle" fill="#87867f" font-size="10">ticket · on-call</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Write ledger entry" class="cursor-pointer" @click="pick('ledger')" @focus="pick('ledger')" :opacity="op('ledger')">
+                  <rect x="210" y="764" width="220" height="48" rx="8" fill="#ffffff" :stroke="st('ledger', '#d1cfc5')" :stroke-width="sw('ledger')"/>
+                  <text x="320" y="784" text-anchor="middle" fill="#141413">Write ledger entry</text>
+                  <text x="320" y="800" text-anchor="middle" fill="#87867f" font-size="10">double-entry · same txn</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Email customer" class="cursor-pointer" @click="pick('notify')" @focus="pick('notify')" :opacity="op('notify')">
+                  <rect x="210" y="848" width="220" height="48" rx="8" fill="#ffffff" :stroke="st('notify', '#d1cfc5')" :stroke-width="sw('notify')"/>
+                  <text x="320" y="868" text-anchor="middle" fill="#141413">Email customer</text>
+                  <text x="320" y="884" text-anchor="middle" fill="#87867f" font-size="10">event → notify svc</text>
+                </g>
+                <g role="button" tabindex="0" aria-label="Refund complete" class="cursor-pointer" @click="pick('done')" @focus="pick('done')" :opacity="op('done')">
+                  <rect x="230" y="932" width="180" height="44" rx="22" fill="#788c5d" fill-opacity="0.12" :stroke="st('done', '#788c5d')" :stroke-width="sw('done')"/>
+                  <text x="320" y="958" text-anchor="middle" fill="#141413">Refund complete ✓</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+
+          <div class="flex flex-wrap gap-x-5 gap-y-2 mt-4 font-mono text-[11.5px] text-[#3d3d3a]">
+            <span class="inline-flex items-center gap-2"><i class="inline-block w-5 h-3 rounded-sm border-[1.5px] border-[#d1cfc5] bg-white"></i>step</span>
+            <span class="inline-flex items-center gap-2"><i class="inline-block w-2.5 h-2.5 rotate-45 border-[1.5px] border-[#87867f] bg-white"></i>decision</span>
+            <span class="inline-flex items-center gap-2"><i class="inline-block w-5 h-3 rounded-sm border-[1.5px] border-[#87867f] bg-oat"></i>human / slow</span>
+            <span class="inline-flex items-center gap-2"><i class="inline-block w-5 h-3 rounded-sm border-[1.5px] border-rust bg-[rgba(176,74,63,0.10)]"></i>failure exit</span>
+            <span class="inline-flex items-center gap-2"><i class="inline-block w-5 h-3 rounded-full border-[1.5px] border-olive bg-[rgba(120,140,93,0.12)]"></i>success</span>
+            <span class="inline-flex items-center gap-2"><i class="inline-block w-6 border-t-[1.5px] border-dashed border-rust"></i>error edge</span>
+          </div>
+        </div>
+
+        <aside class="min-w-0 lg:sticky lg:top-6 bg-white border border-[#d1cfc5] rounded-xl p-5" aria-live="polite">
+          <p class="font-mono text-[11px] text-[#87867f] m-0 mb-3">Click a step, or Tab through them →</p>
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <span class="inline-flex items-center border rounded-full px-2.5 py-0.5 font-mono text-[11px]" :class="kindClass(cur.kind)" x-text="cur.kind"></span>
+          </div>
+          <h2 class="font-serif font-medium text-[22px] text-[#141413] leading-tight m-0 mb-1" x-text="cur.title"></h2>
+          <p class="font-mono text-[11.5px] text-[#87867f] m-0 mb-4 break-all" x-text="cur.file"></p>
+          <div class="grid grid-cols-2 gap-2 mb-4">
+            <div class="bg-[#f0eee6] rounded-lg px-3 py-2">
+              <p class="font-mono text-[10.5px] uppercase tracking-[0.06em] text-[#87867f] m-0">p50</p>
+              <p class="font-mono text-[14px] text-[#141413] m-0" x-text="cur.p50"></p>
+            </div>
+            <div class="bg-[#f0eee6] rounded-lg px-3 py-2">
+              <p class="font-mono text-[10.5px] uppercase tracking-[0.06em] text-[#87867f] m-0">p95</p>
+              <p class="font-mono text-[14px] text-[#141413] m-0" x-text="cur.p95"></p>
+            </div>
+          </div>
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-1">What runs</p>
+          <p class="text-[14px] m-0 mb-4" x-text="cur.runs"></p>
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-1" x-show="cur.fails.length">Fails when</p>
+          <ul class="m-0 mb-4 pl-4 text-[13.5px] space-y-1" x-show="cur.fails.length">
+            <template x-for="f in cur.fails" :key="f"><li x-text="f"></li></template>
+          </ul>
+          <div class="bg-[#141413] rounded-xl px-4 py-3 overflow-x-auto mb-4">
+            <pre class="m-0 text-[#e8e6de] font-mono text-[11.5px] leading-relaxed" x-text="cur.code"></pre>
+          </div>
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2" x-show="cur.next.length">Goes to</p>
+          <div class="flex flex-wrap gap-2">
+            <template x-for="n in cur.next" :key="n.k">
+              <button type="button" @click="pick(n.k)"
+                class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-2.5 py-1 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="text-[#87867f]" x-text="n.label + ' →'"></span> <span class="text-[#141413]" x-text="nodes[n.k].title"></span>
+              </button>
+            </template>
+          </div>
+        </aside>
+      </div>
+
+      <section class="mt-14 grid lg:grid-cols-[minmax(0,1fr)_1fr] gap-8 items-start">
+        <aside class="border-l-4 border-clay bg-white rounded-r-xl px-6 py-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Answer to the support question</p>
+          <p class="m-0 mb-2.5">
+            Refunds that “take days” are almost all <strong>over $500 and requested after hours or on a weekend</strong>.
+            They wait in the manual review queue until someone in finance ops is on shift. A Friday 18:05 request sits until Monday
+            morning, which is the 62-hour worst case in last month's data.
+          </p>
+          <p class="m-0">
+            Retries and dead-letters are rare and fast by comparison. The bank's 5–10 business days happen after “Refund complete” and
+            are outside this flow.
+          </p>
+        </aside>
+        <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+          <table class="w-full text-sm border-collapse">
+            <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+              <tr><th class="px-4 py-2.5 font-medium">Where time goes</th><th class="px-4 py-2.5 font-medium">Share</th><th class="px-4 py-2.5 font-medium">p95 added</th></tr>
+            </thead>
+            <tbody class="divide-y divide-[#f0eee6]">
+              <tr><td class="px-4 py-3">Manual review (weekday)</td><td class="px-4 py-3 font-mono">6%</td><td class="px-4 py-3 font-mono text-clay-dark">38 min</td></tr>
+              <tr><td class="px-4 py-3">Manual review (weekend)</td><td class="px-4 py-3 font-mono">1.4%</td><td class="px-4 py-3 font-mono text-rust">up to 62 h</td></tr>
+              <tr><td class="px-4 py-3">Stripe retry</td><td class="px-4 py-3 font-mono">1.9%</td><td class="px-4 py-3 font-mono">4.5 min</td></tr>
+              <tr><td class="px-4 py-3">Dead-letter → ticket</td><td class="px-4 py-3 font-mono">0.04%</td><td class="px-4 py-3 font-mono">~1 business day</td></tr>
+            </tbody>
+          </table>
+          <p class="font-mono text-[11px] text-[#87867f] m-0 px-4 py-2.5 border-t border-[#f0eee6]">Source: refunds.metrics dashboard, Oct 1–31 · 18.4k refunds/week</p>
+        </div>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/flowchart.md</span>
+      </footer>
+    </main>
+
+    <script>
+      function flow() {
+        return {
+          sel: 'start',
+          mode: 'all',
+          copied: false,
+          modes: [
+            { id: 'all', label: 'Everything' },
+            { id: 'happy', label: 'Auto path' },
+            { id: 'slow', label: 'Over $500' },
+            { id: 'fail', label: 'Failure exits' }
+          ],
+          nodes: {
+            start: { title: 'Customer clicks Refund', kind: 'trigger', groups: ['happy', 'slow', 'fail'],
+              file: 'apps/web/src/orders/RefundButton.tsx', p50: '—', p95: '—',
+              runs: 'The order page posts the order id, line items, and reason to the refunds API. The button disables itself so a double click cannot send two requests.',
+              fails: ['Double click: blocked in the UI, and the API is idempotent on order id anyway'],
+              code: "await api.post('/refunds', {\n  orderId, lines, reason\n});",
+              next: [{ k: 'api', label: 'request' }] },
+            api: { title: 'POST /refunds', kind: 'step', groups: ['happy', 'slow', 'fail'],
+              file: 'services/refunds/src/http/create.ts', p50: '38 ms', p95: '120 ms',
+              runs: 'Validates the payload, inserts a refund row with status "requested", and returns 202 with the refund id. Eligibility and the $500 split also run inside this request.',
+              fails: ['400 on malformed line items', '409 when a refund for the same order is already open'],
+              code: "const refund = await db.refunds.insert({\n  orderId, status: 'requested',\n  idempotencyKey: 'refund:' + orderId\n});\nreturn reply.code(202).send({ id: refund.id });",
+              next: [{ k: 'elig', label: 'then' }] },
+            elig: { title: 'Check eligibility', kind: 'step', groups: ['happy', 'slow', 'fail'],
+              file: 'services/refunds/src/eligibility.ts', p50: '11 ms', p95: '35 ms',
+              runs: 'Three rules: shipped less than 90 days ago, line items not already refunded, account not flagged by risk. The rules are pure functions over data loaded up front.',
+              fails: ['Risk service timeout (300 ms) is treated as ineligible with reason risk_unavailable'],
+              code: "const verdict = checkEligibility(order, {\n  maxAgeDays: 90,\n  priorRefunds: await db.refunds.forOrder(order.id),\n  risk: await risk.score(order.customerId)\n});",
+              next: [{ k: 'g1', label: 'then' }] },
+            g1: { title: 'Eligible?', kind: 'decision', groups: ['happy', 'slow', 'fail'],
+              file: 'services/refunds/src/http/create.ts:41', p50: '—', p95: '—',
+              runs: 'Branches on verdict.ok. About 4% of requests stop here, mostly orders older than 90 days.',
+              fails: [],
+              code: "if (!verdict.ok) {\n  return reject(refund, verdict.reason);\n}",
+              next: [{ k: 'g2', label: 'yes' }, { k: 'reject', label: 'no' }] },
+            reject: { title: 'Reject with reason', kind: 'failure exit', groups: ['fail'],
+              file: 'services/refunds/src/reject.ts', p50: '60 ms', p95: '180 ms',
+              runs: 'Marks the refund rejected, stores the reason code, and emails the customer a templated explanation with a link to support. No money moves.',
+              fails: ['Email bounce is retried by the mailer, not here'],
+              code: "await db.refunds.update(id, {\n  status: 'rejected', reason\n});\nawait mailer.send('refund-rejected', { to, reason });",
+              next: [] },
+            g2: { title: 'Over $500?', kind: 'decision', groups: ['happy', 'slow'],
+              file: 'services/refunds/src/http/create.ts:48', p50: '—', p95: '—',
+              runs: 'Refunds above REFUND_REVIEW_THRESHOLD_CENTS (50000) go to a person. That is 6% of refunds and nearly all of the slow ones.',
+              fails: [],
+              code: "if (refund.amountCents > env.REFUND_REVIEW_THRESHOLD_CENTS) {\n  return reviewQueue.enqueue(refund.id);\n}\nreturn jobs.enqueue('refunds.process', { id });",
+              next: [{ k: 'review', label: 'yes' }, { k: 'proc', label: 'no' }] },
+            review: { title: 'Manual review queue', kind: 'human / slow', groups: ['slow'],
+              file: 'services/refunds/src/review/queue.ts', p50: '22 min', p95: '38 min (weekdays)',
+              runs: 'A finance ops agent approves or denies the refund in the admin panel. The queue is staffed 08:00–18:00 ET on weekdays only, so a Friday-evening request waits until Monday.',
+              fails: ['Denied: same exit as "Reject with reason"', 'No pick-up in 4 business hours pages #finance-ops'],
+              code: "reviewQueue.on('approved', (id) =>\n  jobs.enqueue('refunds.process', { id })\n);",
+              next: [{ k: 'proc', label: 'approved' }, { k: 'reject', label: 'denied' }] },
+            proc: { title: 'Call Stripe refund API', kind: 'step', groups: ['happy', 'slow', 'fail'],
+              file: 'services/refunds/src/jobs/process.ts', p50: '640 ms', p95: '2.1 s',
+              runs: 'A worker job calls the processor with idempotency key refund:<id>, so a retried job can never refund twice.',
+              fails: ['5xx or 8 s timeout → retryable', 'charge_disputed or card_closed → permanent'],
+              code: "await stripe.refunds.create(\n  { payment_intent: order.paymentIntentId,\n    amount: refund.amountCents },\n  { idempotencyKey: 'refund:' + refund.id }\n);",
+              next: [{ k: 'g3', label: 'then' }] },
+            g3: { title: 'Processor ok?', kind: 'decision', groups: ['happy', 'slow', 'fail'],
+              file: 'services/refunds/src/jobs/process.ts:27', p50: '—', p95: '—',
+              runs: 'Retryable errors are rethrown so the job runner backs off and tries again. Permanent errors go straight to the dead-letter queue.',
+              fails: [],
+              code: "if (isRetryable(err)) throw err; // runner retries\nawait deadLetter(refund, err);",
+              next: [{ k: 'ledger', label: 'ok' }, { k: 'retry', label: 'retryable' }, { k: 'dlq', label: 'permanent' }] },
+            retry: { title: 'Retry with backoff', kind: 'failure path', groups: ['fail'],
+              file: 'services/refunds/src/jobs/runner.ts', p50: '10 s', p95: '4.5 min',
+              runs: 'Re-enqueues with exponential backoff: 10 s, 30 s, 90 s, 4.5 min, 13.5 min. 1.9% of refunds retry at least once, and 98% of those succeed on the second try.',
+              fails: ['A fifth failure goes to dead-letter'],
+              code: "jobs.define('refunds.process', process, {\n  attempts: 5,\n  backoff: { type: 'exponential',\n             delay: 10000, factor: 3 }\n});",
+              next: [{ k: 'proc', label: 'retry' }, { k: 'dlq', label: 'after 5' }] },
+            dlq: { title: 'Dead-letter + page', kind: 'failure exit', groups: ['fail'],
+              file: 'services/refunds/src/jobs/deadLetter.ts', p50: '—', p95: '—',
+              runs: 'Marks the refund failed and opens a finance ops ticket. If more than 3 land within 10 minutes, it also pages the payments on-call. That works out to about 7 a week.',
+              fails: ['The customer is not emailed automatically; support follows up from the ticket'],
+              code: "await tickets.open('refund-failed', { refundId, err });\nif (await dlq.countSince('10m') > 3) {\n  pager.trigger('payments');\n}",
+              next: [] },
+            ledger: { title: 'Write ledger entry', kind: 'step', groups: ['happy', 'slow'],
+              file: 'services/ledger/src/entries.ts', p50: '14 ms', p95: '48 ms',
+              runs: 'Double-entry posting (debit refunds_payable, credit cash) in the same transaction that flips the refund to "succeeded". If it fails the job retries, and the Stripe call is skipped because the processor id is already stored.',
+              fails: ['Deadlock: transaction retried 3× in-process'],
+              code: "await db.tx(async (t) => {\n  await ledger.post(t, [\n    { account: 'refunds_payable', debit: amt },\n    { account: 'cash', credit: amt }\n  ]);\n  await t.refunds.update(id, { status: 'succeeded' });\n});",
+              next: [{ k: 'notify', label: 'then' }] },
+            notify: { title: 'Email customer', kind: 'step', groups: ['happy', 'slow'],
+              file: 'services/notify/src/templates/refund-sent.mjml', p50: '1.2 s', p95: '6 s',
+              runs: 'Fire-and-forget event. The notify service renders the email, including the bank posting window (5–10 business days).',
+              fails: ['A bounce is logged; the refund itself is unaffected'],
+              code: "await events.publish('refund.succeeded', {\n  refundId, customerId, amountCents\n});",
+              next: [{ k: 'done', label: 'then' }] },
+            done: { title: 'Refund complete', kind: 'terminal', groups: ['happy', 'slow'],
+              file: 'refunds.status = succeeded', p50: '4.2 s total', p95: '38 min total',
+              runs: 'Ledger is balanced and the customer has been emailed. Money reaches the card in 5–10 business days; that delay is the bank, not this flow.',
+              fails: [],
+              code: "status: succeeded\nledger: balanced\nemail:  sent",
+              next: [] }
+          },
+          get cur() { return this.nodes[this.sel]; },
+          pick(k) { this.sel = k; },
+          op(k) { return this.mode === 'all' || this.nodes[k].groups.includes(this.mode) ? 1 : 0.18; },
+          eo(g) { return this.mode === 'all' || g.split(' ').includes(this.mode) ? 1 : 0.12; },
+          st(k, base) { return this.sel === k ? '#d97757' : base; },
+          sw(k) { return this.sel === k ? 2.5 : 1.5; },
+          kindClass(kind) {
+            if (kind.startsWith('failure')) return 'border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust';
+            if (kind === 'terminal') return 'border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive';
+            if (kind === 'human / slow') return 'border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark';
+            return 'border-[#d1cfc5] bg-white text-[#3d3d3a]';
+          },
+          mermaid: [
+            'flowchart TD',
+            '  start([Customer clicks Refund]) --> api[POST /refunds]',
+            '  api --> elig[Check eligibility]',
+            '  elig --> g1{Eligible?}',
+            '  g1 -- no --> reject[Reject with reason]',
+            '  g1 -- yes --> g2{Over $500?}',
+            '  g2 -- yes --> review[Manual review queue]',
+            '  review -- approved --> proc',
+            '  review -- denied --> reject',
+            '  g2 -- no --> proc[Call Stripe refund API]',
+            '  proc --> g3{Processor ok?}',
+            '  g3 -- retryable --> retry[Retry with backoff x5]',
+            '  retry -- retry --> proc',
+            '  retry -- after 5 --> dlq[Dead-letter + page]',
+            '  g3 -- permanent --> dlq',
+            '  g3 -- ok --> ledger[Write ledger entry]',
+            '  ledger --> notify[Email customer]',
+            '  notify --> done([Refund complete])'
+          ].join('\n'),
+          copyMermaid() {
+            navigator.clipboard.writeText(this.mermaid).then(() => {
+              this.copied = true;
+              setTimeout(() => { this.copied = false; }, 1400);
+            });
+          }
+        };
+      }
+    </script>
+  </body>
+</html>

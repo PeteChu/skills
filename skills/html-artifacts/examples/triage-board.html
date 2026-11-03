@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sprint 31 dependency upgrade triage — acme/web-monorepo</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .card[draggable="true"] { cursor: grab; }
+      .card[draggable="true"]:active { cursor: grabbing; }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+    </style>
+    <script>
+      const COLUMNS = [
+        { key: 'now',   label: 'Now',   cap: 14, accent: 'border-t-clay',      hint: 'Sprint 31. Security fixes and anything blocking CI.' },
+        { key: 'next',  label: 'Next',  cap: 18, accent: 'border-t-olive',     hint: 'Sprint 32, the moment Now clears.' },
+        { key: 'later', label: 'Later', cap: null, accent: 'border-t-[#87867f]', hint: 'Batch with the Q1 framework upgrade.' },
+        { key: 'cut',   label: 'Cut',   cap: null, accent: 'border-t-[#d1cfc5]', hint: 'Pin, replace, or remove instead of upgrading.' }
+      ];
+      const PTS = { S: 1, M: 3, L: 5 };
+      const KINDS = {
+        security: 'border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust',
+        major:    'border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark',
+        minor:    'border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive',
+        remove:   'border-[#d1cfc5] bg-[#f0eee6] text-[#3d3d3a]'
+      };
+      // k = stable key, pkg = package, from → to, kind, est (S/M/L), team, note, col
+      const INITIAL = [
+        { k: 'axios',      pkg: 'axios',               from: '1.6.2',   to: '1.7.7',   kind: 'security', est: 'S', team: 'web',      note: 'SSRF on protocol-relative URLs in apps/api-client', col: 'now' },
+        { k: 'jwt',        pkg: 'jsonwebtoken',        from: '8.5.1',   to: '9.0.2',   kind: 'security', est: 'M', team: 'platform', note: 'Legacy verify() accepts alg=none; 3 call sites', col: 'now' },
+        { k: 'next14',     pkg: 'next',                from: '14.1.0',  to: '14.2.15', kind: 'security', est: 'M', team: 'web',      note: 'Middleware auth bypass; patch line only', col: 'now' },
+        { k: 'sharp',      pkg: 'sharp',               from: '0.32.6',  to: '0.33.5',  kind: 'minor',    est: 'S', team: 'platform', note: 'Prebuilt libvips for the arm64 CI runners', col: 'now' },
+        { k: 'pg',         pkg: 'pg',                  from: '8.11.0',  to: '8.13.1',  kind: 'minor',    est: 'S', team: 'data',     note: 'Fixes pool leak seen in jobs/worker.ts', col: 'now' },
+        { k: 'react',      pkg: 'react',               from: '18.2.0',  to: '18.3.1',  kind: 'minor',    est: 'S', team: 'web',      note: 'Surfaces deprecation warnings ahead of 19', col: 'next' },
+        { k: 'ts',         pkg: 'typescript',          from: '5.3.3',   to: '5.6.3',   kind: 'minor',    est: 'M', team: 'web',      note: 'Unblocks const type params in packages/config', col: 'next' },
+        { k: 'eslint',     pkg: 'eslint',              from: '8.57.0',  to: '9.13.0',  kind: 'major',    est: 'L', team: 'web',      note: 'Flat config migration across 14 packages', col: 'next' },
+        { k: 'vitest',     pkg: 'vitest',              from: '1.2.0',   to: '2.1.4',   kind: 'major',    est: 'M', team: 'web',      note: 'Browser mode for packages/ui component tests', col: 'next' },
+        { k: 's3',         pkg: '@aws-sdk/client-s3',  from: '3.450.0', to: '3.685.0', kind: 'minor',    est: 'S', team: 'data',     note: 'Checksum defaults change; verify exports job', col: 'next' },
+        { k: 'zod',        pkg: 'zod',                 from: '3.22.4',  to: '3.23.8',  kind: 'minor',    est: 'S', team: 'platform', note: 'Faster parse in the webhook validator', col: 'next' },
+        { k: 'prisma',     pkg: 'prisma',              from: '5.7.0',   to: '5.22.0',  kind: 'minor',    est: 'M', team: 'data',     note: 'Query engine perf; regenerate client in CI', col: 'next' },
+        { k: 'storybook',  pkg: 'storybook',           from: '7.6.17',  to: '8.4.1',   kind: 'major',    est: 'L', team: 'web',      note: 'Addon API changes; 3 custom addons', col: 'next' },
+        { k: 'ws',         pkg: 'ws',                  from: '8.13.0',  to: '8.18.0',  kind: 'security', est: 'S', team: 'platform', note: 'DoS via oversized header count in realtime gateway', col: 'later' },
+        { k: 'next15',     pkg: 'next',                from: '14.2.15', to: '15.0.2',  kind: 'major',    est: 'L', team: 'web',      note: 'Async request APIs; requires React 19', col: 'later' },
+        { k: 'tailwind',   pkg: 'tailwindcss',         from: '3.4.1',   to: '4.0.0',   kind: 'major',    est: 'L', team: 'web',      note: 'CSS-first config; 212 files use @apply', col: 'later' },
+        { k: 'node',       pkg: 'node (runtime)',      from: '18.19',   to: '22.11',   kind: 'major',    est: 'L', team: 'platform', note: 'Docker base image + CI matrix; 18 EOL in April', col: 'later' },
+        { k: 'datefns',    pkg: 'date-fns',            from: '2.30.0',  to: '4.1.0',   kind: 'major',    est: 'M', team: 'web',      note: 'Timezone support moves into core', col: 'later' },
+        { k: 'rq',         pkg: '@tanstack/react-query', from: '4.36.1', to: '5.59.0', kind: 'major',    est: 'L', team: 'web',      note: 'Object-only signatures; codemod covers ~80%', col: 'later' },
+        { k: 'pino',       pkg: 'pino',                from: '8.17.2',  to: '9.5.0',   kind: 'major',    est: 'S', team: 'platform', note: 'Drops Node 14; no API changes for us', col: 'later' },
+        { k: 'msw',        pkg: 'msw',                 from: '1.3.2',   to: '2.6.0',   kind: 'major',    est: 'M', team: 'web',      note: 'Handler syntax rewrite in 61 test files', col: 'later' },
+        { k: 'stripe',     pkg: 'stripe',              from: '14.10.0', to: '17.3.0',  kind: 'major',    est: 'M', team: 'platform', note: 'Pins API version 2024-10-28; billing review', col: 'later' },
+        { k: 'moment',     pkg: 'moment',              from: '2.29.4',  to: 'remove',  kind: 'remove',   est: 'M', team: 'web',      note: 'Replace with date-fns, already in the tree', col: 'cut' },
+        { k: 'lodash',     pkg: 'lodash',              from: '4.17.21', to: 'remove',  kind: 'remove',   est: 'M', team: 'web',      note: 'Only 9 imports left, all have native equivalents', col: 'cut' },
+        { k: 'request',    pkg: 'request',             from: '2.88.2',  to: 'remove',  kind: 'remove',   est: 'S', team: 'data',     note: 'Deprecated; used by scripts/backfill.js only', col: 'cut' },
+        { k: 'enzyme',     pkg: 'enzyme',              from: '3.11.0',  to: 'remove',  kind: 'remove',   est: 'L', team: 'web',      note: '47 legacy tests to port to Testing Library', col: 'cut' },
+        { k: 'webpack',    pkg: 'webpack',             from: '5.89.0',  to: '5.96.1',  kind: 'minor',    est: 'S', team: 'web',      note: 'Only the legacy admin build; moves to Vite in Q1', col: 'cut' },
+        { k: 'corejs',     pkg: 'core-js',             from: '3.35.0',  to: '3.39.0',  kind: 'minor',    est: 'S', team: 'web',      note: 'Polyfills unneeded after the browserslist bump', col: 'cut' }
+      ];
+
+      function board() {
+        return {
+          columns: COLUMNS,
+          items: INITIAL.map(i => ({ ...i })),
+          filter: null,
+          dragK: null,
+          overCol: null,
+          copied: false,
+
+          inCol(key) { return this.items.filter(i => i.col === key); },
+          pts(key) { return this.inCol(key).reduce((s, i) => s + PTS[i.est], 0); },
+          colLabel(key) { return COLUMNS.find(c => c.key === key).label; },
+          kindClass(kind) { return KINDS[kind]; },
+          get moved() { return this.items.filter(i => i.col !== INITIAL.find(x => x.k === i.k).col).length; },
+          get warnings() {
+            const out = [];
+            COLUMNS.forEach(c => {
+              const p = this.pts(c.key);
+              if (c.cap && p > c.cap) out.push(c.label + ' is over capacity: ' + p + '/' + c.cap + ' pts. Move ' + (p - c.cap) + ' pts out.');
+            });
+            this.items.forEach(i => {
+              if (i.kind === 'security' && (i.col === 'later' || i.col === 'cut'))
+                out.push(i.pkg + ' ' + i.to + ' is a security fix parked in ' + this.colLabel(i.col) + '.');
+            });
+            return out;
+          },
+          flagged(it) { return it.kind === 'security' && (it.col === 'later' || it.col === 'cut'); },
+
+          // --- moves (shared by drag, buttons, and keyboard) ---
+          moveTo(it, colKey, beforeK = null) {
+            if (beforeK === it.k) return;
+            const from = this.items.indexOf(it);
+            this.items.splice(from, 1);
+            it.col = colKey;
+            const at = beforeK ? this.items.findIndex(i => i.k === beforeK) : -1;
+            if (at === -1) this.items.push(it); else this.items.splice(at, 0, it);
+          },
+          shiftCol(it, dir) {
+            const idx = COLUMNS.findIndex(c => c.key === it.col) + dir;
+            if (idx < 0 || idx >= COLUMNS.length) return;
+            this.moveTo(it, COLUMNS[idx].key);
+            this.refocus(it.k);
+          },
+          shiftRow(it, dir) {
+            const list = this.inCol(it.col);
+            const pos = list.indexOf(it);
+            const other = list[pos + dir];
+            if (!other) return;
+            const a = this.items.indexOf(it), b = this.items.indexOf(other);
+            this.items.splice(a, 1, other);
+            this.items.splice(b, 1, it);
+            this.refocus(it.k);
+          },
+          refocus(k) { this.$nextTick(() => { const el = document.getElementById('card-' + k); if (el) el.focus(); }); },
+          onKey(e, it) {
+            const map = { ArrowLeft: () => this.shiftCol(it, -1), ArrowRight: () => this.shiftCol(it, 1),
+                          ArrowUp: () => this.shiftRow(it, -1), ArrowDown: () => this.shiftRow(it, 1) };
+            if (map[e.key]) { e.preventDefault(); map[e.key](); }
+          },
+          drop(colKey, beforeK) {
+            const it = this.items.find(i => i.k === this.dragK);
+            if (it) this.moveTo(it, colKey, beforeK);
+            this.dragK = null; this.overCol = null;
+          },
+
+          reset() { this.items = INITIAL.map(i => ({ ...i })); this.filter = null; },
+
+          // --- export ---
+          get markdown() {
+            const lines = ['# Sprint 31 dependency triage — acme/web-monorepo', ''];
+            COLUMNS.forEach(c => {
+              const rows = this.inCol(c.key);
+              const cap = c.cap ? this.pts(c.key) + '/' + c.cap + ' pts' : this.pts(c.key) + ' pts';
+              lines.push('## ' + c.label + ' (' + rows.length + ' · ' + cap + ')', '', '_' + c.hint + '_', '');
+              rows.forEach((i, n) => lines.push((n + 1) + '. **' + i.pkg + '** ' + i.from + ' → ' + i.to + ' — ' + i.kind + ', ' + i.est + ', @' + i.team + ' — ' + i.note));
+              lines.push('');
+            });
+            if (this.warnings.length) { lines.push('## Open warnings', ''); this.warnings.forEach(w => lines.push('- ' + w)); }
+            return lines.join('\n').trim() + '\n';
+          },
+          copy() {
+            const text = this.markdown;
+            const done = () => { this.copied = true; setTimeout(() => this.copied = false, 1400); };
+            const fallback = () => {
+              const ta = document.createElement('textarea');
+              ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+              document.body.appendChild(ta); ta.select();
+              try { document.execCommand('copy'); } catch (e) {}
+              ta.remove(); done();
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+            else fallback();
+          }
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-4 sm:px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1360px]" x-data="board()">
+      <header class="mb-8 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Editor · acme/web-monorepo · sprint 31</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Triage 28 outdated dependencies into Now, Next, Later, and Cut
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          <code class="font-mono text-[13px]">pnpm outdated</code> lists 28 packages. Pre-sort them into a best guess, let me
+          drag them around until the sprint fits, then give me the result as Markdown for the planning doc.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          Points: S = 1 · M = 3 · L = 5 &nbsp;·&nbsp; capacity: Now 14, Next 18 &nbsp;·&nbsp; rule: security fixes stay in Now or Next
+        </p>
+      </header>
+
+      <!-- Sticky toolbar: counts, warnings, filter, reset, export -->
+      <div class="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-5 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5] flex flex-wrap gap-x-4 gap-y-2 items-center">
+        <span class="font-mono text-xs text-[#3d3d3a] flex flex-wrap gap-x-2">
+          <template x-for="c in columns" :key="c.key">
+            <span><strong class="text-[#141413]" x-text="inCol(c.key).length"></strong> <span x-text="c.key"></span></span>
+          </template>
+        </span>
+        <span class="font-mono text-xs text-[#87867f]"><strong class="text-[#141413]" x-text="moved"></strong> moved</span>
+        <span class="font-mono text-xs" :class="warnings.length ? 'text-rust' : 'text-olive'"
+          x-text="warnings.length ? '⚠ ' + warnings.length + (warnings.length === 1 ? ' warning' : ' warnings') : '✓ fits'"></span>
+        <span class="flex-1"></span>
+        <button type="button" x-show="filter" x-cloak @click="filter = null"
+          class="font-mono text-[11.5px] border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] text-clay-dark px-2.5 py-1 hover:border-clay focus-visible:outline-2 focus-visible:outline-clay"
+          x-text="'filter: ' + filter + ' ×'"></button>
+        <button type="button" @click="reset()"
+          class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Reset</button>
+        <button type="button" @click="copy()"
+          :class="copied ? 'bg-olive border-olive' : 'bg-[#141413] border-[#141413] hover:bg-[#3d3d3a]'"
+          class="border text-ivory font-mono text-xs rounded-lg px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          x-text="copied ? 'Copied ✓' : 'Copy as Markdown'"></button>
+      </div>
+
+      <!-- Warnings -->
+      <aside x-show="warnings.length" x-cloak class="border-l-4 border-rust bg-white rounded-r-xl px-5 py-4 mb-6">
+        <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-1.5">Constraints not met</p>
+        <ul class="m-0 pl-4 list-disc space-y-1 text-[14px]">
+          <template x-for="w in warnings" :key="w"><li x-text="w"></li></template>
+        </ul>
+      </aside>
+
+      <p class="font-mono text-[11px] text-[#87867f] mb-4">
+        <span class="text-clay">›</span> drag cards between columns, or focus a card and use ← → to change column, ↑ ↓ to reorder &nbsp;·&nbsp; click a kind tag to filter
+      </p>
+
+      <!-- Board -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start" aria-label="Triage board">
+        <template x-for="c in columns" :key="c.key">
+          <div class="bg-white border border-[#d1cfc5] border-t-4 rounded-xl flex flex-col min-h-[220px] transition"
+            :class="[c.accent, overCol === c.key ? 'outline-2 outline-dashed outline-clay -outline-offset-4 bg-[#fbf6f2]' : '']"
+            @dragover.prevent="overCol = c.key" @drop.prevent="drop(c.key, null)" :aria-label="c.label + ' column'" role="region">
+            <div class="px-4 pt-3.5 pb-3 border-b border-[#f0eee6]">
+              <div class="flex items-baseline gap-2">
+                <h2 class="m-0 font-serif font-medium text-[19px] text-[#141413]" x-text="c.label"></h2>
+                <span class="ml-auto font-mono text-[11px] text-[#87867f] bg-[#f0eee6] border border-[#d1cfc5] rounded-full px-2 min-w-[28px] text-center" x-text="inCol(c.key).length"></span>
+              </div>
+              <p class="m-0 mt-1 text-[12.5px] text-[#87867f] leading-snug" x-text="c.hint"></p>
+              <div class="mt-2.5 flex items-center gap-2 font-mono text-[11px]">
+                <template x-if="c.cap">
+                  <div class="flex-1 h-1.5 rounded-full bg-[#f0eee6] overflow-hidden">
+                    <div class="h-full rounded-full transition-all" :class="pts(c.key) > c.cap ? 'bg-rust' : 'bg-olive'"
+                      :style="'width:' + Math.min(100, pts(c.key) / c.cap * 100) + '%'"></div>
+                  </div>
+                </template>
+                <span :class="c.cap && pts(c.key) > c.cap ? 'text-rust' : 'text-[#87867f]'"
+                  x-text="c.cap ? pts(c.key) + '/' + c.cap + ' pts' : pts(c.key) + ' pts'"></span>
+              </div>
+            </div>
+            <div class="p-2.5 flex flex-col gap-2 flex-1">
+              <template x-for="it in inCol(c.key)" :key="it.k">
+                <article :id="'card-' + it.k" tabindex="0" draggable="true"
+                  :aria-label="it.pkg + ' ' + it.from + ' to ' + it.to + ', ' + c.label"
+                  @dragstart="dragK = it.k; $event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', it.k)"
+                  @dragend="dragK = null; overCol = null"
+                  @drop.stop.prevent="drop(c.key, it.k)"
+                  @keydown="onKey($event, it)"
+                  class="card group bg-white border rounded-lg px-3 py-2.5 select-none transition hover:border-[#87867f] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-clay focus-visible:outline-offset-1"
+                  :class="[flagged(it) ? 'border-[rgba(176,74,63,0.55)] bg-[rgba(176,74,63,0.04)]' : 'border-[#d1cfc5]',
+                           filter && it.kind !== filter ? 'opacity-30' : '', dragK === it.k ? 'opacity-40' : '']">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-mono text-[12.5px] text-[#141413] font-semibold truncate" x-text="it.pkg"></span>
+                    <button type="button" @click.stop="filter = filter === it.kind ? null : it.kind"
+                      class="font-mono text-[10px] uppercase tracking-[0.05em] border rounded-full px-1.5 py-px hover:brightness-95 focus-visible:outline-2 focus-visible:outline-clay"
+                      :class="kindClass(it.kind)" x-text="it.kind" :aria-label="'Filter by ' + it.kind"></button>
+                    <span class="ml-auto font-mono text-[10px] text-[#87867f] border border-[#d1cfc5] rounded w-[18px] h-[18px] grid place-items-center shrink-0"
+                      x-text="it.est" :title="'Estimate ' + it.est"></span>
+                  </div>
+                  <p class="m-0 font-mono text-[11.5px] text-[#3d3d3a]">
+                    <span x-text="it.from"></span> <span class="text-[#87867f]">→</span>
+                    <span :class="it.to === 'remove' ? 'text-rust' : 'text-[#141413]'" x-text="it.to"></span>
+                  </p>
+                  <p class="m-0 mt-1 text-[12.5px] leading-snug text-[#3d3d3a]" x-text="it.note"></p>
+                  <div class="mt-2 flex items-center gap-1">
+                    <span class="font-mono text-[10.5px] bg-oat text-[#3d3d3a] rounded-full px-2 py-px" x-text="'@' + it.team"></span>
+                    <span class="flex-1"></span>
+                    <button type="button" @click="shiftCol(it, -1)" :disabled="c.key === 'now'" :aria-label="'Move ' + it.pkg + ' left'"
+                      class="font-mono text-[11px] w-6 h-6 rounded border border-transparent text-[#87867f] hover:border-[#d1cfc5] hover:text-[#141413] disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-clay">←</button>
+                    <button type="button" @click="shiftRow(it, -1)" :aria-label="'Move ' + it.pkg + ' up'"
+                      class="font-mono text-[11px] w-6 h-6 rounded border border-transparent text-[#87867f] hover:border-[#d1cfc5] hover:text-[#141413] focus-visible:outline-2 focus-visible:outline-clay">↑</button>
+                    <button type="button" @click="shiftRow(it, 1)" :aria-label="'Move ' + it.pkg + ' down'"
+                      class="font-mono text-[11px] w-6 h-6 rounded border border-transparent text-[#87867f] hover:border-[#d1cfc5] hover:text-[#141413] focus-visible:outline-2 focus-visible:outline-clay">↓</button>
+                    <button type="button" @click="shiftCol(it, 1)" :disabled="c.key === 'cut'" :aria-label="'Move ' + it.pkg + ' right'"
+                      class="font-mono text-[11px] w-6 h-6 rounded border border-transparent text-[#87867f] hover:border-[#d1cfc5] hover:text-[#141413] disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-clay">→</button>
+                  </div>
+                </article>
+              </template>
+              <p x-show="!inCol(c.key).length" x-cloak class="m-0 py-6 text-center font-mono text-[11px] text-[#87867f] border border-dashed border-[#d1cfc5] rounded-lg">drop here</p>
+            </div>
+          </div>
+        </template>
+      </section>
+
+      <!-- Export preview -->
+      <section class="mt-12">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">→</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">What gets copied</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">The export is regenerated from the board on every move, in column and card order, with open warnings appended so nothing is silently dropped.</p>
+        <details class="fold border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+          <summary class="cursor-pointer px-4 py-3 flex gap-3 items-center bg-[#f0eee6]">
+            <span class="flex-1 font-mono text-[13px] text-[#141413]">docs/planning/sprint-31.md</span>
+            <span class="font-mono text-xs text-[#87867f]" x-text="markdown.split('\n').length + ' lines'"></span>
+          </summary>
+          <div class="bg-[#141413] px-5 py-4 overflow-x-auto max-h-[420px]">
+            <pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed" x-text="markdown"></pre>
+          </div>
+        </details>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/triage-board.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ledger Button — variant contact sheet</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .kw { color: #d97757; }
+      .str { color: #a3b37f; }
+      .fn { color: #c9b98a; }
+      .cm { color: #87867f; }
+      .sheet button { pointer-events: none; }
+      .finding:target { outline: 2px solid #d97757; outline-offset: 4px; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1360px]">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Contact sheet · acme-ledger / packages/ledger-ui</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Every Button, every intent, state, and size on one page
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Before I move <code class="font-mono text-[13px]">Button.tsx</code> over to <code class="font-mono text-[13px]">cva</code>, render every variant
+          as it looks today on one sheet. I want to see the gaps before I lock the new API.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          Rendered from <span class="text-[#3d3d3a]">packages/ledger-ui/src/Button.tsx</span> @ 3f91a0c · states forced with static classes · nothing is clickable
+        </p>
+      </header>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Intents</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">4</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">primary · secondary · ghost · danger</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">States</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">7</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">incl. loading + icon slot</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Cells rendered</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">50</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">28 states · 16 sizes · 6 edge</p>
+        </div>
+        <div class="bg-white border border-[rgba(176,74,63,0.45)] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0">Findings</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">5</p>
+          <p class="font-mono text-xs text-rust m-0">marked ● on the sheet</p>
+        </div>
+      </div>
+
+      <!-- 01 State matrix -->
+      <section class="mb-14 scroll-mt-6" id="matrix">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Intent × state, size md</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[760px] m-0 mb-6">Read across a row to check that one intent changes consistently, and down a column to check that a state means the same thing for every intent. Numbered markers link to the findings.</p>
+        <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl">
+          <div class="sheet grid grid-cols-[132px_repeat(7,minmax(128px,1fr))] gap-px bg-[#d1cfc5] min-w-[1040px]">
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">intent ↓ · state →</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">default</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">hover</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">focus-visible</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">active</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">loading</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">disabled</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">with icon</div>
+<div class="bg-[#f0eee6] px-3 py-2 flex flex-col justify-center"><span class="font-mono text-[12.5px] text-[#141413]">primary</span><span class="font-mono text-[10.5px] text-[#87867f]">intent="primary"</span></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#185A4A] text-white ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white ring-2 ring-offset-2 ring-offset-white ring-[#1F6F5C] ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#12463A] text-white shadow-[inset_0_2px_0_rgba(0,0,0,0.22)] ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white cursor-wait "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Send invoice</span></button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" disabled class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white opacity-45 cursor-not-allowed ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Send invoice</span></button></div>
+<div class="bg-[#f0eee6] px-3 py-2 flex flex-col justify-center"><span class="font-mono text-[12.5px] text-[#141413]">secondary</span><span class="font-mono text-[10.5px] text-[#87867f]">intent="secondary"</span></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9] ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#F3F5F7] text-[#1C2430] border border-[#CBD2D9] ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9] ring-2 ring-offset-2 ring-offset-white ring-[#1F6F5C] ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-[#F7EDEC] "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#F3F5F7] text-[#1C2430] border border-[#CBD2D9] ">Preview</button><a href="#f1" class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-rust text-white font-mono text-[10.5px] leading-5 text-center no-underline hover:bg-[#141413]" aria-label="Finding 1">1</a></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9] cursor-wait "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Preview</span></button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" disabled class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9] opacity-45 cursor-not-allowed ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9] "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Preview</span></button></div>
+<div class="bg-[#f0eee6] px-3 py-2 flex flex-col justify-center"><span class="font-mono text-[12.5px] text-[#141413]">ghost</span><span class="font-mono text-[10.5px] text-[#87867f]">intent="ghost"</span></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C] ">Add line</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#E6F1EE] text-[#1F6F5C] ">Add line</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C] ring-2 ring-offset-2 ring-offset-white ring-[#1F6F5C] ">Add line</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#CFE5DF] text-[#12463A] ">Add line</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C] cursor-wait "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Add line</span></button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-[#F7EDEC] "><button type="button" tabindex="-1" disabled class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C] opacity-30 cursor-not-allowed ">Add line</button><a href="#f3" class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-rust text-white font-mono text-[10.5px] leading-5 text-center no-underline hover:bg-[#141413]" aria-label="Finding 3">3</a></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C] "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Add line</span></button></div>
+<div class="bg-[#f0eee6] px-3 py-2 flex flex-col justify-center"><span class="font-mono text-[12.5px] text-[#141413]">danger</span><span class="font-mono text-[10.5px] text-[#87867f]">intent="danger"</span></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#B3261E] text-white ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#94201A] text-white ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-[#F7EDEC] "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#B3261E] text-white ring-2 ring-offset-2 ring-offset-white ring-[#1F6F5C] ">Void invoice</button><a href="#f2" class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-rust text-white font-mono text-[10.5px] leading-5 text-center no-underline hover:bg-[#141413]" aria-label="Finding 2">2</a></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#7A1A15] text-white shadow-[inset_0_2px_0_rgba(0,0,0,0.25)] ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#B3261E] text-white cursor-wait "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Void invoice</span></button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" disabled class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#B3261E] text-white opacity-45 cursor-not-allowed ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#B3261E] text-white "><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Void invoice</span></button></div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-4">
+          <span class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px]">hover / active: forced background classes</span>
+          <span class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px]">focus-visible: ring-2 + offset-2</span>
+          <span class="inline-flex items-center gap-1.5 border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-1 font-mono text-[11.5px] text-rust">tinted cell = finding</span>
+        </div>
+      </section>
+
+      <!-- 02 Sizes -->
+      <section class="mb-14 scroll-mt-6" id="sizes">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Intent × size, plus the anatomy</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[760px] m-0 mb-6">Sizes share radius and weight. Only height, horizontal padding, and font size change. The last column checks the tightest combination: a small button that is loading.</p>
+        <div class="grid xl:grid-cols-[minmax(0,1fr)_460px] gap-7 items-start">
+          <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl">
+            <div class="sheet grid grid-cols-[112px_repeat(4,minmax(132px,1fr))] gap-px bg-[#d1cfc5] min-w-[660px]">
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">intent ↓ · size →</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">sm · 28px</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">md · 36px</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">lg · 44px</div>
+<div class="bg-[#f0eee6] px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] flex items-end">sm · loading</div>
+<div class="bg-[#f0eee6] px-3 py-2 flex items-center font-mono text-[12.5px] text-[#141413]">primary</div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-[#1F6F5C] text-white ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-11 px-5 text-[15px] bg-[#1F6F5C] text-white ">Send invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-[#F7EDEC] "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-[#1F6F5C] text-white cursor-wait"><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Send invoice</span></button><a href="#f4" class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-rust text-white font-mono text-[10.5px] leading-5 text-center no-underline hover:bg-[#141413]" aria-label="Finding 4">4</a></div>
+<div class="bg-[#f0eee6] px-3 py-2 flex items-center font-mono text-[12.5px] text-[#141413]">secondary</div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-white text-[#1C2430] border border-[#CBD2D9] ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9] ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-11 px-5 text-[15px] bg-white text-[#1C2430] border border-[#CBD2D9] ">Preview</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-white text-[#1C2430] border border-[#CBD2D9] cursor-wait"><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Preview</span></button></div>
+<div class="bg-[#f0eee6] px-3 py-2 flex items-center font-mono text-[12.5px] text-[#141413]">ghost</div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-transparent text-[#1F6F5C] ">Add line</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C] ">Add line</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-[#F7EDEC] "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-11 px-3.5 text-[15px] bg-transparent text-[#1F6F5C] ">Add line</button><a href="#f5" class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-rust text-white font-mono text-[10.5px] leading-5 text-center no-underline hover:bg-[#141413]" aria-label="Finding 5">5</a></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-transparent text-[#1F6F5C] cursor-wait"><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Add line</span></button></div>
+<div class="bg-[#f0eee6] px-3 py-2 flex items-center font-mono text-[12.5px] text-[#141413]">danger</div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-[#B3261E] text-white ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-9 px-3.5 text-[14px] bg-[#B3261E] text-white ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-11 px-5 text-[15px] bg-[#B3261E] text-white ">Void invoice</button></div>
+<div class="relative flex items-center justify-center min-h-[84px] px-2 bg-white "><button type="button" tabindex="-1" aria-busy="true" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold whitespace-nowrap select-none h-7 px-2.5 text-[12.5px] bg-[#B3261E] text-white cursor-wait"><svg viewBox="0 0 16 16" class="w-4 h-4 shrink-0 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Void invoice</span></button></div>
+            </div>
+          </div>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <div class="overflow-x-auto">
+              <svg viewBox="0 0 560 220" class="w-full min-w-[420px] h-auto" role="img" aria-label="Anatomy of the medium primary button at 2x: 36px tall, 14px horizontal padding, 16px icon, 6px gap, 6px radius, 2px focus ring with 2px offset">
+                <rect x="132" y="52" width="288" height="88" rx="16" fill="none" stroke="#1F6F5C" stroke-width="2" stroke-dasharray="5 4" opacity=".55"/>
+                <rect x="140" y="60" width="272" height="72" rx="12" fill="#1F6F5C"/>
+                <path d="M184 84v24M172 96h24" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+                <text x="212" y="106" font-family="system-ui, sans-serif" font-size="27" font-weight="600" fill="#fff">Send invoice</text>
+                <g stroke="#d97757" stroke-width="1.5">
+                  <path d="M110 60v72M104 60h12M104 132h12"/>
+                  <path d="M140 160h28M168 160h32M200 160h12M384 160h28"/>
+                  <path d="M140 154v12M168 154v12M200 154v12M212 154v12M384 154v12M412 154v12"/>
+                  <path d="M300 60V38"/>
+                  <path d="M408 63l44-28"/>
+                </g>
+                <g font-family="ui-monospace, monospace" font-size="12" fill="#3d3d3a">
+                  <text x="98" y="100" text-anchor="end">h 36</text>
+                  <text x="154" y="182" text-anchor="middle">14</text>
+                  <text x="184" y="182" text-anchor="middle">16</text>
+                  <text x="206" y="182" text-anchor="middle">6</text>
+                  <text x="398" y="182" text-anchor="middle">14</text>
+                  <text x="300" y="30" text-anchor="middle">label 14px / 600</text>
+                  <text x="458" y="32">radius 6</text>
+                </g>
+                <text x="140" y="208" font-family="ui-monospace, monospace" font-size="11" fill="#87867f">padding · icon · gap (px) — dashed: focus ring 2 + offset 2</text>
+              </svg>
+            </div>
+            <figcaption class="font-mono text-xs text-[#87867f] mt-2">md primary at 2× · all values in CSS px</figcaption>
+            <div class="overflow-x-auto mt-4 border border-[#d1cfc5] rounded-lg">
+              <table class="w-full text-[13px] border-collapse">
+                <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+                  <tr><th class="px-3 py-2 font-medium">size</th><th class="px-3 py-2 font-medium">height</th><th class="px-3 py-2 font-medium">pad-x</th><th class="px-3 py-2 font-medium">font</th><th class="px-3 py-2 font-medium">icon</th></tr>
+                </thead>
+                <tbody class="divide-y divide-[#f0eee6] font-mono">
+                  <tr><td class="px-3 py-2">sm</td><td class="px-3 py-2">28</td><td class="px-3 py-2">10</td><td class="px-3 py-2">12.5</td><td class="px-3 py-2 text-rust">16 → 12</td></tr>
+                  <tr><td class="px-3 py-2">md</td><td class="px-3 py-2">36</td><td class="px-3 py-2">14</td><td class="px-3 py-2">14</td><td class="px-3 py-2">16</td></tr>
+                  <tr><td class="px-3 py-2">lg</td><td class="px-3 py-2">44</td><td class="px-3 py-2">20</td><td class="px-3 py-2">15</td><td class="px-3 py-2">18</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 03 Edge cases -->
+      <section class="mb-14 scroll-mt-6" id="edges">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Edge cases from real screens</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[760px] m-0 mb-6">Content and context the matrix cannot show: long copy, no copy, dark surfaces, and right-to-left text.</p>
+        <div class="sheet grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="h-[110px] flex items-center justify-center px-4 bg-white">
+              <div class="w-[200px]"><button type="button" tabindex="-1" class="inline-flex items-center justify-center rounded-[6px] font-semibold h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white w-full"><span class="truncate">Send reminder to all 14 overdue customers</span></button></div>
+            </div>
+            <figcaption class="border-t border-[#f0eee6] px-4 py-3 text-[13px] flex gap-2 items-start justify-between"><span><strong class="text-[#141413]">Long label</strong> in a 200px slot truncates and keeps <code class="font-mono text-[12px]">title</code>.</span><span class="shrink-0 border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 font-mono text-[10.5px]">ok</span></figcaption>
+          </figure>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="h-[110px] flex items-center justify-center gap-3 bg-white">
+              <button type="button" tabindex="-1" aria-label="More actions" class="inline-flex items-center justify-center rounded-[6px] w-9 h-9 bg-white text-[#1C2430] border border-[#CBD2D9]"><svg viewBox="0 0 16 16" class="w-4 h-4" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg></button>
+              <button type="button" tabindex="-1" aria-label="Add line" class="inline-flex items-center justify-center rounded-[6px] w-9 h-9 text-[#1F6F5C] bg-[#E6F1EE]"><svg viewBox="0 0 16 16" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+            </div>
+            <figcaption class="border-t border-[#f0eee6] px-4 py-3 text-[13px] flex gap-2 items-start justify-between"><span><strong class="text-[#141413]">Icon-only</strong> is square 36×36 and requires <code class="font-mono text-[12px]">aria-label</code> (type-enforced).</span><span class="shrink-0 border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 font-mono text-[10.5px]">ok</span></figcaption>
+          </figure>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="h-[110px] flex items-center justify-center gap-3 bg-[#1C2430] px-4">
+              <button type="button" tabindex="-1" class="inline-flex items-center justify-center rounded-[6px] font-semibold h-9 px-3.5 text-[14px] bg-white text-[#1C2430] border border-[#CBD2D9]">Preview</button>
+              <button type="button" tabindex="-1" class="inline-flex items-center justify-center rounded-[6px] font-semibold h-9 px-3.5 text-[14px] bg-transparent text-[#1F6F5C]">Add line</button>
+            </div>
+            <figcaption class="border-t border-[#f0eee6] px-4 py-3 text-[13px] flex gap-2 items-start justify-between"><span><strong class="text-[#141413]">Dark toolbar</strong> (invoice editor): ghost text is 2.6:1 on #1C2430. Needs an <code class="font-mono text-[12px]">onDark</code> tone.</span><span class="shrink-0 border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-2 py-0.5 font-mono text-[10.5px]">watch</span></figcaption>
+          </figure>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="h-[110px] flex items-center justify-center px-4 bg-white" dir="rtl">
+              <button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white"><svg viewBox="0 0 16 16" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>إرسال الفاتورة</span></button>
+            </div>
+            <figcaption class="border-t border-[#f0eee6] px-4 py-3 text-[13px] flex gap-2 items-start justify-between"><span><strong class="text-[#141413]">RTL</strong> (ar-AE locale): the icon moves to the logical start because the button uses <code class="font-mono text-[12px]">gap</code>, not margins.</span><span class="shrink-0 border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 font-mono text-[10.5px]">ok</span></figcaption>
+          </figure>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="h-[110px] flex flex-col items-center justify-center gap-2 px-4 bg-white">
+              <div class="flex gap-2 items-center"><span class="font-mono text-[10.5px] text-[#87867f] w-12 text-right">idle</span><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white w-[150px]">Send invoice</button></div>
+              <div class="flex gap-2 items-center"><span class="font-mono text-[10.5px] text-[#87867f] w-12 text-right">loading</span><button type="button" tabindex="-1" class="inline-flex items-center justify-center gap-1.5 rounded-[6px] font-semibold h-9 px-3.5 text-[14px] bg-[#1F6F5C] text-white w-[150px] cursor-wait"><svg viewBox="0 0 16 16" class="w-4 h-4 animate-spin" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Sending…</span></button></div>
+            </div>
+            <figcaption class="border-t border-[#f0eee6] px-4 py-3 text-[13px] flex gap-2 items-start justify-between"><span><strong class="text-[#141413]">Width lock</strong>: md and lg keep their idle width while loading, so the footer bar doesn't shift.</span><span class="shrink-0 border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 font-mono text-[10.5px]">ok</span></figcaption>
+          </figure>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="h-[110px] flex items-end justify-center px-4 pb-4 bg-[#F3F5F7]">
+              <div class="w-full max-w-[260px] bg-white border border-[#CBD2D9] rounded-t-xl p-3 flex gap-2">
+                <button type="button" tabindex="-1" class="inline-flex items-center justify-center rounded-[6px] font-semibold h-11 px-5 text-[15px] bg-white text-[#1C2430] border border-[#CBD2D9] flex-1">Back</button>
+                <button type="button" tabindex="-1" class="inline-flex items-center justify-center rounded-[6px] font-semibold h-11 px-5 text-[15px] bg-[#1F6F5C] text-white flex-[2]">Pay $1,240</button>
+              </div>
+            </div>
+            <figcaption class="border-t border-[#f0eee6] px-4 py-3 text-[13px] flex gap-2 items-start justify-between"><span><strong class="text-[#141413]">Mobile footer</strong> at 360px: lg with <code class="font-mono text-[12px]">block</code>, 2:1 split, 44px tap target.</span><span class="shrink-0 border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 font-mono text-[10.5px]">ok</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 04 Findings -->
+      <section class="mb-14 scroll-mt-6" id="findings">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">What the sheet surfaced</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[760px] m-0 mb-6">None of these show up in Storybook, because each story renders one variant at a time. Fix them in the cva config so the new API cannot reproduce them.</p>
+        <div class="grid lg:grid-cols-[minmax(0,1fr)_440px] gap-7 items-start">
+          <ol class="list-none m-0 p-0 space-y-3">
+            <li id="f1" class="finding scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl px-5 py-4 grid grid-cols-[28px_1fr] gap-3">
+              <span class="w-6 h-6 rounded-full bg-rust text-white font-mono text-xs leading-6 text-center">1</span>
+              <div><p class="m-0 text-[#141413] font-semibold">secondary has no pressed state</p><p class="m-0 text-[14px]">Active is identical to hover, so the click gives no feedback. Add <code class="font-mono text-[12.5px]">active:bg-[#E6EAEE]</code> and a 1px inset shadow to match primary.</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Button.tsx:41 · variants.intent.secondary</p></div>
+            </li>
+            <li id="f2" class="finding scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl px-5 py-4 grid grid-cols-[28px_1fr] gap-3">
+              <span class="w-6 h-6 rounded-full bg-rust text-white font-mono text-xs leading-6 text-center">2</span>
+              <div><p class="m-0 text-[#141413] font-semibold">danger focus ring is brand green</p><p class="m-0 text-[14px]">The ring comes from the shared <code class="font-mono text-[12.5px]">focusRing</code> constant, so the focused "Void invoice" button looks safe. Make the ring color a per-intent value.</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Button.tsx:28 · const focusRing</p></div>
+            </li>
+            <li id="f3" class="finding scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl px-5 py-4 grid grid-cols-[28px_1fr] gap-3">
+              <span class="w-6 h-6 rounded-full bg-rust text-white font-mono text-xs leading-6 text-center">3</span>
+              <div><p class="m-0 text-[#141413] font-semibold">ghost disabled fades to 30%, everything else to 45%</p><p class="m-0 text-[14px]">At 30%, a disabled "Add line" button looks like placeholder text. Use one <code class="font-mono text-[12.5px]">disabled:opacity-45</code> in the base class.</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Button.tsx:57 · ghost override</p></div>
+            </li>
+            <li id="f4" class="finding scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl px-5 py-4 grid grid-cols-[28px_1fr] gap-3">
+              <span class="w-6 h-6 rounded-full bg-rust text-white font-mono text-xs leading-6 text-center">4</span>
+              <div><p class="m-0 text-[#141413] font-semibold">sm + loading uses the 16px md spinner</p><p class="m-0 text-[14px]">In a 28px button the spinner crowds the label and widens the button by 22px. Size the spinner from <code class="font-mono text-[12.5px]">size</code> (12 / 16 / 18).</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Spinner.tsx:9 · hard-coded w-4 h-4</p></div>
+            </li>
+            <li id="f5" class="finding scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl px-5 py-4 grid grid-cols-[28px_1fr] gap-3">
+              <span class="w-6 h-6 rounded-full bg-rust text-white font-mono text-xs leading-6 text-center">5</span>
+              <div><p class="m-0 text-[#141413] font-semibold">lg ghost keeps md padding</p><p class="m-0 text-[14px]">The ghost class string includes <code class="font-mono text-[12.5px]">px-3.5</code>, which wins over the size's <code class="font-mono text-[12.5px]">px-5</code> because the classes are joined without <code class="font-mono text-[12.5px]">twMerge</code>. Move padding out of the intent classes and into size only.</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Button.tsx:55 · cx(base, intent, size)</p></div>
+            </li>
+          </ol>
+          <div>
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Proposed cva shape (fixes 1–5)</p>
+            <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">export const</span> <span class="fn">button</span> = <span class="fn">cva</span>(base, {
+  variants: {
+    intent: {
+      primary:   <span class="str">'bg-teal ring-teal'</span>,
+      secondary: <span class="str">'border active:bg-fog'</span>, <span class="cm">// 1</span>
+      ghost:     <span class="str">'text-teal'</span>,  <span class="cm">// 5: no px-*</span>
+      danger:    <span class="str">'bg-red ring-red'</span>,      <span class="cm">// 2</span>
+    },
+    size: {
+      sm: <span class="str">'h-7 px-2.5 [--spin:12px]'</span>,  <span class="cm">// 4</span>
+      md: <span class="str">'h-9 px-3.5 [--spin:16px]'</span>,
+      lg: <span class="str">'h-11 px-5 [--spin:18px]'</span>,
+    },
+  },
+});
+<span class="cm">// 3: one disabled:opacity-45 in base</span></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/component-variants.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

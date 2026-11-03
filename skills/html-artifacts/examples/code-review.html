@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review — PR #518 per-key rate limiting</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .diff .row { display: grid; grid-template-columns: 44px 18px 1fr; white-space: pre; padding-right: 14px; }
+      .diff .ln { text-align: right; padding-right: 12px; color: #87867f; user-select: none; }
+      .diff .mk { text-align: center; color: #87867f; }
+      .diff .bd { color: #e8e6dc; }
+      .diff .ctx .bd { color: #b8b6ac; }
+      .diff .add { background: rgba(120,140,93,.18); } .diff .add .mk { color: #a3b37f; }
+      .diff .del { background: rgba(176,74,63,.18); }  .diff .del .mk { color: #e08a7f; }
+      .diff .hunk { background: rgba(255,255,255,.05); } .diff .hunk .bd { color: #87867f; }
+      .diff .row.hot { box-shadow: inset 3px 0 0 #d97757; }
+      .file:target { box-shadow: 0 0 0 3px rgba(217,119,87,.4); }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+      .step:has(input:checked) label { text-decoration: line-through; color: #87867f; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-5 sm:px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]">
+      <header class="mb-10">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Code review · acme/gateway · pull request #518</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(30px,5vw,42px)] leading-[1.12] tracking-tight m-0 mb-4 max-w-[860px]">
+          Add per-key rate limiting to the public API
+        </h1>
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[12px] mb-6">
+          <span class="flex items-center gap-2"><span class="size-7 rounded-full bg-oat text-[#141413] grid place-items-center text-[11px]">TR</span>Tomás Reyes · opened 1 day ago</span>
+          <span class="border border-[#d1cfc5] bg-white rounded-md px-2 py-0.5">tr/rate-limit → main</span>
+          <span><span class="text-olive">+139</span> / <span class="text-rust">−3</span> · 7 files</span>
+          <span class="text-[#87867f]">CI ✓ 212 tests</span>
+        </div>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px] max-w-[820px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Review PR #518 for me. Tell me what has to change before it merges, what's fine as-is, and where I should look first.
+          It goes out with Thursday's release.
+        </div>
+      </header>
+
+      <!-- Verdict -->
+      <section class="grid md:grid-cols-[1fr_300px] gap-6 mb-12" aria-label="Verdict">
+        <div class="border-l-4 border-rust bg-white rounded-r-xl px-6 py-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-1">Verdict · request changes</p>
+          <p class="m-0 mb-3 text-[15.5px] text-[#141413]">The design is right: a fixed-window counter in Redis, mounted after auth, returning <code class="font-mono text-[13.5px]">429</code> with <code class="font-mono text-[13.5px]">Retry-After</code>. Two bugs make it unsafe to ship Thursday.</p>
+          <ul class="m-0 pl-5 list-disc marker:text-rust space-y-1 text-[14.5px]">
+            <li>The counter is read and written in two round-trips, so bursts can blow past the limit.</li>
+            <li>Behind the ALB, every anonymous caller shares one bucket, so one scraper can lock out all signups.</li>
+          </ul>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-3">Comments</p>
+          <dl class="m-0 grid grid-cols-[1fr_auto] gap-y-2 text-sm">
+            <dt><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)]">blocking</span></dt><dd class="m-0 font-mono">2</dd>
+            <dt><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">should fix</span></dt><dd class="m-0 font-mono">2</dd>
+            <dt><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-white text-[#3d3d3a] border border-[#d1cfc5]">question</span></dt><dd class="m-0 font-mono">1</dd>
+            <dt><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[#f0eee6] text-[#87867f] border border-[#d1cfc5]">nit</span></dt><dd class="m-0 font-mono">1</dd>
+            <dt><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(120,140,93,0.12)] text-olive border border-[rgba(120,140,93,0.45)]">praise</span></dt><dd class="m-0 font-mono">1</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Risk map -->
+      <section class="mb-12" aria-labelledby="riskmap">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 id="riskmap" class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Risk map</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">Width is lines changed, color is risk. Click a file to jump to it. Start with the two rust blocks: they are 25 lines of the 139.</p>
+        <div class="flex h-12 rounded-lg overflow-hidden border border-[#d1cfc5] mb-4 font-mono text-[11px]">
+          <a href="#f-ratelimit" class="grow-[19] basis-0 min-w-[28px] bg-rust text-white grid place-items-center hover:brightness-110 truncate px-1" title="src/middleware/rateLimit.ts · +19">rateLimit</a>
+          <a href="#f-key" class="grow-[8] basis-0 min-w-[28px] bg-rust/85 text-white grid place-items-center border-l border-white hover:brightness-110 truncate px-1" title="src/lib/keyResolver.ts · +6 −2">key</a>
+          <a href="#f-limits" class="grow-[9] basis-0 min-w-[28px] bg-clay text-white grid place-items-center border-l border-white hover:brightness-110 truncate px-1" title="src/config/limits.ts · +9">limits</a>
+          <a href="#f-routes" class="grow-[4] basis-0 min-w-[20px] bg-olive/70 grid place-items-center border-l border-white hover:brightness-110 truncate" title="src/routes/index.ts · +3 −1"></a>
+          <a href="#f-types" class="grow-[3] basis-0 min-w-[16px] bg-olive/60 grid place-items-center border-l border-white hover:brightness-110 truncate" title="src/types/express.d.ts · +3"></a>
+          <a href="#f-docs" class="grow-[41] basis-0 min-w-[28px] bg-olive/45 text-[#141413] grid place-items-center border-l border-white hover:brightness-110 truncate px-1" title="docs/api/rate-limits.md · +41">docs</a>
+          <a href="#f-tests" class="grow-[58] basis-0 min-w-[28px] bg-olive/30 text-[#141413] grid place-items-center border-l border-white hover:brightness-110 truncate px-1" title="test/middleware/rateLimit.test.ts · +58">tests</a>
+        </div>
+        <div class="flex flex-wrap gap-2 font-mono text-[11.5px]">
+          <a href="#f-ratelimit" class="border border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust rounded-full px-2.5 py-1 hover:border-rust">● middleware/rateLimit.ts</a>
+          <a href="#f-key" class="border border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust rounded-full px-2.5 py-1 hover:border-rust">● lib/keyResolver.ts</a>
+          <a href="#f-limits" class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-2.5 py-1 hover:border-clay">● config/limits.ts</a>
+          <a href="#safe" class="border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2.5 py-1 hover:border-olive">● 4 safe files</a>
+          <span class="text-[#87867f] px-1 py-1">rust = needs attention · clay = worth a look · olive = safe</span>
+        </div>
+      </section>
+
+      <!-- Files -->
+      <section class="mb-12" aria-labelledby="files">
+        <div class="flex items-baseline gap-3 mb-5">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 id="files" class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Files, riskiest first</h2>
+        </div>
+
+        <!-- rateLimit.ts -->
+        <article id="f-ratelimit" class="file scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden mb-6">
+          <header class="flex flex-wrap items-center gap-3 px-4 py-3 bg-[#f0eee6] border-b border-[#d1cfc5]">
+            <span class="font-mono text-[13px] text-[#141413] flex-1 min-w-0 break-all">src/middleware/rateLimit.ts</span>
+            <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)]">needs attention</span>
+            <span class="font-mono text-xs"><span class="text-olive">+19</span> <span class="text-rust">−0</span></span>
+          </header>
+          <div class="diff bg-[#141413] font-mono text-[12.5px] leading-[1.7] overflow-x-auto py-1">
+            <div class="row hunk"><span class="ln"></span><span class="mk"></span><span class="bd">@@ -0,0 +1,19 @@</span></div>
+            <div class="row add"><span class="ln">1</span><span class="mk">+</span><span class="bd">import type { Request, Response, NextFunction } from 'express';</span></div>
+            <div class="row add"><span class="ln">2</span><span class="mk">+</span><span class="bd">import { redis } from '../lib/redis';</span></div>
+            <div class="row add"><span class="ln">3</span><span class="mk">+</span><span class="bd">import { limitFor } from '../config/limits';</span></div>
+            <div class="row add"><span class="ln">4</span><span class="mk">+</span><span class="bd">import { resolveKey } from '../lib/keyResolver';</span></div>
+            <div class="row add"><span class="ln">5</span><span class="mk">+</span><span class="bd"></span></div>
+            <div class="row add"><span class="ln">6</span><span class="mk">+</span><span class="bd">export async function rateLimit(req: Request, res: Response, next: NextFunction) {</span></div>
+            <div class="row add"><span class="ln">7</span><span class="mk">+</span><span class="bd">  const key = resolveKey(req);</span></div>
+            <div class="row add"><span class="ln">8</span><span class="mk">+</span><span class="bd">  const { perMinute } = limitFor(req.plan);</span></div>
+            <div class="row add hot"><span class="ln">9</span><span class="mk">+</span><span class="bd">  const bucket = `rl:${key}:${Math.floor(Date.now() / 60_000)}`;</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-white text-[#3d3d3a] border border-[#d1cfc5]">question</span><span class="font-mono text-[11px] text-[#87867f] mr-2">line 9</span>A fixed window allows up to 2× the limit across a minute boundary (59 s + 0 s). That's fine for v1. Should the docs say "per calendar minute" so nobody files it as a bug?</p>
+            </div>
+            <div class="row add"><span class="ln">10</span><span class="mk">+</span><span class="bd"></span></div>
+            <div class="row add hot"><span class="ln">11</span><span class="mk">+</span><span class="bd">  const used = Number(await redis.get(bucket)) || 0;</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">should fix</span><span class="font-mono text-[11px] text-[#87867f] mr-2">line 11</span>If Redis is unreachable, this throws and Express returns 500 for <em>every</em> API call. That turns a rate-limiter outage into a full outage. Catch, fail open, and emit <code class="font-mono text-[12.5px]">ratelimit.redis_error</code>.</p>
+            </div>
+            <div class="row add"><span class="ln">12</span><span class="mk">+</span><span class="bd">  if (used &gt;= perMinute) {</span></div>
+            <div class="row add"><span class="ln">13</span><span class="mk">+</span><span class="bd">    res.set('Retry-After', String(60 - new Date().getSeconds()));</span></div>
+            <div class="row add"><span class="ln">14</span><span class="mk">+</span><span class="bd">    return res.status(429).json({ error: 'rate_limited' });</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-[rgba(120,140,93,0.12)] text-olive border border-[rgba(120,140,93,0.45)]">praise</span><span class="font-mono text-[11px] text-[#87867f] mr-2">lines 13–14</span><code class="font-mono text-[12.5px]">Retry-After</code> plus a stable <code class="font-mono text-[12.5px]">error</code> code matches what the SDKs already back off on. No client changes needed.</p>
+            </div>
+            <div class="row add"><span class="ln">15</span><span class="mk">+</span><span class="bd">  }</span></div>
+            <div class="row add hot"><span class="ln">16</span><span class="mk">+</span><span class="bd">  await redis.set(bucket, used + 1, 'EX', 60);</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0 mb-2"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)]">blocking</span><span class="font-mono text-[11px] text-[#87867f] mr-2">lines 11–16</span>Read-then-write is not atomic. Fifty concurrent requests all read <code class="font-mono text-[12.5px]">used = 0</code> and all pass; I reproduced 212 accepted calls against a limit of 60 with <code class="font-mono text-[12.5px]">autocannon -c 50</code>. Use <code class="font-mono text-[12.5px]">INCR</code>, which returns the new count, and set the TTL only on first hit:</p>
+              <pre class="m-0 bg-[#f0eee6] rounded-md px-3 py-2 font-mono text-[12px] overflow-x-auto">const [[, count]] = await redis.multi().incr(bucket).expire(bucket, 60, 'NX').exec();
+if (count &gt; perMinute) { /* 429 */ }</pre>
+            </div>
+            <div class="row add"><span class="ln">17</span><span class="mk">+</span><span class="bd">  res.set('X-RateLimit-Remaining', String(perMinute - used - 1));</span></div>
+            <div class="row add"><span class="ln">18</span><span class="mk">+</span><span class="bd">  next();</span></div>
+            <div class="row add"><span class="ln">19</span><span class="mk">+</span><span class="bd">}</span></div>
+          </div>
+        </article>
+
+        <!-- keyResolver.ts -->
+        <article id="f-key" class="file scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden mb-6">
+          <header class="flex flex-wrap items-center gap-3 px-4 py-3 bg-[#f0eee6] border-b border-[#d1cfc5]">
+            <span class="font-mono text-[13px] text-[#141413] flex-1 min-w-0 break-all">src/lib/keyResolver.ts</span>
+            <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)]">needs attention</span>
+            <span class="font-mono text-xs"><span class="text-olive">+6</span> <span class="text-rust">−2</span></span>
+          </header>
+          <div class="diff bg-[#141413] font-mono text-[12.5px] leading-[1.7] overflow-x-auto py-1">
+            <div class="row hunk"><span class="ln"></span><span class="mk"></span><span class="bd">@@ -8,9 +8,13 @@ export function resolveKey(req: Request): string {</span></div>
+            <div class="row ctx"><span class="ln">8</span><span class="mk"> </span><span class="bd">  const header = req.get('Authorization');</span></div>
+            <div class="row del"><span class="ln">9</span><span class="mk">−</span><span class="bd">  if (!header) throw new Unauthorized();</span></div>
+            <div class="row add hot"><span class="ln">9</span><span class="mk">+</span><span class="bd">  // anonymous endpoints (signup, status) are limited per IP</span></div>
+            <div class="row add hot"><span class="ln">10</span><span class="mk">+</span><span class="bd">  if (!header) return `ip:${req.ip}`;</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)]">blocking</span><span class="font-mono text-[11px] text-[#87867f] mr-2">line 10</span>We don't set <code class="font-mono text-[12.5px]">trust proxy</code> in <code class="font-mono text-[12.5px]">src/app.ts</code>, so behind the ALB <code class="font-mono text-[12.5px]">req.ip</code> is the load balancer's address (10.4.x.x). Every anonymous caller lands in one bucket, and 60 signups per minute site-wide is the cap. Add <code class="font-mono text-[12.5px]">app.set('trust proxy', 1)</code> and a test with an <code class="font-mono text-[12.5px]">X-Forwarded-For</code> header.</p>
+            </div>
+            <div class="row ctx"><span class="ln">11</span><span class="mk"> </span><span class="bd">  const [scheme, token] = header.split(' ');</span></div>
+            <div class="row ctx"><span class="ln">12</span><span class="mk"> </span><span class="bd">  if (scheme !== 'Bearer') throw new Unauthorized();</span></div>
+            <div class="row del"><span class="ln">13</span><span class="mk">−</span><span class="bd">  return token;</span></div>
+            <div class="row add"><span class="ln">13</span><span class="mk">+</span><span class="bd">  // never put the raw secret into a Redis key</span></div>
+            <div class="row add"><span class="ln">14</span><span class="mk">+</span><span class="bd">  return `key:${sha256(token).slice(0, 16)}`;</span></div>
+            <div class="row add"><span class="ln">15</span><span class="mk">+</span><span class="bd"></span></div>
+            <div class="row ctx"><span class="ln">16</span><span class="mk"> </span><span class="bd">}</span></div>
+          </div>
+        </article>
+
+        <!-- limits.ts -->
+        <article id="f-limits" class="file scroll-mt-6 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden mb-6">
+          <header class="flex flex-wrap items-center gap-3 px-4 py-3 bg-[#f0eee6] border-b border-[#d1cfc5]">
+            <span class="font-mono text-[13px] text-[#141413] flex-1 min-w-0 break-all">src/config/limits.ts</span>
+            <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">worth a look</span>
+            <span class="font-mono text-xs"><span class="text-olive">+9</span> <span class="text-rust">−0</span></span>
+          </header>
+          <div class="diff bg-[#141413] font-mono text-[12.5px] leading-[1.7] overflow-x-auto py-1">
+            <div class="row hunk"><span class="ln"></span><span class="mk"></span><span class="bd">@@ -1,2 +1,11 @@</span></div>
+            <div class="row ctx"><span class="ln">1</span><span class="mk"> </span><span class="bd">export const PLANS = ['free', 'team', 'enterprise'] as const;</span></div>
+            <div class="row ctx"><span class="ln">2</span><span class="mk"> </span><span class="bd">export type Plan = (typeof PLANS)[number];</span></div>
+            <div class="row add"><span class="ln">3</span><span class="mk">+</span><span class="bd"></span></div>
+            <div class="row add"><span class="ln">4</span><span class="mk">+</span><span class="bd">const LIMITS: Record&lt;Plan, { perMinute: number }&gt; = {</span></div>
+            <div class="row add"><span class="ln">5</span><span class="mk">+</span><span class="bd">  free:       { perMinute: 60 },</span></div>
+            <div class="row add"><span class="ln">6</span><span class="mk">+</span><span class="bd">  team:       { perMinute: 300 },</span></div>
+            <div class="row add hot"><span class="ln">7</span><span class="mk">+</span><span class="bd">  enterprise: { perMinute: 600 },</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-[#f0eee6] text-[#87867f] border border-[#d1cfc5]">nit</span><span class="font-mono text-[11px] text-[#87867f] mr-2">line 7</span><code class="font-mono text-[12.5px]">docs/api/rate-limits.md</code> in this same PR says enterprise gets 1,000/min. One of them is wrong. Sales has quoted 1,000.</p>
+            </div>
+            <div class="row add"><span class="ln">8</span><span class="mk">+</span><span class="bd">};</span></div>
+            <div class="row add"><span class="ln">9</span><span class="mk">+</span><span class="bd"></span></div>
+            <div class="row add hot"><span class="ln">10</span><span class="mk">+</span><span class="bd">export const limitFor = (plan: Plan = 'free') =&gt; LIMITS[plan];</span></div>
+            <div class="bg-white border-y border-[#d1cfc5] px-4 py-3 font-sans text-[13.5px] leading-relaxed whitespace-normal">
+              <p class="m-0"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 mr-2 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">should fix</span><span class="font-mono text-[11px] text-[#87867f] mr-2">line 10</span>About 140 legacy accounts still have <code class="font-mono text-[12.5px]">plan = 'pro'</code> in the <code class="font-mono text-[12.5px]">accounts</code> table. The type says that can't happen, but at runtime <code class="font-mono text-[12.5px]">LIMITS['pro']</code> is <code class="font-mono text-[12.5px]">undefined</code> and the destructure on rateLimit.ts:8 throws. Fall back with <code class="font-mono text-[12.5px]">?? LIMITS.free</code> and log the unknown plan.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- Safe files, collapsed -->
+        <div id="safe" class="scroll-mt-6 space-y-3">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-1">Safe: skimmed, no comments</p>
+          <details id="f-routes" class="file fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+            <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-3 items-center bg-[#f0eee6]">
+              <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">src/routes/index.ts</span>
+              <span class="font-mono text-[11px] text-olive">safe</span><span class="font-mono text-xs"><span class="text-olive">+3</span> <span class="text-rust">−1</span></span>
+            </summary>
+            <p class="m-0 p-4 text-[14.5px]">Mounts <code class="font-mono text-[13px]">rateLimit</code> after <code class="font-mono text-[13px]">authenticate</code> and before the v2 router, so <code class="font-mono text-[13px]">req.plan</code> is populated. <code class="font-mono text-[13px]">/healthz</code> stays above it and is not limited. That ordering is correct.</p>
+          </details>
+          <details id="f-types" class="file fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+            <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-3 items-center bg-[#f0eee6]">
+              <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">src/types/express.d.ts</span>
+              <span class="font-mono text-[11px] text-olive">safe</span><span class="font-mono text-xs"><span class="text-olive">+3</span></span>
+            </summary>
+            <p class="m-0 p-4 text-[14.5px]">Adds <code class="font-mono text-[13px]">plan?: Plan</code> to <code class="font-mono text-[13px]">Express.Request</code>. Type-only.</p>
+          </details>
+          <details id="f-docs" class="file fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+            <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-3 items-center bg-[#f0eee6]">
+              <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">docs/api/rate-limits.md</span>
+              <span class="font-mono text-[11px] text-olive">safe</span><span class="font-mono text-xs"><span class="text-olive">+41</span></span>
+            </summary>
+            <p class="m-0 p-4 text-[14.5px]">New public page: limits per plan, headers, and a backoff example in curl and the JS SDK. Only the enterprise number disagrees with the code (see limits.ts:7).</p>
+          </details>
+          <details id="f-tests" class="file fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+            <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-3 items-center bg-[#f0eee6]">
+              <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">test/middleware/rateLimit.test.ts</span>
+              <span class="font-mono text-[11px] text-olive">safe</span><span class="font-mono text-xs"><span class="text-olive">+58</span></span>
+            </summary>
+            <p class="m-0 p-4 text-[14.5px]">Covers under-limit, at-limit, the 429 body, and headers, against a real Redis via testcontainers. All requests are sequential, which is why the race in rateLimit.ts:11–16 passed. Add one <code class="font-mono text-[13px]">Promise.all</code> case.</p>
+          </details>
+        </div>
+      </section>
+
+      <!-- Next steps -->
+      <section class="mb-6" aria-labelledby="next">
+        <div class="flex items-baseline gap-3 mb-5">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 id="next" class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Before merge</h2>
+        </div>
+        <ol class="list-none m-0 p-0 bg-white border border-[#d1cfc5] rounded-xl divide-y divide-[#f0eee6]">
+          <li class="step flex gap-3 items-start px-5 py-3.5"><input id="s1" type="checkbox" class="mt-1.5 accent-clay size-4 shrink-0"><label for="s1" class="flex-1">Replace GET/SET with <code class="font-mono text-[13px]">INCR</code> + <code class="font-mono text-[13px]">EXPIRE NX</code> in rateLimit.ts. <span class="font-mono text-[11px] text-rust">blocking</span></label></li>
+          <li class="step flex gap-3 items-start px-5 py-3.5"><input id="s2" type="checkbox" class="mt-1.5 accent-clay size-4 shrink-0"><label for="s2" class="flex-1">Set <code class="font-mono text-[13px]">trust proxy</code> in src/app.ts and test anonymous keys with <code class="font-mono text-[13px]">X-Forwarded-For</code>. <span class="font-mono text-[11px] text-rust">blocking</span></label></li>
+          <li class="step flex gap-3 items-start px-5 py-3.5"><input id="s3" type="checkbox" class="mt-1.5 accent-clay size-4 shrink-0"><label for="s3" class="flex-1">Fail open on Redis errors, and default unknown plans to <code class="font-mono text-[13px]">free</code>. <span class="font-mono text-[11px] text-clay-dark">should fix</span></label></li>
+          <li class="step flex gap-3 items-start px-5 py-3.5"><input id="s4" type="checkbox" class="mt-1.5 accent-clay size-4 shrink-0"><label for="s4" class="flex-1">Add a concurrent-burst test (<code class="font-mono text-[13px]">Promise.all</code> of 100) that asserts exactly 60 succeed.</label></li>
+          <li class="step flex gap-3 items-start px-5 py-3.5"><input id="s5" type="checkbox" class="mt-1.5 accent-clay size-4 shrink-0"><label for="s5" class="flex-1">Agree with sales on the enterprise number, then fix either limits.ts or the docs. <span class="font-mono text-[11px] text-[#87867f]">nit</span></label></li>
+        </ol>
+        <p class="font-mono text-xs text-[#87867f] mt-3 mb-0">Estimated fix time: ~2 hours. Re-review needed only for rateLimit.ts and keyResolver.ts.</p>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/code-review.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

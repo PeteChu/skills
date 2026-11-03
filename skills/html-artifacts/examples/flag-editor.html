@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme Wallet 6.2 — remote config editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .diff .row { display: grid; grid-template-columns: 18px 1fr; white-space: pre; padding: 0 14px 0 6px; }
+      .diff .mk { text-align: center; color: #87867f; }
+      .diff .bd { color: #e8e6dc; }
+      .diff .add { background: rgba(120,140,93,.18); } .diff .add .mk { color: #a3b37f; }
+      .diff .del { background: rgba(176,74,63,.18); }  .diff .del .mk { color: #e08a7f; }
+    </style>
+    <script>
+      const GROUPS = [
+        { id: 'payments', label: 'Payments', owner: '@payments-core', flags: [
+          { key: 'payments.nfc_sdk_v3', type: 'bool', value: false, desc: 'Load the v3 NFC SDK. Adds 1.8 MB to the iOS binary.' },
+          { key: 'payments.tap_to_pay', type: 'bool', value: false, requires: 'payments.nfc_sdk_v3', desc: 'Accept contactless cards on the merchant’s own phone.' },
+          { key: 'payments.tap_to_pay_rollout', type: 'percent', value: 0, requires: 'payments.tap_to_pay', desc: 'Share of eligible merchants who see Tap to Pay.' },
+          { key: 'payments.split_bill', type: 'bool', value: true, desc: 'Split a card transaction among up to 8 contacts.' },
+          { key: 'payments.payout_speed_default', type: 'enum', options: ['standard', 'instant'], value: 'standard', desc: 'Payout speed preselected on the withdraw sheet.' }
+        ]},
+        { id: 'kyc', label: 'Identity & KYC', owner: '@risk', flags: [
+          { key: 'kyc.strict_mode', type: 'bool', value: true, locked: 'compliance-owned · change via RISK ticket', desc: 'Require document + selfie before any outbound transfer.' },
+          { key: 'kyc.selfie_check_v2', type: 'bool', value: true, desc: 'Passive liveness check instead of the blink prompt.' },
+          { key: 'kyc.doc_scan_provider', type: 'enum', options: ['onfido', 'veriff', 'in_house'], value: 'onfido', desc: 'Vendor used for ID document capture.' },
+          { key: 'kyc.skip_for_low_limit', type: 'bool', value: false, conflicts: 'kyc.strict_mode', desc: 'Let accounts under the €150 limit transfer before verification.' }
+        ]},
+        { id: 'offline', label: 'Offline & sync', owner: '@mobile-platform', flags: [
+          { key: 'offline.cached_balance', type: 'bool', value: true, desc: 'Show the last known balance with a timestamp when offline.' },
+          { key: 'offline.queue_transfers', type: 'bool', value: false, requires: 'offline.cached_balance', desc: 'Queue P2P transfers offline and send them on reconnect.' },
+          { key: 'sync.background_refresh_min', type: 'enum', options: ['15', '30', '60'], value: '30', desc: 'Minutes between background balance refreshes.' }
+        ]},
+        { id: 'notify', label: 'Notifications', owner: '@growth', flags: [
+          { key: 'push.rich_receipts', type: 'bool', value: true, desc: 'Merchant logo and map snippet in payment pushes.' },
+          { key: 'push.spend_insights', type: 'bool', value: true, requires: 'ml.on_device_categorizer', desc: 'Weekly “you spent 23% more on dining” push.' },
+          { key: 'push.quiet_hours_default', type: 'bool', value: true, desc: 'Mute non-security pushes 22:00–07:00 for new users.' }
+        ]},
+        { id: 'exp', label: 'Experiments & ML', owner: '@data-science', flags: [
+          { key: 'ml.on_device_categorizer', type: 'bool', value: false, desc: 'Categorize transactions on device instead of server-side.' },
+          { key: 'exp.home_v3_layout', type: 'percent', value: 10, desc: 'Share of users on the card-first home screen.' },
+          { key: 'exp.dark_mode_default', type: 'bool', value: false, desc: 'Follow system dark mode on first launch.' }
+        ]}
+      ];
+      const FLAGS = {}, INITIAL = {};
+      GROUPS.forEach(g => g.flags.forEach(f => { FLAGS[f.key] = f; INITIAL[f.key] = f.value; }));
+
+      function flags() {
+        return {
+          groups: GROUPS,
+          values: { ...INITIAL },
+          initial: INITIAL,
+          q: '',
+          changedOnly: false,
+          copied: null,
+
+          active(key) { const v = this.values[key]; return FLAGS[key].type === 'percent' ? v > 0 : FLAGS[key].type === 'enum' ? true : v; },
+          changed(key) { return this.values[key] !== INITIAL[key]; },
+          fmt(v) { return typeof v === 'string' ? JSON.stringify(v) : String(v); },
+          visible(f) {
+            const q = this.q.trim().toLowerCase();
+            return (!q || f.key.includes(q) || f.desc.toLowerCase().includes(q)) && (!this.changedOnly || this.changed(f.key));
+          },
+          groupMeta(g) {
+            const on = g.flags.filter(f => f.type !== 'enum' && this.active(f.key)).length;
+            const ch = g.flags.filter(f => this.changed(f.key)).length;
+            return g.flags.length + ' keys · ' + on + ' on' + (ch ? ' · ' + ch + ' changed' : '');
+          },
+          warning(key) {
+            const f = FLAGS[key];
+            if (f.requires && this.active(key) && !this.active(f.requires))
+              return { msg: 'requires ' + f.requires + ', which is off', fix: 'Enable ' + f.requires.split('.')[1], apply: () => this.turnOn(f.requires) };
+            if (f.conflicts && this.active(key) && this.active(f.conflicts))
+              return { msg: 'conflicts with ' + f.conflicts + (FLAGS[f.conflicts].locked ? ' (locked on)' : ''), fix: 'Turn this off', apply: () => this.turnOff(key) };
+            return null;
+          },
+          get warnings() { return Object.keys(FLAGS).filter(k => this.warning(k)).map(k => ({ key: k, ...this.warning(k) })); },
+          turnOn(key) { const f = FLAGS[key]; this.values[key] = f.type === 'percent' ? 5 : true; },
+          turnOff(key) { const f = FLAGS[key]; this.values[key] = f.type === 'percent' ? 0 : false; },
+          revert(key) { this.values[key] = INITIAL[key]; },
+          reset() { this.values = { ...INITIAL }; this.q = ''; this.changedOnly = false; },
+
+          // --- export ---
+          get changes() { return Object.keys(FLAGS).filter(k => this.changed(k)).map(k => ({ key: k, from: INITIAL[k], to: this.values[k] })); },
+          get diffText() {
+            return this.changes.map(c => '- "' + c.key + '": ' + this.fmt(c.from) + '\n+ "' + c.key + '": ' + this.fmt(c.to)).join('\n');
+          },
+          get patchJson() { const o = {}; this.changes.forEach(c => o[c.key] = c.to); return JSON.stringify(o, null, 2); },
+          get fullJson() { return JSON.stringify(this.values, null, 2); },
+          copy(text, which) {
+            const done = () => { this.copied = which; setTimeout(() => this.copied = null, 1400); };
+            const fallback = () => {
+              const ta = document.createElement('textarea');
+              ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+              document.body.appendChild(ta); ta.select();
+              try { document.execCommand('copy'); } catch (e) {}
+              ta.remove(); done();
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+            else fallback();
+          },
+
+          // --- dependency map ---
+          node(key) {
+            if (this.warning(key)) return { fill: 'rgba(176,74,63,0.10)', stroke: '#b04a3f', text: '#b04a3f' };
+            return this.active(key) ? { fill: 'rgba(120,140,93,0.12)', stroke: '#788c5d', text: '#141413' }
+                                    : { fill: '#f0eee6', stroke: '#d1cfc5', text: '#87867f' };
+          },
+          edge(child) { return this.warning(child) ? '#b04a3f' : '#87867f'; }
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-4 sm:px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1180px]" x-data="flags()">
+      <header class="mb-8 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Editor · acme-wallet · config/remote/prod.json</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Remote config for the Wallet 6.2 release
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          6.2 ships Thursday. Give me a form for <code class="font-mono text-[13px]">config/remote/prod.json</code> so I can flip
+          what we’re launching, warn me when something depends on a flag that’s off, and hand me back only the keys I changed.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          18 keys · 5 areas · last deployed 2026-10-29 by @mkovacs · 1 key locked by compliance
+        </p>
+      </header>
+
+      <!-- Sticky toolbar -->
+      <div class="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-6 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5] flex flex-wrap gap-x-4 gap-y-2 items-center">
+        <span class="font-mono text-xs"><strong class="text-[#141413]" x-text="changes.length"></strong> changed</span>
+        <span class="font-mono text-xs" :class="warnings.length ? 'text-rust' : 'text-olive'"
+          x-text="warnings.length ? '⚠ ' + warnings.length + (warnings.length === 1 ? ' warning' : ' warnings') : '✓ no warnings'"></span>
+        <label class="flex items-center gap-2 font-mono text-xs text-[#3d3d3a] cursor-pointer">
+          <input type="checkbox" x-model="changedOnly" class="accent-clay"> changed only
+        </label>
+        <input type="search" x-model="q" placeholder="filter keys…" aria-label="Filter keys"
+          class="font-mono text-xs bg-white border border-[#d1cfc5] rounded-lg px-3 py-1.5 w-40 focus:outline-2 focus:outline-clay">
+        <span class="flex-1"></span>
+        <button type="button" @click="reset()"
+          class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Reset</button>
+        <button type="button" @click="copy(diffText, 'diff')" :disabled="!changes.length"
+          :class="copied === 'diff' ? 'bg-olive border-olive' : 'bg-[#141413] border-[#141413] hover:bg-[#3d3d3a]'"
+          class="border text-ivory font-mono text-xs rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          x-text="copied === 'diff' ? 'Copied ✓' : 'Copy diff'"></button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+        <!-- Form column -->
+        <div class="flex flex-col gap-5 min-w-0">
+          <template x-for="g in groups" :key="g.id">
+            <section x-show="g.flags.some(f => visible(f))" class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-3 bg-[#f0eee6] border-b border-[#d1cfc5]">
+                <h2 class="m-0 font-serif font-medium text-[18px] text-[#141413]" x-text="g.label"></h2>
+                <span class="font-mono text-[11px] text-[#87867f]" x-text="g.owner"></span>
+                <span class="ml-auto font-mono text-[11px] text-[#87867f]" x-text="groupMeta(g)"></span>
+              </div>
+              <div class="divide-y divide-[#f0eee6]">
+                <template x-for="f in g.flags" :key="f.key">
+                  <div x-show="visible(f)" class="grid grid-cols-[auto_1fr] gap-x-4 px-5 py-4 border-l-4 transition-colors"
+                    :class="warning(f.key) ? 'border-l-rust bg-[rgba(176,74,63,0.05)]' : changed(f.key) ? 'border-l-clay bg-[rgba(217,119,87,0.05)]' : 'border-l-transparent'">
+                    <!-- control -->
+                    <div class="pt-0.5 w-[52px]">
+                      <template x-if="f.type === 'bool'">
+                        <button type="button" role="switch" :aria-checked="values[f.key].toString()" :aria-label="f.key"
+                          @click="values[f.key] = !values[f.key]" :disabled="!!f.locked"
+                          class="relative w-10 h-[22px] rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay disabled:opacity-50 disabled:cursor-not-allowed"
+                          :class="values[f.key] ? 'bg-olive' : 'bg-[#d1cfc5]'">
+                          <span class="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform"
+                            :class="values[f.key] ? 'translate-x-[18px]' : ''"></span>
+                        </button>
+                      </template>
+                      <template x-if="f.type === 'percent'">
+                        <span class="inline-block font-mono text-[13px] text-[#141413] bg-[#f0eee6] border border-[#d1cfc5] rounded-md px-1.5 py-0.5"
+                          x-text="values[f.key] + '%'"></span>
+                      </template>
+                      <template x-if="f.type === 'enum'">
+                        <span class="inline-block font-mono text-[10.5px] uppercase tracking-[0.05em] text-[#87867f] pt-1">enum</span>
+                      </template>
+                    </div>
+                    <!-- info -->
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <code class="font-mono text-[13px] text-[#141413] break-all" x-text="f.key"></code>
+                        <span x-show="f.locked" class="font-mono text-[10.5px] border border-[#d1cfc5] rounded-full bg-[#f0eee6] px-2 py-px text-[#3d3d3a]" x-text="'🔒 ' + f.locked"></span>
+                        <span x-show="changed(f.key)" class="font-mono text-[10.5px] border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] text-clay-dark px-2 py-px"
+                          x-text="'was ' + fmt(initial[f.key])"></span>
+                        <button type="button" x-show="changed(f.key)" @click="revert(f.key)" :aria-label="'Revert ' + f.key"
+                          class="font-mono text-[10.5px] text-[#87867f] hover:text-[#141413] underline decoration-dotted focus-visible:outline-2 focus-visible:outline-clay">revert</button>
+                      </div>
+                      <p class="m-0 mt-1 text-[13.5px] text-[#3d3d3a]" x-text="f.desc"></p>
+
+                      <template x-if="f.type === 'percent'">
+                        <div class="mt-2.5 flex items-center gap-3 max-w-[420px]">
+                          <input type="range" min="0" max="100" step="5" x-model.number="values[f.key]" :aria-label="f.key + ' rollout percent'" class="flex-1 accent-clay">
+                          <span class="font-mono text-[11px] text-[#87867f] w-24 text-right" x-text="values[f.key] === 0 ? 'off' : values[f.key] === 100 ? 'everyone' : values[f.key] + '% of users'"></span>
+                        </div>
+                      </template>
+                      <template x-if="f.type === 'enum'">
+                        <div class="mt-2.5 inline-flex flex-wrap border border-[#d1cfc5] rounded-lg overflow-hidden" role="radiogroup" :aria-label="f.key">
+                          <template x-for="o in f.options" :key="o">
+                            <button type="button" role="radio" :aria-checked="(values[f.key] === o).toString()" @click="values[f.key] = o"
+                              class="font-mono text-xs px-3 py-1.5 border-l border-[#d1cfc5] first:border-l-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-clay"
+                              :class="values[f.key] === o ? 'bg-[#141413] text-ivory' : 'bg-white hover:bg-[#f0eee6]'" x-text="o"></button>
+                          </template>
+                        </div>
+                      </template>
+
+                      <div x-show="f.requires || f.conflicts" class="mt-2 flex flex-wrap gap-2 items-center">
+                        <span x-show="f.requires" class="font-mono text-[11px] text-[#87867f]" x-text="'needs ' + f.requires"></span>
+                        <span x-show="f.conflicts" class="font-mono text-[11px] text-[#87867f]" x-text="'exclusive with ' + f.conflicts"></span>
+                      </div>
+                      <template x-if="warning(f.key)">
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                          <span class="font-mono text-[11.5px] text-rust" x-text="'⚠ ' + warning(f.key).msg"></span>
+                          <button type="button" @click="warning(f.key).apply()"
+                            class="font-mono text-[11px] border border-[rgba(176,74,63,0.45)] bg-white text-rust rounded-md px-2 py-0.5 hover:bg-[rgba(176,74,63,0.10)] focus-visible:outline-2 focus-visible:outline-clay"
+                            x-text="warning(f.key).fix"></button>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </section>
+          </template>
+          <p x-show="!groups.some(g => g.flags.some(f => visible(f)))" x-cloak class="m-0 py-10 text-center font-mono text-xs text-[#87867f] border border-dashed border-[#d1cfc5] rounded-xl">No keys match the filter.</p>
+        </div>
+
+        <!-- Sidebar: pending diff + warnings + export -->
+        <aside class="lg:sticky lg:top-20 flex flex-col gap-4">
+          <div class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-[#f0eee6] flex items-baseline gap-2">
+              <p class="m-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">Pending diff</p>
+              <span class="ml-auto font-mono text-[11px] text-[#3d3d3a]" x-text="changes.length + ' of 18 keys'"></span>
+            </div>
+            <div class="diff bg-[#141413] font-mono text-[12px] leading-[1.75] py-2 overflow-x-auto max-h-[300px]">
+              <p x-show="!changes.length" class="m-0 px-4 py-1 text-[#87867f]">// no changes yet</p>
+              <template x-for="c in changes" :key="c.key">
+                <div>
+                  <div class="row del"><span class="mk">−</span><span class="bd" x-text="'&quot;' + c.key + '&quot;: ' + fmt(c.from)"></span></div>
+                  <div class="row add"><span class="mk">+</span><span class="bd" x-text="'&quot;' + c.key + '&quot;: ' + fmt(c.to)"></span></div>
+                </div>
+              </template>
+            </div>
+            <div class="p-3 grid grid-cols-2 gap-2">
+              <button type="button" @click="copy(patchJson, 'patch')" :disabled="!changes.length"
+                class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-2 py-1.5 hover:border-[#141413] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="copied === 'patch' ? 'Copied ✓' : 'Copy changed JSON'" :class="copied === 'patch' ? 'text-olive' : ''"></button>
+              <button type="button" @click="copy(fullJson, 'full')"
+                class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-2 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="copied === 'full' ? 'Copied ✓' : 'Copy full file'" :class="copied === 'full' ? 'text-olive' : ''"></button>
+            </div>
+          </div>
+
+          <div class="bg-white border rounded-xl px-4 py-3" :class="warnings.length ? 'border-[rgba(176,74,63,0.45)]' : 'border-[#d1cfc5]'">
+            <p class="m-0 mb-2 font-mono text-[11px] uppercase tracking-[0.06em]" :class="warnings.length ? 'text-rust' : 'text-olive'"
+              x-text="warnings.length ? 'Fix before deploying' : 'Dependencies satisfied'"></p>
+            <p x-show="!warnings.length" class="m-0 text-[13px] text-[#87867f]">Every enabled key has its prerequisite on, and no exclusive pair is both on.</p>
+            <ul class="m-0 p-0 list-none space-y-2.5">
+              <template x-for="w in warnings" :key="w.key">
+                <li class="text-[13px]">
+                  <code class="font-mono text-[12px] text-[#141413] break-all" x-text="w.key"></code>
+                  <span class="block text-rust text-[12.5px]" x-text="w.msg"></span>
+                  <button type="button" @click="w.apply()" class="mt-1 font-mono text-[11px] underline decoration-dotted text-[#3d3d3a] hover:text-[#141413]" x-text="'→ ' + w.fix"></button>
+                </li>
+              </template>
+            </ul>
+          </div>
+
+          <p class="m-0 font-mono text-[11px] text-[#87867f] leading-relaxed px-1">
+            Diff lists only changed keys, in file order. Paste it into the PR for <span class="text-[#3d3d3a]">config/remote/prod.json</span>; CI re-validates dependencies on merge.
+          </p>
+        </aside>
+      </div>
+
+      <!-- Dependency map -->
+      <section class="mt-14">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">→</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Dependency map</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">Every <code class="font-mono text-[13px]">requires</code> and <code class="font-mono text-[13px]">conflicts</code> edge in the file. Nodes update live: olive is on, gray is off, rust is a broken rule.</p>
+        <div class="overflow-x-auto bg-white border border-[#d1cfc5] rounded-xl p-4">
+          <svg viewBox="0 0 900 270" class="w-full min-w-[720px]" role="img" aria-label="Dependency graph of remote config keys: three requires chains and one exclusive pair">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#87867f"></path>
+              </marker>
+              <marker id="arrow-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#b04a3f"></path>
+              </marker>
+            </defs>
+            <g font-family="ui-monospace, monospace" font-size="12">
+              <!-- chain 1 -->
+              <text x="20" y="22" fill="#87867f" font-size="10.5" letter-spacing="0.06em">PAYMENTS</text>
+              <line x1="260" y1="49" x2="326" y2="49" stroke-width="1.5" :stroke="edge('payments.tap_to_pay')" :marker-end="warning('payments.tap_to_pay') ? 'url(#arrow-bad)' : 'url(#arrow)'"></line>
+              <line x1="570" y1="49" x2="636" y2="49" stroke-width="1.5" :stroke="edge('payments.tap_to_pay_rollout')" :marker-end="warning('payments.tap_to_pay_rollout') ? 'url(#arrow-bad)' : 'url(#arrow)'"></line>
+              <rect x="20" y="32" width="240" height="34" rx="8" :fill="node('payments.nfc_sdk_v3').fill" :stroke="node('payments.nfc_sdk_v3').stroke" stroke-width="1.5"></rect>
+              <text x="140" y="53" text-anchor="middle" :fill="node('payments.nfc_sdk_v3').text">payments.nfc_sdk_v3</text>
+              <rect x="330" y="32" width="240" height="34" rx="8" :fill="node('payments.tap_to_pay').fill" :stroke="node('payments.tap_to_pay').stroke" stroke-width="1.5"></rect>
+              <text x="450" y="53" text-anchor="middle" :fill="node('payments.tap_to_pay').text">payments.tap_to_pay</text>
+              <rect x="640" y="32" width="240" height="34" rx="8" :fill="node('payments.tap_to_pay_rollout').fill" :stroke="node('payments.tap_to_pay_rollout').stroke" stroke-width="1.5"></rect>
+              <text x="760" y="53" text-anchor="middle" :fill="node('payments.tap_to_pay_rollout').text">payments.tap_to_pay_rollout</text>
+              <!-- chain 2 -->
+              <text x="20" y="90" fill="#87867f" font-size="10.5" letter-spacing="0.06em">OFFLINE</text>
+              <line x1="260" y1="117" x2="326" y2="117" stroke-width="1.5" :stroke="edge('offline.queue_transfers')" :marker-end="warning('offline.queue_transfers') ? 'url(#arrow-bad)' : 'url(#arrow)'"></line>
+              <rect x="20" y="100" width="240" height="34" rx="8" :fill="node('offline.cached_balance').fill" :stroke="node('offline.cached_balance').stroke" stroke-width="1.5"></rect>
+              <text x="140" y="121" text-anchor="middle" :fill="node('offline.cached_balance').text">offline.cached_balance</text>
+              <rect x="330" y="100" width="240" height="34" rx="8" :fill="node('offline.queue_transfers').fill" :stroke="node('offline.queue_transfers').stroke" stroke-width="1.5"></rect>
+              <text x="450" y="121" text-anchor="middle" :fill="node('offline.queue_transfers').text">offline.queue_transfers</text>
+              <!-- chain 3 -->
+              <text x="20" y="158" fill="#87867f" font-size="10.5" letter-spacing="0.06em">ML → NOTIFICATIONS</text>
+              <line x1="260" y1="185" x2="326" y2="185" stroke-width="1.5" :stroke="edge('push.spend_insights')" :marker-end="warning('push.spend_insights') ? 'url(#arrow-bad)' : 'url(#arrow)'"></line>
+              <rect x="20" y="168" width="240" height="34" rx="8" :fill="node('ml.on_device_categorizer').fill" :stroke="node('ml.on_device_categorizer').stroke" stroke-width="1.5"></rect>
+              <text x="140" y="189" text-anchor="middle" :fill="node('ml.on_device_categorizer').text">ml.on_device_categorizer</text>
+              <rect x="330" y="168" width="240" height="34" rx="8" :fill="node('push.spend_insights').fill" :stroke="node('push.spend_insights').stroke" stroke-width="1.5"></rect>
+              <text x="450" y="189" text-anchor="middle" :fill="node('push.spend_insights').text">push.spend_insights</text>
+              <!-- exclusive pair -->
+              <text x="20" y="226" fill="#87867f" font-size="10.5" letter-spacing="0.06em">KYC · EXCLUSIVE</text>
+              <line x1="260" y1="253" x2="330" y2="253" stroke-width="1.5" stroke-dasharray="4 4" :stroke="edge('kyc.skip_for_low_limit')"></line>
+              <text x="295" y="247" text-anchor="middle" font-size="13" :fill="edge('kyc.skip_for_low_limit')">⊥</text>
+              <rect x="20" y="236" width="240" height="34" rx="8" :fill="node('kyc.strict_mode').fill" :stroke="node('kyc.strict_mode').stroke" stroke-width="1.5"></rect>
+              <text x="140" y="257" text-anchor="middle" :fill="node('kyc.strict_mode').text">kyc.strict_mode 🔒</text>
+              <rect x="330" y="236" width="240" height="34" rx="8" :fill="node('kyc.skip_for_low_limit').fill" :stroke="node('kyc.skip_for_low_limit').stroke" stroke-width="1.5"></rect>
+              <text x="450" y="257" text-anchor="middle" :fill="node('kyc.skip_for_low_limit').text">kyc.skip_for_low_limit</text>
+              <!-- legend -->
+              <g transform="translate(640,110)" font-size="11">
+                <rect x="0" y="0" width="14" height="14" rx="3" fill="rgba(120,140,93,0.12)" stroke="#788c5d"></rect><text x="22" y="11" fill="#3d3d3a">on</text>
+                <rect x="0" y="24" width="14" height="14" rx="3" fill="#f0eee6" stroke="#d1cfc5"></rect><text x="22" y="35" fill="#3d3d3a">off</text>
+                <rect x="0" y="48" width="14" height="14" rx="3" fill="rgba(176,74,63,0.10)" stroke="#b04a3f"></rect><text x="22" y="59" fill="#3d3d3a">rule broken</text>
+                <line x1="0" y1="80" x2="30" y2="80" stroke="#87867f" stroke-width="1.5" marker-end="url(#arrow)"></line><text x="40" y="84" fill="#3d3d3a">requires (points to dependent)</text>
+                <line x1="0" y1="102" x2="30" y2="102" stroke="#87867f" stroke-width="1.5" stroke-dasharray="4 4"></line><text x="40" y="106" fill="#3d3d3a">mutually exclusive</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/flag-editor.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

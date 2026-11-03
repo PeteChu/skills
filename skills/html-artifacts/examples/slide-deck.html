@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en" class="snap-y snap-mandatory">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline sync, one quarter in — eng review deck</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .dash > li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 18px; height: 1.5px; background: #d97757; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#141413] font-sans antialiased overflow-x-hidden" x-data="deck()" @keydown.window="key($event)">
+    <!-- chrome -->
+    <div class="fixed top-0 left-0 h-[3px] bg-clay z-30 transition-[width] duration-300" :style="'width:' + ((cur + 1) / n * 100) + '%'"></div>
+    <nav class="hidden md:flex fixed right-5 top-1/2 -translate-y-1/2 z-30 flex-col gap-2.5" aria-label="Slides">
+      <template x-for="(t, i) in titles" :key="i">
+        <button type="button" @click="go(i)" :aria-label="'Slide ' + (i + 1) + ': ' + t" :aria-current="cur === i ? 'step' : null"
+          :class="cur === i ? 'bg-clay scale-125' : 'bg-[#d1cfc5] hover:bg-[#87867f]'"
+          class="w-2 h-2 rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"></button>
+      </template>
+    </nav>
+    <div class="fixed bottom-5 right-6 z-30 flex items-center gap-2 font-mono text-xs select-none">
+      <button type="button" @click="go(cur - 1)" :disabled="cur === 0" aria-label="Previous slide"
+        class="w-8 h-8 rounded-full border border-[#d1cfc5] bg-ivory/90 backdrop-blur text-[#3d3d3a] disabled:opacity-40 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">←</button>
+      <span class="bg-ivory/90 backdrop-blur border border-[#d1cfc5] rounded-full px-3 py-1.5 text-[#3d3d3a]" aria-live="polite"
+        x-text="String(cur + 1).padStart(2, '0') + ' / ' + String(n).padStart(2, '0')">01 / 08</span>
+      <button type="button" @click="go(cur + 1)" :disabled="cur === n - 1" aria-label="Next slide"
+        class="w-8 h-8 rounded-full border border-[#d1cfc5] bg-ivory/90 backdrop-blur text-[#3d3d3a] disabled:opacity-40 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">→</button>
+    </div>
+
+    <!-- 01 · Title -->
+    <section id="s1" data-slide data-title="Title" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <svg width="56" height="56" viewBox="0 0 56 56" class="mb-9" aria-hidden="true">
+          <rect x="14" y="6" width="28" height="44" rx="6" fill="none" stroke="#d1cfc5" stroke-width="1.5"/>
+          <path d="M22 26 a8 8 0 0 1 12 0 M19 22 a13 13 0 0 1 18 0" fill="none" stroke="#d97757" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="18" y1="34" x2="38" y2="18" stroke="#141413" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="28" cy="42" r="2" fill="#141413"/>
+        </svg>
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">Acme Field · mobile eng review · Nov 6</p>
+        <h1 class="font-serif font-medium text-[clamp(40px,6.4vw,68px)] leading-[1.06] tracking-tight m-0 mb-5">Offline sync,<br />one quarter in</h1>
+        <p class="text-[17px] leading-relaxed text-[#3d3d3a] max-w-[560px] m-0">
+          What we shipped for technicians working without signal, what it changed, and one call we need from this room on photo uploads.
+        </p>
+        <div class="mt-10 max-w-[640px] bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14px] text-[#3d3d3a]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Turn the Q3 offline-sync retro notes and the ticket numbers into a short deck for Thursday's eng review. Keep it under ten
+          minutes and end on the photo-queue decision.
+        </div>
+        <div class="mt-10 flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs text-[#87867f]">
+          <span>8 slides</span><span>~6 min</span><span>presenter: Ines Duarte</span><span class="text-clay-dark">← → or scroll</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 · Problem -->
+    <section id="s2" data-slide data-title="The problem" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">Why we did it</p>
+        <h2 class="font-serif font-medium text-[clamp(30px,4.2vw,44px)] leading-[1.14] tracking-tight m-0 mb-12">Technicians were losing work whenever the signal dropped</h2>
+        <div class="grid sm:grid-cols-3 gap-10 sm:gap-8">
+          <div class="border-t-2 border-[#141413] pt-5">
+            <p class="font-serif text-[56px] leading-none m-0">11<span class="text-[28px] text-[#87867f]">%</span></p>
+            <p class="text-[15px] text-[#3d3d3a] mt-3 m-0">of work orders are edited with no connection: basements, plant rooms, rural sites.</p>
+          </div>
+          <div class="border-t-2 border-clay pt-5">
+            <p class="font-serif text-[56px] leading-none m-0 text-clay-dark">312</p>
+            <p class="text-[15px] text-[#3d3d3a] mt-3 m-0">“lost edit” or conflict tickets in Q2, our #2 support category after login.</p>
+          </div>
+          <div class="border-t-2 border-[#141413] pt-5">
+            <p class="font-serif text-[56px] leading-none m-0">23<span class="text-[28px] text-[#87867f]"> min</span></p>
+            <p class="text-[15px] text-[#3d3d3a] mt-3 m-0">median time a technician spent re-entering a job after the app dropped it.</p>
+          </div>
+        </div>
+        <p class="font-mono text-[11px] text-[#87867f] mt-12 m-0">Source: Zendesk view “sync-conflict”, Apr 1 – Jun 30 · field telemetry, 4,120 active devices</p>
+      </div>
+    </section>
+
+    <!-- 03 · What we built -->
+    <section id="s3" data-slide data-title="What we built" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">What we built</p>
+        <h2 class="font-serif font-medium text-[clamp(30px,4.2vw,44px)] leading-[1.14] tracking-tight m-0 mb-10">Every edit becomes an operation, saved on the device first</h2>
+        <div class="overflow-x-auto mb-10">
+          <svg viewBox="0 0 880 224" class="block w-full h-auto min-w-[640px]" role="img" aria-label="Device app UI writes to a local op log; the sync engine sends batches to POST /sync, which merges into Postgres and returns acks and remote changes.">
+            <defs>
+              <marker id="d-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#87867f"/></marker>
+              <marker id="d-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97757"/></marker>
+            </defs>
+            <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+              <rect x="10" y="20" width="250" height="160" rx="18" fill="#ffffff" stroke="#3d3d3a" stroke-width="1.5"/>
+              <text x="26" y="42" fill="#87867f" font-size="11">device · offline-capable</text>
+              <rect x="28" y="60" width="90" height="44" rx="8" fill="#f0eee6" stroke="#d1cfc5" stroke-width="1.5"/>
+              <text x="73" y="86" text-anchor="middle" fill="#141413">app UI</text>
+              <line x1="118" y1="82" x2="142" y2="82" stroke="#87867f" stroke-width="1.5" marker-end="url(#d-arrow)"/>
+              <rect x="146" y="60" width="96" height="44" rx="8" fill="#d97757" fill-opacity="0.12" stroke="#d97757" stroke-width="2"/>
+              <text x="194" y="86" text-anchor="middle" fill="#141413">op log</text>
+              <text x="135" y="134" text-anchor="middle" fill="#3d3d3a" font-size="11">SQLite · append-only</text>
+              <text x="135" y="152" text-anchor="middle" fill="#87867f" font-size="11">survives app kill + reboot</text>
+
+              <line x1="260" y1="100" x2="332" y2="100" stroke="#d97757" stroke-width="2" marker-end="url(#d-clay)"/>
+              <text x="296" y="90" text-anchor="middle" fill="#b85c3e" font-size="11">reconnect</text>
+              <rect x="336" y="60" width="190" height="80" rx="10" fill="#e3dacc" stroke="#141413" stroke-width="2"/>
+              <text x="431" y="92" text-anchor="middle" fill="#141413">sync engine</text>
+              <text x="431" y="110" text-anchor="middle" fill="#3d3d3a" font-size="11">200 ops / batch · 30 s</text>
+              <text x="431" y="126" text-anchor="middle" fill="#87867f" font-size="11">backoff to 5 min idle</text>
+
+              <line x1="526" y1="100" x2="592" y2="100" stroke="#d97757" stroke-width="2" marker-end="url(#d-clay)"/>
+              <text x="559" y="90" text-anchor="middle" fill="#b85c3e" font-size="11">ops</text>
+              <rect x="596" y="60" width="130" height="80" rx="10" fill="#ffffff" stroke="#3d3d3a" stroke-width="1.5"/>
+              <text x="661" y="92" text-anchor="middle" fill="#141413">POST /sync</text>
+              <text x="661" y="110" text-anchor="middle" fill="#87867f" font-size="11">merge rules</text>
+              <line x1="726" y1="100" x2="756" y2="100" stroke="#87867f" stroke-width="1.5" marker-end="url(#d-arrow)"/>
+              <rect x="760" y="74" width="110" height="52" rx="10" fill="#f0eee6" stroke="#3d3d3a" stroke-width="1.5"/>
+              <text x="815" y="105" text-anchor="middle" fill="#141413">postgres</text>
+
+              <path d="M661,140 L661,206 L135,206 L135,184" fill="none" stroke="#87867f" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#d-arrow)"/>
+              <text x="400" y="200" text-anchor="middle" fill="#87867f" font-size="11">acks + remote changes</text>
+            </g>
+          </svg>
+        </div>
+        <ul class="grid sm:grid-cols-3 gap-6 list-none m-0 p-0 text-[15px] text-[#3d3d3a]">
+          <li><span class="block font-mono text-xs text-clay-dark mb-1">Op log</span>Edits are appended locally before any network call, so nothing a technician types is ever held only in memory.</li>
+          <li><span class="block font-mono text-xs text-clay-dark mb-1">Merge</span>Last-writer-wins per field. Checklist items merge as sets, so two techs ticking boxes never collide.</li>
+          <li><span class="block font-mono text-xs text-clay-dark mb-1">Sync</span>On reconnect, then every 30 s. Batches of 200 ops, idempotent by op id.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 04 · Results -->
+    <section id="s4" data-slide data-title="Results" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">Results</p>
+        <h2 class="font-serif font-medium text-[clamp(30px,4.2vw,44px)] leading-[1.14] tracking-tight m-0 mb-8">Conflict tickets fell 81% after launch</h2>
+        <svg viewBox="0 0 880 236" class="block w-full h-auto mb-8" role="img" aria-label="Monthly conflict tickets: April 98, May 104, June 110, July 61, August 24, September 19, October 21. Offline sync shipped July 8.">
+          <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+            <line x1="50" y1="60" x2="870" y2="60" stroke="#f0eee6" stroke-width="1"/>
+            <text x="42" y="64" text-anchor="end" fill="#87867f" font-size="11">100</text>
+            <line x1="50" y1="200" x2="870" y2="200" stroke="#d1cfc5" stroke-width="1.5"/>
+            <text x="42" y="204" text-anchor="end" fill="#87867f" font-size="11">0</text>
+            <g fill="#d1cfc5">
+              <rect x="70" y="63" width="56" height="137" rx="3"/>
+            <rect x="185" y="54" width="56" height="146" rx="3"/>
+              <rect x="300" y="46" width="56" height="154" rx="3"/>
+            </g>
+            <rect x="415" y="115" width="56" height="85" rx="3" fill="#d97757"/>
+            <g fill="#788c5d">
+              <rect x="530" y="166" width="56" height="34" rx="3"/>
+              <rect x="645" y="173" width="56" height="27" rx="3"/>
+              <rect x="760" y="171" width="56" height="29" rx="3"/>
+            </g>
+            <g text-anchor="middle" fill="#141413">
+              <text x="98" y="56">98</text><text x="213" y="47">104</text><text x="328" y="39">110</text>
+              <text x="443" y="108">61</text><text x="558" y="159">24</text><text x="673" y="166">19</text><text x="788" y="164">21</text>
+            </g>
+            <g text-anchor="middle" fill="#87867f" font-size="11">
+              <text x="98" y="220">Apr</text><text x="213" y="220">May</text><text x="328" y="220">Jun</text><text x="443" y="220">Jul</text><text x="558" y="220">Aug</text><text x="673" y="220">Sep</text><text x="788" y="220">Oct</text>
+            </g>
+            <line x1="385" y1="18" x2="385" y2="200" stroke="#d97757" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <text x="393" y="28" fill="#b85c3e" font-size="11">v4.2 offline sync · Jul 8</text>
+          </g>
+        </svg>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Re-entry time</p>
+            <p class="font-serif text-[34px] leading-none mt-2 mb-1">0<span class="text-base text-[#87867f]"> min</span></p>
+            <p class="font-mono text-xs text-olive m-0">▼ from 23 min median</p>
+          </div>
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Sync first-try success</p>
+            <p class="font-serif text-[34px] leading-none mt-2 mb-1">99.6<span class="text-base text-[#87867f]"> %</span></p>
+            <p class="font-mono text-xs text-[#87867f] m-0">of 2.3M batches since Jul 8</p>
+          </div>
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Battery per 8 h shift</p>
+            <p class="font-serif text-[34px] leading-none mt-2 mb-1">+0.4<span class="text-base text-[#87867f]"> %</span></p>
+            <p class="font-mono text-xs text-clay-dark m-0">was +2.1% before 4.2.3</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 · What bit us -->
+    <section id="s5" data-slide data-title="What bit us" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">What didn't go well</p>
+        <h2 class="font-serif font-medium text-[clamp(30px,4.2vw,44px)] leading-[1.14] tracking-tight m-0 mb-10">Three things bit us</h2>
+        <ol class="list-none m-0 p-0 divide-y divide-[#e3dacc]">
+          <li class="grid grid-cols-[40px_1fr] sm:grid-cols-[40px_1fr_auto] gap-x-5 gap-y-1 py-6">
+            <span class="font-mono text-xs bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)] rounded-lg w-9 h-7 grid place-items-center">01</span>
+            <div><p class="font-serif text-[21px] m-0 mb-1">Android 12 battery drain</p><p class="text-[15px] text-[#3d3d3a] m-0">Sync woke the radio every 30 s even with an empty queue. Idle backoff to 5 min fixed it.</p></div>
+            <span class="col-start-2 sm:col-start-3 font-mono text-[11.5px] text-olive whitespace-nowrap">fixed · #5512</span>
+          </li>
+          <li class="grid grid-cols-[40px_1fr] sm:grid-cols-[40px_1fr_auto] gap-x-5 gap-y-1 py-6">
+            <span class="font-mono text-xs bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)] rounded-lg w-9 h-7 grid place-items-center">02</span>
+            <div><p class="font-serif text-[21px] m-0 mb-1">Large photos block text edits</p><p class="text-[15px] text-[#3d3d3a] m-0">Photos share the sync queue, so one 25 MB upload on a weak signal holds every edit queued behind it.</p></div>
+            <span class="col-start-2 sm:col-start-3 font-mono text-[11.5px] text-rust whitespace-nowrap">open · next slide</span>
+          </li>
+          <li class="grid grid-cols-[40px_1fr] sm:grid-cols-[40px_1fr_auto] gap-x-5 gap-y-1 py-6">
+            <span class="font-mono text-xs bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)] rounded-lg w-9 h-7 grid place-items-center">03</span>
+            <div><p class="font-serif text-[21px] m-0 mb-1">40 s first launch for 2% of devices</p><p class="text-[15px] text-[#3d3d3a] m-0">The schema migration ran in one transaction on devices caching 10k+ orders. It is now chunked, with p99 at 6 s.</p></div>
+            <span class="col-start-2 sm:col-start-3 font-mono text-[11.5px] text-olive whitespace-nowrap">fixed · #5388</span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 06 · Decision (inverted) -->
+    <section id="s6" data-slide data-title="Decision needed" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh] bg-[#141413] text-ivory">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#d1cfc5] m-0 mb-6">Decision needed · by Nov 13</p>
+        <h2 class="font-serif font-medium text-[clamp(28px,4vw,42px)] leading-[1.16] tracking-tight m-0 mb-10">Should photo uploads get their own background queue, on by default?</h2>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div class="border-[1.5px] border-clay rounded-2xl p-6 bg-[rgba(217,119,87,0.07)] relative">
+            <span class="absolute -top-3 left-6 font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2.5 py-0.5">Our lean</span>
+            <p class="font-serif text-[22px] m-0 mb-3">A · Separate photo queue</p>
+            <ul class="m-0 pl-4 space-y-1.5 text-[14.5px] text-[#e3dacc]">
+              <li>Text edits never wait behind a photo again</li>
+              <li>About +1.5% battery on photo-heavy shifts</li>
+              <li>Two sprints: WorkManager on Android, BGTaskScheduler on iOS</li>
+            </ul>
+          </div>
+          <div class="border-[1.5px] border-[#3d3d3a] rounded-2xl p-6">
+            <p class="font-serif text-[22px] m-0 mb-3">B · Shared queue, 10 MB cap</p>
+            <ul class="m-0 pl-4 space-y-1.5 text-[14.5px] text-[#d1cfc5]">
+              <li>Ships this week</li>
+              <li>14% of today's photos exceed 10 MB, so techs must retake or compress</li>
+              <li>The blocking problem comes back as camera resolution grows</li>
+            </ul>
+          </div>
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-8 m-0">Needed by Nov 13 to make the Q1 release train · owner: Ines Duarte</p>
+      </div>
+    </section>
+
+    <!-- 07 · Next -->
+    <section id="s7" data-slide data-title="Next quarter" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">Next quarter</p>
+        <h2 class="font-serif font-medium text-[clamp(30px,4.2vw,44px)] leading-[1.14] tracking-tight m-0 mb-10">On deck for Q1</h2>
+        <ul class="dash list-none m-0 p-0 space-y-6">
+          <li class="relative pl-9 font-serif text-[22px] leading-snug">Photo queue (if A), with per-photo progress in the job sheet.</li>
+          <li class="relative pl-9 font-serif text-[22px] leading-snug">Conflict review screen for supervisors: see both versions and pick one.</li>
+          <li class="relative pl-9 font-serif text-[22px] leading-snug">Prefetch map tiles for the day's scheduled jobs at 06:00 on Wi-Fi.</li>
+          <li class="relative pl-9 font-serif text-[22px] leading-snug">Sync health dashboard for Field Ops, so they hear about stuck devices before support does.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 08 · Sources -->
+    <section id="s8" data-slide data-title="Sources" class="snap-start snap-always min-h-[100svh] flex items-center justify-center px-[6vw] py-[10vh]">
+      <div class="w-full max-w-[880px]">
+        <p class="font-mono text-xs tracking-[0.12em] uppercase text-[#87867f] m-0 mb-6">Appendix</p>
+        <h2 class="font-serif font-medium text-[clamp(30px,4.2vw,44px)] leading-[1.14] tracking-tight m-0 mb-10">Sources behind every number</h2>
+        <dl class="m-0 border border-[#d1cfc5] rounded-xl bg-white divide-y divide-[#f0eee6] text-[14.5px]">
+          <div class="grid sm:grid-cols-[200px_1fr] gap-1 px-5 py-3.5"><dt class="font-mono text-xs text-[#87867f] pt-0.5">Tickets</dt><dd class="m-0">Zendesk view “sync-conflict”, Apr 1 – Oct 31</dd></div>
+          <div class="grid sm:grid-cols-[200px_1fr] gap-1 px-5 py-3.5"><dt class="font-mono text-xs text-[#87867f] pt-0.5">Design</dt><dd class="m-0"><span class="font-mono text-[13px]">docs/rfc/118-offline-op-log.md</span></dd></div>
+          <div class="grid sm:grid-cols-[200px_1fr] gap-1 px-5 py-3.5"><dt class="font-mono text-xs text-[#87867f] pt-0.5">Code</dt><dd class="m-0 font-mono text-[13px]">#5320 op log · #5388 chunked migration · #5512 idle backoff</dd></div>
+          <div class="grid sm:grid-cols-[200px_1fr] gap-1 px-5 py-3.5"><dt class="font-mono text-xs text-[#87867f] pt-0.5">Battery</dt><dd class="m-0">QA lab, Pixel 6 + iPhone 13, scripted 8 h shift, 3 runs each</dd></div>
+          <div class="grid sm:grid-cols-[200px_1fr] gap-1 px-5 py-3.5"><dt class="font-mono text-xs text-[#87867f] pt-0.5">Sync success</dt><dd class="m-0">Telemetry event <span class="font-mono text-[13px]">sync.batch.result</span>, Jul 8 – Nov 1</dd></div>
+        </dl>
+        <p class="font-mono text-xs text-[#87867f] mt-8 m-0">Questions → #field-mobile, or grab Ines after the review.</p>
+        <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+          Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/slide-deck.md</span>
+        </footer>
+      </div>
+    </section>
+
+    <script>
+      function deck() {
+        return {
+          cur: 0,
+          n: 0,
+          slides: [],
+          titles: [],
+          init() {
+            this.slides = Array.from(document.querySelectorAll('[data-slide]'));
+            this.titles = this.slides.map((s) => s.dataset.title);
+            this.n = this.slides.length;
+            const io = new IntersectionObserver((entries) => {
+              entries.forEach((e) => { if (e.isIntersecting) this.cur = this.slides.indexOf(e.target); });
+            }, { rootMargin: '-50% 0px -50% 0px' });
+            this.slides.forEach((s) => io.observe(s));
+          },
+          go(i) {
+            const j = Math.max(0, Math.min(this.n - 1, i));
+            this.cur = j;
+            this.slides[j].scrollIntoView({ behavior: 'smooth' });
+          },
+          key(e) {
+            if (e.target.closest('input, textarea, select')) return;
+            const next = ['ArrowRight', 'ArrowDown', 'PageDown'];
+            const prev = ['ArrowLeft', 'ArrowUp', 'PageUp'];
+            if (next.includes(e.key) || (e.key === ' ' && !e.shiftKey && e.target.tagName !== 'BUTTON')) { e.preventDefault(); this.go(this.cur + 1); }
+            else if (prev.includes(e.key) || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); this.go(this.cur - 1); }
+            else if (e.key === 'Home') { e.preventDefault(); this.go(0); }
+            else if (e.key === 'End') { e.preventDefault(); this.go(this.n - 1); }
+          }
+        };
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Webhook retries — three approaches</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .kw { color: #d97757; }
+      .str { color: #a3b37f; }
+      .fn { color: #c9b98a; }
+      .cm { color: #87867f; }
+      .pro::before, .con::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: 2px; }
+      .pro::before { background: #788c5d; }
+      .con::before { background: #d97757; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1360px]">
+      <header class="mb-12 max-w-[780px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Exploration · acme-relay service</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Three ways to retry failed webhook deliveries
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Customers are missing webhooks when their endpoint blips. Show me three ways to add retries to
+          <code class="font-mono text-[13px]">src/webhooks/deliver.ts</code>, with tradeoffs for each.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          Context: ~42k deliveries/day · 1.8% fail on first attempt · Postgres 15 already in use · no queue infra today
+        </p>
+      </header>
+
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-7 mb-14" aria-label="Approaches">
+        <!-- 01 -->
+        <article class="bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
+          <header>
+            <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
+              <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">01</span>Inline retry with backoff
+            </h2>
+            <p class="text-sm text-[#87867f] m-0">Wrap the existing <code class="font-mono">fetch</code> call in a bounded retry loop.</p>
+          </header>
+          <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// src/webhooks/deliver.ts</span>
+<span class="kw">export async function</span> <span class="fn">deliver</span>(hook: Hook, body: Payload) {
+  <span class="kw">for</span> (<span class="kw">let</span> attempt = <span class="str">0</span>; attempt &lt; <span class="str">4</span>; attempt++) {
+    <span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">signedPost</span>(hook.url, body);
+    <span class="kw">if</span> (res.ok) <span class="kw">return</span> <span class="fn">record</span>(hook, <span class="str">'delivered'</span>);
+    <span class="kw">if</span> (res.status &lt; <span class="str">500</span>) <span class="kw">break</span>;   <span class="cm">// 4xx: don't retry</span>
+    <span class="kw">await</span> <span class="fn">sleep</span>(<span class="str">250</span> * <span class="str">2</span> ** attempt + <span class="fn">jitter</span>());
+  }
+  <span class="kw">return</span> <span class="fn">record</span>(hook, <span class="str">'failed'</span>);
+}</pre>
+          </div>
+          <div class="grid grid-cols-2 border border-[#d1cfc5] rounded-lg overflow-hidden text-[13px]">
+            <div class="bg-[#f0eee6] px-3.5 py-2 font-semibold text-xs uppercase tracking-[0.04em] text-[#141413]">Pro</div>
+            <div class="bg-[#f0eee6] px-3.5 py-2 font-semibold text-xs uppercase tracking-[0.04em] text-[#141413] border-l border-[#d1cfc5]">Con</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">Ten-line change, ships today</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">Max window is ~2 s, so it misses longer outages</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">No schema or infra change</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">Holds the API worker while sleeping</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">Easy to unit test with fake timers</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">A deploy mid-retry loses the event</div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-auto">
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Retry window: <strong class="text-[#141413]">~2 s</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Durability: <strong class="text-rust">none</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">New infra: <strong class="text-[#141413]">0</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Effort: <strong class="text-[#141413]">½ day</strong></span>
+          </div>
+        </article>
+
+        <!-- 02 -->
+        <article class="bg-white border-2 border-clay rounded-xl p-6 flex flex-col gap-5 relative">
+          <span class="absolute -top-3 right-5 font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2.5 py-0.5">Recommended</span>
+          <header>
+            <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
+              <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">02</span>Postgres outbox + worker
+            </h2>
+            <p class="text-sm text-[#87867f] m-0">Write deliveries to a table in the same transaction; a worker drains it.</p>
+          </header>
+          <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">-- migrations/0042_webhook_outbox.sql</span>
+<span class="kw">create table</span> webhook_outbox (
+  id bigserial <span class="kw">primary key</span>, hook_id uuid, body jsonb,
+  attempts int <span class="kw">default</span> <span class="str">0</span>, next_at timestamptz <span class="kw">default</span> now()
+);
+
+<span class="cm">// src/webhooks/worker.ts — every 2 s</span>
+<span class="kw">const</span> rows = <span class="kw">await</span> db.<span class="fn">query</span>(<span class="str">`select * from webhook_outbox
+  where next_at &lt;= now() order by next_at
+  limit 50 for update skip locked`</span>);
+<span class="kw">for</span> (<span class="kw">const</span> r <span class="kw">of</span> rows) <span class="kw">await</span> <span class="fn">attempt</span>(r); <span class="cm">// bumps next_at</span></pre>
+          </div>
+          <div class="grid grid-cols-2 border border-[#d1cfc5] rounded-lg overflow-hidden text-[13px]">
+            <div class="bg-[#f0eee6] px-3.5 py-2 font-semibold text-xs uppercase tracking-[0.04em] text-[#141413]">Pro</div>
+            <div class="bg-[#f0eee6] px-3.5 py-2 font-semibold text-xs uppercase tracking-[0.04em] text-[#141413] border-l border-[#d1cfc5]">Con</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">Survives deploys and crashes</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">New migration and a worker process</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">Retries for hours on a schedule we own</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">Table needs pruning (cron or partition)</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">Uses the database we already run</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">Polling adds ~2 s latency to every delivery</div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-auto">
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Retry window: <strong class="text-[#141413]">24 h</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Durability: <strong class="text-olive">transactional</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">New infra: <strong class="text-[#141413]">1 worker</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Effort: <strong class="text-[#141413]">3 days</strong></span>
+          </div>
+        </article>
+
+        <!-- 03 -->
+        <article class="bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
+          <header>
+            <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
+              <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">03</span>Managed queue + DLQ
+            </h2>
+            <p class="text-sm text-[#87867f] m-0">Publish to a cloud queue with visibility timeouts and a dead-letter queue.</p>
+          </header>
+          <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// src/webhooks/enqueue.ts</span>
+<span class="kw">await</span> queue.<span class="fn">send</span>({
+  queueUrl: env.WEBHOOK_QUEUE_URL,
+  body: <span class="fn">JSON</span>.<span class="fn">stringify</span>({ hookId, body }),
+});
+
+<span class="cm">// infra/queues.tf</span>
+redrive_policy = {
+  maxReceiveCount     = <span class="str">8</span>
+  deadLetterTargetArn = <span class="fn">aws_sqs_queue</span>.webhooks_dlq.arn
+}</pre>
+          </div>
+          <div class="grid grid-cols-2 border border-[#d1cfc5] rounded-lg overflow-hidden text-[13px]">
+            <div class="bg-[#f0eee6] px-3.5 py-2 font-semibold text-xs uppercase tracking-[0.04em] text-[#141413]">Pro</div>
+            <div class="bg-[#f0eee6] px-3.5 py-2 font-semibold text-xs uppercase tracking-[0.04em] text-[#141413] border-l border-[#d1cfc5]">Con</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">Scales far past current volume</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">First queue in the stack: IAM, Terraform, local dev story</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">DLQ gives a built-in "give up" bucket</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">Publish is not transactional with the DB write</div>
+            <div class="px-3.5 py-2.5 border-t border-[#d1cfc5] pro">No polling, low latency</div>
+            <div class="px-3.5 py-2.5 border-t border-l border-[#d1cfc5] con">Backoff is coarse (visibility timeout)</div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-auto">
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Retry window: <strong class="text-[#141413]">~4 d</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Durability: <strong class="text-clay-dark">at-least-once</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">New infra: <strong class="text-[#141413]">2 queues + IAM</strong></span>
+            <span class="font-mono text-[11.5px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2.5 py-1">Effort: <strong class="text-[#141413]">1–2 wks</strong></span>
+          </div>
+        </article>
+      </section>
+
+      <div class="grid lg:grid-cols-[minmax(0,860px)_1fr] gap-8 items-start">
+        <aside class="border-l-4 border-clay bg-white rounded-r-xl px-7 py-6">
+          <h2 class="font-serif font-medium text-[22px] text-[#141413] m-0 mb-2.5">Recommendation</h2>
+          <p class="m-0 mb-2.5">
+            Go with <strong>approach 02, the Postgres outbox</strong>. The failures in last month's support tickets were
+            endpoint outages of 5–40 minutes, which the 2-second inline window cannot cover. The outbox reuses the database
+            and migration tooling acme-relay already runs, and because the row is written in the same transaction as the
+            event, a deploy can no longer drop a delivery.
+          </p>
+          <p class="m-0">
+            Consider approach 03 once delivery volume passes roughly 1M/day or a second service needs a queue. At that point
+            the infrastructure cost is shared. Approach 01 is still worth adding as a first fast attempt <em>inside</em> the
+            outbox worker.
+          </p>
+        </aside>
+        <div class="border border-[#d1cfc5] rounded-xl bg-white overflow-hidden text-sm">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 px-4 pt-3 pb-2">When to choose each</p>
+          <dl class="m-0 divide-y divide-[#f0eee6]">
+            <div class="px-4 py-2.5 grid grid-cols-[36px_1fr]"><dt class="font-mono text-xs text-[#87867f]">01</dt><dd class="m-0">Stop-gap this week while 02 is built</dd></div>
+            <div class="px-4 py-2.5 grid grid-cols-[36px_1fr]"><dt class="font-mono text-xs text-clay-dark">02</dt><dd class="m-0">Now: durable, owned, fits current scale</dd></div>
+            <div class="px-4 py-2.5 grid grid-cols-[36px_1fr]"><dt class="font-mono text-xs text-[#87867f]">03</dt><dd class="m-0">Later, when queues are shared platform infra</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/code-approaches.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

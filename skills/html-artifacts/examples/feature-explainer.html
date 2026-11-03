@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How file uploads work in acme-docs</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .kw { color: #d97757; }
+      .str { color: #a3b37f; }
+      .fn { color: #c9b98a; }
+      .cm { color: #87867f; }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; display: inline-block; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+    </style>
+    <script>
+      function explainer() {
+        return {
+          open: [1],
+          active: 1,
+          tab: 'yaml',
+          tabs: ['yaml', 'route', 'client', 'response'],
+          labels: { yaml: 'config/uploads.yaml', route: 'api/routes/comments.ts', client: 'AttachButton.tsx', response: 'response' },
+          copied: false,
+          isOpen(n) { return this.open.includes(n); },
+          toggle(n) {
+            if (this.isOpen(n)) { this.open = this.open.filter((x) => x !== n); }
+            else { this.open.push(n); this.active = n; }
+          },
+          show(n) {
+            if (!this.isOpen(n)) this.open.push(n);
+            this.active = n;
+            this.$nextTick(() => document.getElementById('step-' + n).scrollIntoView({ block: 'center' }));
+          },
+          stroke(n) { return this.active === n ? '#d97757' : '#87867f'; },
+          nextTab(d) { const i = this.tabs.indexOf(this.tab); this.tab = this.tabs[(i + d + this.tabs.length) % this.tabs.length]; },
+          copy() {
+            navigator.clipboard.writeText(this.$refs[this.tab].textContent).then(() => {
+              this.copied = true;
+              setTimeout(() => (this.copied = false), 1400);
+            });
+          },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <div class="mx-auto max-w-[1160px] grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)] gap-12" x-data="explainer()">
+      <!-- side nav -->
+      <nav class="hidden lg:block sticky top-8 self-start text-[13px]" aria-label="On this page">
+        <p class="font-mono text-[10px] tracking-[0.1em] uppercase text-[#87867f] m-0 mb-3">On this page</p>
+        <a href="#tldr" class="block py-1 pl-3 border-l-2 border-[#d1cfc5] hover:border-[#141413] hover:text-[#141413]">TL;DR</a>
+        <a href="#glance" class="block py-1 pl-3 border-l-2 border-[#d1cfc5] hover:border-[#141413] hover:text-[#141413]">At a glance</a>
+        <a href="#path" class="block py-1 pl-3 border-l-2 border-[#d1cfc5] hover:border-[#141413] hover:text-[#141413]">Step by step</a>
+        <template x-for="n in [1,2,3,4,5]" :key="n">
+          <button type="button" @click="show(n)" class="block w-full text-left py-0.5 pl-6 border-l-2 font-mono text-[12px] hover:text-[#141413]"
+            :class="active === n ? 'border-clay text-clay-dark' : 'border-[#d1cfc5] text-[#87867f]'" x-text="'Step ' + n"></button>
+        </template>
+        <a href="#config" class="block py-1 pl-3 border-l-2 border-[#d1cfc5] hover:border-[#141413] hover:text-[#141413]">Add it to your feature</a>
+        <a href="#gotchas" class="block py-1 pl-3 border-l-2 border-[#d1cfc5] hover:border-[#141413] hover:text-[#141413]">Gotchas</a>
+        <a href="#faq" class="block py-1 pl-3 border-l-2 border-[#d1cfc5] hover:border-[#141413] hover:text-[#141413]">FAQ</a>
+        <div class="mt-7 pt-4 border-t border-[#d1cfc5]">
+          <p class="font-mono text-[10px] tracking-[0.1em] uppercase text-[#87867f] m-0 mb-2">Files read</p>
+          <code class="block font-mono text-[11px] text-[#87867f] py-0.5">api/uploads/presign.ts</code>
+          <code class="block font-mono text-[11px] text-[#87867f] py-0.5">web/hooks/useUpload.ts</code>
+          <code class="block font-mono text-[11px] text-[#87867f] py-0.5">workers/scan/index.ts</code>
+          <code class="block font-mono text-[11px] text-[#87867f] py-0.5">api/uploads/finalize.ts</code>
+          <code class="block font-mono text-[11px] text-[#87867f] py-0.5">config/uploads.yaml</code>
+          <code class="block font-mono text-[11px] text-[#87867f] py-0.5">infra/buckets.tf</code>
+        </div>
+      </nav>
+
+      <main class="min-w-0">
+        <header class="mb-10 max-w-[820px]">
+          <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Research · feature explainer · acme-docs</p>
+          <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">How file uploads work in acme-docs</h1>
+          <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px] mb-6">
+            <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+            I need to let people attach PDFs to comments. Before I touch anything: how do uploads actually work in this repo,
+            end to end, and what's the minimum I have to add for a new kind of upload?
+          </div>
+          <div id="tldr" class="scroll-mt-6 bg-white border border-[#d1cfc5] border-l-4 border-l-clay rounded-xl p-6 grid md:grid-cols-[90px_1fr] gap-3">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-clay-dark m-0 pt-0.5">TL;DR</p>
+            <ul class="m-0 pl-4 space-y-1.5 list-disc marker:text-clay">
+              <li>Files never pass through our API. The browser asks for a <strong class="text-[#141413]">presigned URL</strong>, then uploads straight to the bucket.</li>
+              <li>A bucket event triggers the <strong class="text-[#141413]">virus scanner</strong>; only after it passes does the file get a row in <code class="font-mono text-[13px]">attachments</code> and become visible.</li>
+              <li>Each upload <em>kind</em> (avatar, attachment, import) is declared in <code class="font-mono text-[13px]">config/uploads.yaml</code>. A new kind is one YAML entry plus one route.</li>
+            </ul>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-4">
+            <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-full px-2.5 py-1">Uploads/day: <strong class="text-[#141413]">~31k</strong></span>
+            <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-full px-2.5 py-1">Max size: <strong class="text-[#141413]">2 GB</strong></span>
+            <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-full px-2.5 py-1">Scan p95: <strong class="text-[#141413]">9 s</strong></span>
+            <span class="font-mono text-[11.5px] border border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust rounded-full px-2.5 py-1">Quarantined last 30d: 14</span>
+          </div>
+        </header>
+
+        <!-- 01 glance -->
+        <section class="mb-14 scroll-mt-6" id="glance">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">The path at a glance</h2>
+          </div>
+          <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Five actors, five messages. Click a number to open that step below; the open step is drawn in clay.</p>
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-4 overflow-x-auto">
+            <svg class="min-w-[720px] w-full h-auto" viewBox="0 0 880 270" role="img" aria-label="Sequence diagram: browser requests a presigned URL from the API, uploads directly to the bucket, the bucket event triggers the scanner, the scanner finalizes via the API, and the browser reads via the CDN">
+              <defs>
+                <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#87867f" /></marker>
+                <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d97757" /></marker>
+              </defs>
+              <g stroke="#d1cfc5" stroke-width="1.5" stroke-dasharray="4 5">
+                <line x1="90" y1="62" x2="90" y2="258" /><line x1="265" y1="62" x2="265" y2="258" /><line x1="440" y1="62" x2="440" y2="258" /><line x1="615" y1="62" x2="615" y2="258" /><line x1="790" y1="62" x2="790" y2="258" />
+              </g>
+              <g font-family="ui-monospace, monospace" text-anchor="middle">
+                <rect x="20" y="16" width="140" height="46" rx="9" fill="#f0eee6" stroke="#d1cfc5" /><text x="90" y="36" font-size="12.5" fill="#141413">Browser</text><text x="90" y="52" font-size="10" fill="#87867f">useUpload()</text>
+                <rect x="195" y="16" width="140" height="46" rx="9" fill="#f0eee6" stroke="#d1cfc5" /><text x="265" y="36" font-size="12.5" fill="#141413">API</text><text x="265" y="52" font-size="10" fill="#87867f">api/uploads/*</text>
+                <rect x="370" y="16" width="140" height="46" rx="9" fill="#f0eee6" stroke="#d1cfc5" /><text x="440" y="36" font-size="12.5" fill="#141413">Bucket</text><text x="440" y="52" font-size="10" fill="#87867f">acme-docs-uploads</text>
+                <rect x="545" y="16" width="140" height="46" rx="9" fill="#f0eee6" stroke="#d1cfc5" /><text x="615" y="36" font-size="12.5" fill="#141413">Scanner</text><text x="615" y="52" font-size="10" fill="#87867f">workers/scan</text>
+                <rect x="720" y="16" width="140" height="46" rx="9" fill="#f0eee6" stroke="#d1cfc5" /><text x="790" y="36" font-size="12.5" fill="#141413">CDN</text><text x="790" y="52" font-size="10" fill="#87867f">files.acme.dev</text>
+              </g>
+              <!-- messages -->
+              <g fill="none">
+                <line x1="90" y1="98" x2="263" y2="98" stroke-width="2" :stroke="stroke(1)" :marker-end="active === 1 ? 'url(#ac)' : 'url(#ag)'" stroke="#d97757" marker-end="url(#ac)" />
+                <line x1="90" y1="136" x2="438" y2="136" stroke-width="2" :stroke="stroke(2)" :marker-end="active === 2 ? 'url(#ac)' : 'url(#ag)'" stroke="#87867f" marker-end="url(#ag)" />
+                <line x1="440" y1="174" x2="613" y2="174" stroke-width="2" :stroke="stroke(3)" :marker-end="active === 3 ? 'url(#ac)' : 'url(#ag)'" stroke="#87867f" marker-end="url(#ag)" />
+                <line x1="615" y1="212" x2="267" y2="212" stroke-width="2" :stroke="stroke(4)" :marker-end="active === 4 ? 'url(#ac)' : 'url(#ag)'" stroke="#87867f" marker-end="url(#ag)" />
+                <line x1="90" y1="248" x2="788" y2="248" stroke-width="2" :stroke="stroke(5)" :marker-end="active === 5 ? 'url(#ac)' : 'url(#ag)'" stroke="#87867f" marker-end="url(#ag)" />
+              </g>
+              <g font-family="ui-monospace, monospace" font-size="10.5" text-anchor="middle" fill="#3d3d3a" stroke="#ffffff" stroke-width="4" paint-order="stroke">
+                <text x="190" y="90">POST /uploads/presign</text>
+                <text x="350" y="128">PUT object · direct, no API hop</text>
+                <text x="470" y="166" text-anchor="start">ObjectCreated → queue</text>
+                <text x="460" y="204">POST /uploads/:id/finalize</text>
+                <text x="520" y="240">GET signed URL (15 min)</text>
+              </g>
+              <g font-family="ui-monospace, monospace" font-size="11" font-weight="600" text-anchor="middle" style="cursor: pointer">
+                <g @click="show(1)"><circle cx="112" cy="86" r="10" :fill="stroke(1)" fill="#d97757" /><text x="112" y="90" fill="#ffffff">1</text></g>
+                <g @click="show(2)"><circle cx="112" cy="124" r="10" :fill="stroke(2)" fill="#87867f" /><text x="112" y="128" fill="#ffffff">2</text></g>
+                <g @click="show(3)"><circle cx="454" cy="162" r="10" :fill="stroke(3)" fill="#87867f" /><text x="454" y="166" fill="#ffffff">3</text></g>
+                <g @click="show(4)"><circle cx="593" cy="200" r="10" :fill="stroke(4)" fill="#87867f" /><text x="593" y="204" fill="#ffffff">4</text></g>
+                <g @click="show(5)"><circle cx="112" cy="236" r="10" :fill="stroke(5)" fill="#87867f" /><text x="112" y="240" fill="#ffffff">5</text></g>
+              </g>
+            </svg>
+          </div>
+        </section>
+
+        <!-- 02 steps -->
+        <section class="mb-14 scroll-mt-6" id="path">
+          <div class="flex flex-wrap items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Step by step</h2>
+            <span class="flex-1"></span>
+            <button type="button" @click="open = [1,2,3,4,5]" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Expand all</button>
+            <button type="button" @click="open = []" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Collapse all</button>
+          </div>
+          <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Steps 1–2 run in the user's tab; 3–4 run asynchronously, usually within 10 seconds. The comment shows a "scanning" chip until step 4 lands.</p>
+
+          <div class="flex flex-col gap-3">
+            <!-- step 1 -->
+            <div id="step-1" class="scroll-mt-24 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" :style="active === 1 ? 'border-color:#d97757' : ''">
+              <button type="button" @click="toggle(1)" :aria-expanded="isOpen(1)" class="w-full text-left px-5 py-3.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 hover:bg-[#faf9f5] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="text-clay inline-block transition-transform" :class="isOpen(1) && 'rotate-90'">▸</span>
+                <span class="font-serif text-[17px] text-[#141413]">1 · Ask the API for a presigned URL</span>
+                <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">api/uploads/presign.ts:18</span>
+              </button>
+              <div x-show="isOpen(1)" class="px-5 pb-5 sm:pl-11">
+                <p class="m-0 mb-3 text-[14.5px] max-w-[680px]"><code class="font-mono text-[13px]">useUpload</code> posts the file's name, size and MIME type. The API looks up the upload <em>kind</em> in <code class="font-mono text-[13px]">uploads.yaml</code>, rejects anything over <code class="font-mono text-[13px]">max_bytes</code> or outside <code class="font-mono text-[13px]">mime</code>, inserts a <code class="font-mono text-[13px]">pending_uploads</code> row, and returns a URL that is valid for 15 minutes and only for that exact key and size.</p>
+                <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// api/uploads/presign.ts</span>
+<span class="kw">const</span> key = <span class="str">`${kind}/${orgId}/${nanoid()}`</span>;
+<span class="kw">const</span> url = <span class="kw">await</span> s3.<span class="fn">presignPut</span>(BUCKET, key, {
+  contentLength: body.size,       <span class="cm">// signed: client can't lie later</span>
+  contentType: body.mime,
+  expiresIn: cfg.ttl_seconds,
+});
+<span class="kw">await</span> db.pendingUploads.<span class="fn">insert</span>({ id, key, kind, userId, docId });</pre>
+                </div>
+                <div class="flex flex-wrap gap-2 mt-3"><span class="font-mono text-[11px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2 py-0.5">p50: <strong class="text-[#141413]">38 ms</strong></span><span class="font-mono text-[11px] bg-[#f0eee6] border border-[#d1cfc5] rounded-lg px-2 py-0.5">auth: <strong class="text-[#141413]">route middleware</strong></span></div>
+              </div>
+            </div>
+            <!-- step 2 -->
+            <div id="step-2" class="scroll-mt-24 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" :style="active === 2 ? 'border-color:#d97757' : ''">
+              <button type="button" @click="toggle(2)" :aria-expanded="isOpen(2)" class="w-full text-left px-5 py-3.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 hover:bg-[#faf9f5] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="text-clay inline-block transition-transform" :class="isOpen(2) && 'rotate-90'">▸</span>
+                <span class="font-serif text-[17px] text-[#141413]">2 · Browser uploads straight to the bucket</span>
+                <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">web/hooks/useUpload.ts:44</span>
+              </button>
+              <div x-show="isOpen(2)" x-cloak class="px-5 pb-5 sm:pl-11">
+                <p class="m-0 mb-2 text-[14.5px] max-w-[680px]">The hook PUTs the file to the presigned URL with progress events. Files over 100 MB switch to multipart: the hook asks for part URLs in batches of 20 and uploads 4 parts in parallel. Our servers never see the bytes, so API memory and timeouts do not limit file size.</p>
+                <p class="m-0 text-[14.5px] max-w-[680px]">If the tab closes mid-upload the <code class="font-mono text-[13px]">pending_uploads</code> row expires after 24 h and a bucket lifecycle rule removes orphaned parts.</p>
+              </div>
+            </div>
+            <!-- step 3 -->
+            <div id="step-3" class="scroll-mt-24 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" :style="active === 3 ? 'border-color:#d97757' : ''">
+              <button type="button" @click="toggle(3)" :aria-expanded="isOpen(3)" class="w-full text-left px-5 py-3.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 hover:bg-[#faf9f5] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="text-clay inline-block transition-transform" :class="isOpen(3) && 'rotate-90'">▸</span>
+                <span class="font-serif text-[17px] text-[#141413]">3 · Bucket event wakes the scanner</span>
+                <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">workers/scan/index.ts:12</span>
+              </button>
+              <div x-show="isOpen(3)" x-cloak class="px-5 pb-5 sm:pl-11">
+                <p class="m-0 mb-3 text-[14.5px] max-w-[680px]"><code class="font-mono text-[13px]">ObjectCreated</code> events go to the <code class="font-mono text-[13px]">upload-scan</code> queue. The worker streams the object through ClamAV and, for images, strips EXIF and renders the variants listed for that kind. Nothing is user-visible yet.</p>
+                <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// workers/scan/index.ts</span>
+<span class="kw">const</span> verdict = <span class="kw">await</span> clam.<span class="fn">scanStream</span>(s3.<span class="fn">stream</span>(evt.key));
+<span class="kw">if</span> (verdict.infected) {
+  <span class="kw">await</span> s3.<span class="fn">move</span>(evt.key, <span class="str">`quarantine/${evt.key}`</span>);
+  <span class="kw">return</span> api.<span class="fn">finalize</span>(id, { status: <span class="str">'quarantined'</span>, sig: verdict.name });
+}
+<span class="kw">return</span> api.<span class="fn">finalize</span>(id, { status: <span class="str">'clean'</span>, variants: <span class="kw">await</span> <span class="fn">render</span>(evt) });</pre>
+                </div>
+              </div>
+            </div>
+            <!-- step 4 -->
+            <div id="step-4" class="scroll-mt-24 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" :style="active === 4 ? 'border-color:#d97757' : ''">
+              <button type="button" @click="toggle(4)" :aria-expanded="isOpen(4)" class="w-full text-left px-5 py-3.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 hover:bg-[#faf9f5] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="text-clay inline-block transition-transform" :class="isOpen(4) && 'rotate-90'">▸</span>
+                <span class="font-serif text-[17px] text-[#141413]">4 · Finalize: the file becomes real</span>
+                <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">api/uploads/finalize.ts:27</span>
+              </button>
+              <div x-show="isOpen(4)" x-cloak class="px-5 pb-5 sm:pl-11">
+                <p class="m-0 text-[14.5px] max-w-[680px]">Finalize is an internal route (mTLS only). It moves the <code class="font-mono text-[13px]">pending_uploads</code> row into <code class="font-mono text-[13px]">attachments</code>, then publishes <code class="font-mono text-[13px]">upload.ready</code> on the doc's realtime channel, which swaps the "scanning" chip for the file card. This is the <strong class="text-[#141413]">only</strong> place an <code class="font-mono text-[13px]">attachments</code> row is created.</p>
+              </div>
+            </div>
+            <!-- step 5 -->
+            <div id="step-5" class="scroll-mt-24 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" :style="active === 5 ? 'border-color:#d97757' : ''">
+              <button type="button" @click="toggle(5)" :aria-expanded="isOpen(5)" class="w-full text-left px-5 py-3.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 hover:bg-[#faf9f5] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="text-clay inline-block transition-transform" :class="isOpen(5) && 'rotate-90'">▸</span>
+                <span class="font-serif text-[17px] text-[#141413]">5 · Reads go through signed CDN URLs</span>
+                <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">api/uploads/url.ts:9</span>
+              </button>
+              <div x-show="isOpen(5)" x-cloak class="px-5 pb-5 sm:pl-11">
+                <p class="m-0 text-[14.5px] max-w-[680px]">The bucket is private. When a doc renders, the API checks doc access and signs a <code class="font-mono text-[13px]">files.acme.dev</code> URL valid for 15 minutes. The editor refreshes URLs on focus, so a tab left open overnight does not show broken images.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 03 config -->
+        <section class="mb-14 scroll-mt-6" id="config">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Adding PDF attachments to comments</h2>
+          </div>
+          <p class="text-[#87867f] max-w-[720px] m-0 mb-6">You don't touch the presign, scan or finalize code. Declare a kind, mount one route, and call the hook. Use ← → to switch tabs.</p>
+          <div class="border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+            <div class="flex flex-wrap items-center bg-[#f0eee6] border-b border-[#d1cfc5]">
+              <div role="tablist" aria-label="Config snippets" class="flex overflow-x-auto" @keydown.right.prevent="nextTab(1); $nextTick(() => $el.querySelector('[aria-selected=true]').focus())" @keydown.left.prevent="nextTab(-1); $nextTick(() => $el.querySelector('[aria-selected=true]').focus())">
+                <template x-for="t in tabs" :key="t">
+                  <button type="button" role="tab" @click="tab = t" :aria-selected="tab === t" :tabindex="tab === t ? 0 : -1"
+                    :class="tab === t ? 'bg-white text-[#141413] border-b-clay' : 'text-[#87867f] border-b-transparent'"
+                    class="font-mono text-xs px-4 py-2.5 border-r border-[#d1cfc5] border-b-2 -mb-px whitespace-nowrap hover:text-[#141413] focus-visible:outline-2 focus-visible:outline-clay" x-text="labels[t]"></button>
+                </template>
+              </div>
+              <span class="flex-1"></span>
+              <button type="button" @click="copy()" class="font-mono text-xs m-1.5 border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+                <span x-show="!copied">Copy</span><span x-show="copied" x-cloak class="text-olive">Copied ✓</span>
+              </button>
+            </div>
+<pre x-ref="yaml" x-show="tab === 'yaml'" class="m-0 px-5 py-4 font-mono text-[12.5px] leading-relaxed text-[#141413] overflow-x-auto"><span class="cm"># config/uploads.yaml</span>
+defaults:
+  ttl_seconds: 900          <span class="cm"># presigned URL lifetime</span>
+  scan: required
+kinds:
+  avatar:
+    max_bytes: 2097152      <span class="cm"># 2 MB</span>
+    mime: [image/png, image/jpeg, image/webp]
+    variants: [64, 256]
+  <span class="text-clay-dark font-semibold">comment_pdf:</span>
+    <span class="text-clay-dark">max_bytes: 26214400     # 25 MB, single PUT</span>
+    <span class="text-clay-dark">mime: [application/pdf]</span>
+    <span class="text-clay-dark">variants: [thumb_page_1]</span></pre>
+<pre x-ref="route" x-show="tab === 'route'" x-cloak class="m-0 px-5 py-4 font-mono text-[12.5px] leading-relaxed text-[#141413] overflow-x-auto"><span class="cm">// api/routes/comments.ts</span>
+router.post(
+  '/docs/:docId/comments/:commentId/attachments',
+  requireDocAccess('comment'),
+  <span class="text-clay-dark font-semibold">presignUpload('comment_pdf')</span>,   <span class="cm">// reads kinds.comment_pdf</span>
+);</pre>
+<pre x-ref="client" x-show="tab === 'client'" x-cloak class="m-0 px-5 py-4 font-mono text-[12.5px] leading-relaxed text-[#141413] overflow-x-auto"><span class="cm">// web/comments/AttachButton.tsx</span>
+const { start, progress, status } = <span class="text-clay-dark font-semibold">useUpload('comment_pdf', { docId, commentId })</span>;
+
+return (
+  &lt;FilePicker accept="application/pdf" onPick={start}&gt;
+    {status === 'scanning' ? &lt;Chip&gt;Scanning…&lt;/Chip&gt; : &lt;Progress value={progress} /&gt;}
+  &lt;/FilePicker&gt;
+);</pre>
+<pre x-ref="response" x-show="tab === 'response'" x-cloak class="m-0 px-5 py-4 font-mono text-[12.5px] leading-relaxed text-[#141413] overflow-x-auto">HTTP/1.1 201 Created
+{
+  "uploadId": "upl_7Kq2mX9d",
+  "method": "PUT",
+  "url": "https://acme-docs-uploads.s3.eu-west-1.amazonaws.com/comment_pdf/org_31/…",
+  "headers": { "Content-Type": "application/pdf", "Content-Length": "1843201" },
+  "expiresAt": "2026-11-02T14:15:00Z"
+}</pre>
+          </div>
+          <aside class="mt-5 border-l-4 border-olive bg-white rounded-r-xl px-6 py-4">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-1">Shortcut</p>
+            <p class="m-0 text-[14.5px]">If the generic <code class="font-mono text-[13px]">attachment</code> kind (any MIME, 2 GB) is acceptable, skip the YAML entry and pass <code class="font-mono text-[13px]">'attachment'</code>. Add a dedicated kind only to restrict MIME types or size, as PDFs-only does here.</p>
+          </aside>
+        </section>
+
+        <!-- 04 gotchas -->
+        <section class="mb-14 scroll-mt-6" id="gotchas">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Gotchas worth knowing</h2>
+          </div>
+          <ul class="list-none m-0 p-0 grid md:grid-cols-2 gap-4 mt-5">
+            <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 text-[14.5px]"><strong class="text-[#141413] block mb-1">Local dev skips the scanner.</strong>With <code class="font-mono text-[13px]">SCAN_MODE=off</code> (the default in <code class="font-mono text-[13px]">.env.example</code>) finalize runs inline, so you never see the "scanning" state locally. Set it to <code class="font-mono text-[13px]">stub</code> to get a 3 s fake delay.</li>
+            <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 text-[14.5px]"><strong class="text-[#141413] block mb-1">MIME is checked twice, differently.</strong>Presign trusts the browser's claimed type; the scanner sniffs magic bytes. A renamed <code class="font-mono text-[13px]">.exe</code> passes step 1 and is quarantined at step 3.</li>
+            <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 text-[14.5px]"><strong class="text-[#141413] block mb-1">Size is signed into the URL.</strong>Re-using an upload ID for a different file fails with a 403 from the bucket, not from our API, so it won't appear in API logs.</li>
+            <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 text-[14.5px]"><strong class="text-[#141413] block mb-1">Deleting a comment doesn't delete files.</strong>Attachments are owned by the doc. A nightly job (<code class="font-mono text-[13px]">jobs/gc-attachments.ts</code>) removes unreferenced ones after 30 days.</li>
+          </ul>
+        </section>
+
+        <!-- 05 faq -->
+        <section class="mb-6 scroll-mt-6" id="faq">
+          <div class="flex items-baseline gap-3 mb-5">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">FAQ</h2>
+          </div>
+          <div class="flex flex-col gap-2.5 max-w-[820px]">
+            <details class="fold border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+              <summary class="cursor-pointer px-5 py-3.5 flex gap-3 items-center font-serif text-[16.5px] text-[#141413]">Can I show a preview before the scan finishes?</summary>
+              <p class="m-0 px-5 pb-4 sm:pl-11 text-[14.5px]">Only from the local <code class="font-mono text-[13px]">File</code> object (an object URL in the uploader's own tab). Other viewers get nothing until finalize, by design.</p>
+            </details>
+            <details class="fold border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+              <summary class="cursor-pointer px-5 py-3.5 flex gap-3 items-center font-serif text-[16.5px] text-[#141413]">Where do I see quarantined files?</summary>
+              <p class="m-0 px-5 pb-4 sm:pl-11 text-[14.5px]">Admin → Security → Quarantine lists them with the ClamAV signature. Every quarantine also emits <code class="font-mono text-[13px]">upload.quarantined</code> to the security Slack channel.</p>
+            </details>
+            <details class="fold border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+              <summary class="cursor-pointer px-5 py-3.5 flex gap-3 items-center font-serif text-[16.5px] text-[#141413]">Do I need a migration for a new kind?</summary>
+              <p class="m-0 px-5 pb-4 sm:pl-11 text-[14.5px]">No. <code class="font-mono text-[13px]">attachments.kind</code> is a text column validated against the YAML at boot. Unknown kinds fail the deploy's smoke test, not production traffic.</p>
+            </details>
+          </div>
+        </section>
+
+        <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+          Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/feature-explainer.md</span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

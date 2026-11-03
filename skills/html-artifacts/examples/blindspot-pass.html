@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blindspot pass — adding DHL Express to acme/services/shipping</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+    </style>
+    <script>
+      function blindspots() {
+        return {
+          filter: 'all',
+          cats: [
+            { key: 'all', label: 'All' },
+            { key: 'landmine', label: 'Landmine' },
+            { key: 'history', label: 'History' },
+            { key: 'concept', label: 'Missing concept' },
+            { key: 'convention', label: 'Convention' },
+          ],
+          spots: [
+            { id: '01', cat: 'landmine', label: 'Weights',
+              fix: 'Read weight from parcels.weight_g only (integer grams). Never read weight_oz or copy the UPS adapter\'s conversion. Convert to DHL\'s kg with Weight.toKg() and round up to 0.5 kg as their rate table expects.' },
+            { id: '02', cat: 'landmine', label: 'Rate cache',
+              fix: 'Before adding DHL rates, add carrier_id to the RateCache key in rates/cache.ts and bump RATE_CACHE_VERSION so old entries are ignored. Show me a test where UPS and DHL quote the same lane and both prices survive.' },
+            { id: '03', cat: 'history', label: 'Label idempotency',
+              fix: 'Read the revert of PR #1932 and ADR-014 first. Purchase labels through LabelPurchase with idempotency_key = shipment_id + attempt_group, and add a test where a 504 on purchase followed by a retry buys exactly one label.' },
+            { id: '04', cat: 'concept', label: 'Customs',
+              fix: 'Treat DHL Express as international-first: build a CommercialInvoice for every cross-border shipment using the customs/ module. When a SKU has no hs_code, block label purchase with a clear error rather than sending a blank declaration.' },
+            { id: '05', cat: 'landmine', label: 'Tracking dedupe',
+              fix: 'DHL repeats status codes across hubs, so do not reuse the (tracking_number, status_code) dedupe in tracking/ingest.ts. Dedupe DHL events on (tracking_number, event_id) and add a fixture with two PU scans at different facilities.' },
+            { id: '06', cat: 'convention', label: 'Registration',
+              fix: 'Register the carrier in all three places: carriers/registry.ts, a carrier_accounts seed migration, and the fixture list in __tests__/carrier-contract.spec.ts. Show the contract suite green for dhl_express.' },
+            { id: '07', cat: 'convention', label: 'Cassettes',
+              fix: 'CI has no network. Record sandbox responses with pnpm cassette:record --carrier dhl_express (creds in vault at shipping/dhl-sandbox) and commit them under __cassettes__/dhl_express/. Do not mock the HTTP client by hand.' },
+          ],
+          inc: { '01': true, '02': true, '03': true, '04': true, '05': true, '06': true, '07': true },
+          copied: '',
+          show(cat) { return this.filter === 'all' || this.filter === cat; },
+          count(cat) { return cat === 'all' ? this.spots.length : this.spots.filter(s => s.cat === cat).length; },
+          get included() { return this.spots.filter(s => this.inc[s.id]); },
+          get finalPrompt() {
+            const lines = ['Add DHL Express as a carrier in acme/services/shipping/. Constraints from the blindspot pass:', ''];
+            if (!this.included.length) lines.push('(no constraints selected; use your judgment)');
+            this.included.forEach((s, i) => lines.push((i + 1) + '. ' + s.label + ': ' + s.fix));
+            lines.push('');
+            lines.push('Work in this order: rate-cache key fix, then adapter skeleton, then label purchase, then customs, then tracking ingest, then registration and cassettes.');
+            lines.push('Stop and show me the plan after reading PR #1932 and ADR-014, before writing any code.');
+            return lines.join('\n');
+          },
+          copy(text, key) {
+            navigator.clipboard.writeText(text).then(() => { this.copied = key; setTimeout(() => { if (this.copied === key) this.copied = ''; }, 1400); });
+          },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]" x-data="blindspots()">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Blindspot pass · acme/services/shipping · 63 files scanned</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Seven things you would have learned the hard way about the shipping service
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <div class="flex items-center justify-between gap-3 mb-1.5">
+            <span class="font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+            <button type="button" @click="copy($refs.ask.textContent.trim(), 'ask')"
+              class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-2.5 py-1 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="copied !== 'ask'">Copy</span><span x-show="copied === 'ask'" x-cloak class="text-olive">Copied ✓</span>
+            </button>
+          </div>
+          <p x-ref="ask" class="m-0">I need to add DHL Express as a carrier, but I've never worked in the shipping service. Do a blindspot pass:
+          find my unknown unknowns in <code class="font-mono text-[13px]">services/shipping/</code>, explain each one, and tell me how to prompt you better for the implementation.</p>
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          Read: 63 files · 388 commits since Feb 2025 · 2 migrations in flight · 1 reverted carrier PR · ADR-009, ADR-014
+        </p>
+      </header>
+
+      <!-- Asked vs actual -->
+      <section class="grid md:grid-cols-2 gap-4 mb-6" aria-label="Expectation versus reality">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-6">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">What you asked for</p>
+          <p class="m-0">"Add a carrier." In a clean codebase that means implementing <code class="font-mono text-[13px]">CarrierAdapter</code>,
+          registering it and writing a few tests, about three days of work.</p>
+        </div>
+        <div class="bg-white border border-clay rounded-xl p-6">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-2">What you're actually walking into</p>
+          <p class="m-0">A service with <strong class="text-[#141413]">two weight units in the same table</strong>, a <strong class="text-[#141413]">rate cache that
+          can't tell carriers apart</strong>, a <strong class="text-[#141413]">reverted attempt</strong> at exactly this task, and a customs concept that
+          the adapter interface never mentions.</p>
+        </div>
+      </section>
+
+      <div class="flex flex-wrap gap-2 mb-12 font-mono text-[11.5px]">
+        <span class="inline-flex items-center gap-1.5 border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-1 text-rust"><b>3</b> landmines</span>
+        <span class="inline-flex items-center gap-1.5 border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2.5 py-1 text-clay-dark"><b>1</b> reverted attempt (PR #1932)</span>
+        <span class="inline-flex items-center gap-1.5 border border-[#141413] rounded-full bg-white px-2.5 py-1 text-[#141413]"><b>1</b> missing concept</span>
+        <span class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1"><b>2</b> unwritten conventions</span>
+      </div>
+
+      <!-- Territory map -->
+      <section class="mb-14" id="map">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Where the blindspots live</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">The module tree you'll touch, with each numbered blindspot pinned to the file that hides it. Gray directories are safe to ignore for this task.</p>
+        <div class="overflow-x-auto bg-white border border-[#d1cfc5] rounded-xl p-4">
+          <svg viewBox="0 0 1000 300" class="w-full min-w-[720px]" role="img" aria-label="Directory map of services/shipping with seven blindspot markers">
+            <text x="20" y="28" font-family="ui-monospace, monospace" font-size="13" fill="#141413">services/shipping/</text>
+            <line x1="30" y1="38" x2="30" y2="270" stroke="#d1cfc5" stroke-width="2" />
+            <!-- carriers -->
+            <line x1="30" y1="70" x2="56" y2="70" stroke="#d1cfc5" stroke-width="2" />
+            <rect x="56" y="50" width="280" height="110" rx="10" fill="#faf9f5" stroke="#d1cfc5" />
+            <text x="72" y="72" font-family="ui-monospace, monospace" font-size="12" fill="#141413" font-weight="600">carriers/</text>
+            <text x="72" y="96" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">ups.ts ← tempting template</text>
+            <text x="72" y="116" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">usps-legacy.ts</text>
+            <text x="72" y="136" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">registry.ts</text>
+            <circle cx="312" cy="92" r="11" fill="#b04a3f" /><text x="312" y="96" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">01</text>
+            <circle cx="312" cy="132" r="11" fill="#87867f" /><text x="312" y="136" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">06</text>
+            <!-- rates -->
+            <line x1="30" y1="200" x2="56" y2="200" stroke="#d1cfc5" stroke-width="2" />
+            <rect x="56" y="180" width="280" height="90" rx="10" fill="#faf9f5" stroke="#d97757" stroke-width="1.5" />
+            <text x="72" y="202" font-family="ui-monospace, monospace" font-size="12" fill="#141413" font-weight="600">rates/</text>
+            <text x="72" y="226" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">cache.ts  key omits carrier</text>
+            <text x="72" y="246" font-family="ui-monospace, monospace" font-size="11.5" fill="#87867f">quote.ts</text>
+            <circle cx="312" cy="222" r="11" fill="#b04a3f" /><text x="312" y="226" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">02</text>
+            <!-- labels -->
+            <rect x="370" y="50" width="280" height="110" rx="10" fill="#faf9f5" stroke="#d1cfc5" />
+            <text x="386" y="72" font-family="ui-monospace, monospace" font-size="12" fill="#141413" font-weight="600">labels/</text>
+            <text x="386" y="96" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">purchase.ts</text>
+            <text x="386" y="116" font-family="ui-monospace, monospace" font-size="11.5" fill="#87867f">adr/014-idempotent-labels.md</text>
+            <text x="386" y="136" font-family="ui-monospace, monospace" font-size="11.5" fill="#d97757">PR #1932 (reverted)</text>
+            <circle cx="626" cy="92" r="11" fill="#d97757" /><text x="626" y="96" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">03</text>
+            <!-- customs -->
+            <rect x="370" y="180" width="280" height="90" rx="10" fill="#faf9f5" stroke="#d1cfc5" />
+            <text x="386" y="202" font-family="ui-monospace, monospace" font-size="12" fill="#141413" font-weight="600">customs/</text>
+            <text x="386" y="226" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">commercial-invoice.ts</text>
+            <text x="386" y="246" font-family="ui-monospace, monospace" font-size="11.5" fill="#87867f">only used by canada-post.ts</text>
+            <circle cx="626" cy="222" r="11" fill="#141413" /><text x="626" y="226" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">04</text>
+            <!-- tracking -->
+            <rect x="684" y="50" width="296" height="110" rx="10" fill="#faf9f5" stroke="#d1cfc5" />
+            <text x="700" y="72" font-family="ui-monospace, monospace" font-size="12" fill="#141413" font-weight="600">tracking/</text>
+            <text x="700" y="96" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">ingest.ts  dedupe on status_code</text>
+            <text x="700" y="116" font-family="ui-monospace, monospace" font-size="11.5" fill="#87867f">webhooks.ts</text>
+            <circle cx="956" cy="92" r="11" fill="#b04a3f" /><text x="956" y="96" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">05</text>
+            <!-- tests -->
+            <rect x="684" y="180" width="296" height="90" rx="10" fill="#faf9f5" stroke="#d1cfc5" />
+            <text x="700" y="202" font-family="ui-monospace, monospace" font-size="12" fill="#141413" font-weight="600">__tests__/  __cassettes__/</text>
+            <text x="700" y="226" font-family="ui-monospace, monospace" font-size="11.5" fill="#3d3d3a">carrier-contract.spec.ts</text>
+            <text x="700" y="246" font-family="ui-monospace, monospace" font-size="11.5" fill="#87867f">nock.disableNetConnect() in CI</text>
+            <circle cx="956" cy="222" r="11" fill="#87867f" /><text x="956" y="226" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#fff">07</text>
+            <g font-family="ui-monospace, monospace" font-size="11" fill="#87867f">
+              <circle cx="26" cy="290" r="5" fill="#b04a3f" /><text x="36" y="294">landmine</text>
+              <circle cx="116" cy="290" r="5" fill="#d97757" /><text x="126" y="294">history</text>
+              <circle cx="200" cy="290" r="5" fill="#141413" /><text x="210" y="294">missing concept</text>
+              <circle cx="336" cy="290" r="5" fill="#87867f" /><text x="346" y="294">convention</text>
+            </g>
+          </svg>
+        </div>
+      </section>
+
+      <!-- Blindspots -->
+      <section class="mb-14" id="blindspots">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">The blindspots</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">Each card says what's true, why it bites, and the sentence to add to your prompt. Uncheck a card to drop its fix from the final prompt.</p>
+
+        <div role="tablist" aria-label="Filter by category" class="flex flex-wrap gap-2 mb-6">
+          <template x-for="c in cats" :key="c.key">
+            <button type="button" role="tab" @click="filter = c.key" :aria-selected="filter === c.key"
+              :class="filter === c.key ? 'bg-[#141413] text-ivory border-[#141413]' : 'bg-white text-[#3d3d3a] border-[#d1cfc5] hover:border-[#141413]'"
+              class="font-mono text-xs border rounded-full px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-text="c.label"></span> <span class="opacity-60" x-text="count(c.key)"></span>
+            </button>
+          </template>
+        </div>
+
+        <div class="grid lg:grid-cols-[1fr_260px] gap-8 items-start">
+          <div class="space-y-5">
+            <!-- 01 -->
+            <article id="bs-01" x-show="show('landmine')" :class="inc['01'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+                <span class="inline-flex border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-0.5 font-mono text-[11px] text-rust">Landmine</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">Parcels carry weight in two units, and the adapter you'll copy reads the wrong one</h3>
+              <p class="m-0 mb-3">Migration <code class="font-mono text-[13px]">0087_weight_grams</code> added <code class="font-mono text-[13px]">parcels.weight_g</code> as the source of truth, but a trigger still back-fills the old <code class="font-mono text-[13px]">weight_oz</code> column (rounded to whole ounces) because <code class="font-mono text-[13px]">usps-legacy.ts</code> needs it. <code class="font-mono text-[13px]">ups.ts</code>, the newest and cleanest adapter, reads <code class="font-mono text-[13px]">weight_oz</code> too.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>DHL rates by 0.5 kg steps. Ounce rounding drifts a 2.24 kg parcel to 2.27 kg and moves it into the next band, so quotes come out up to 12% high on light parcels. No test catches it because fixtures use round numbers.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[0].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[0].fix, '01')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '01'">Copy fix</span><span x-show="copied === '01'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['01']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: db/migrations/0087_weight_grams.sql · carriers/ups.ts:41 · db/triggers/parcels_weight_oz.sql</p>
+            </article>
+
+            <!-- 02 -->
+            <article id="bs-02" x-show="show('landmine')" :class="inc['02'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+                <span class="inline-flex border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-0.5 font-mono text-[11px] text-rust">Landmine</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">The rate cache can't tell two carriers apart on the same lane</h3>
+              <p class="m-0 mb-3"><code class="font-mono text-[13px]">RateCache</code> keys quotes on <code class="font-mono text-[13px]">origin_zip3 × dest_zip3 × service_level</code> with a 6-hour TTL. That worked while every service level mapped to exactly one carrier. DHL Express and UPS Next Day Air both map to <code class="font-mono text-[13px]">service_level = "express"</code>.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>Whichever carrier is quoted first wins the cache for six hours. Checkout then shows the UPS price on a DHL label, and finance only finds the gap in the monthly carrier reconciliation.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[1].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[1].fix, '02')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '02'">Copy fix</span><span x-show="copied === '02'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['02']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: rates/cache.ts:18 · config/service-levels.yaml</p>
+            </article>
+
+            <!-- 03 -->
+            <article id="bs-03" x-show="show('history')" :class="inc['03'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+                <span class="inline-flex border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2.5 py-0.5 font-mono text-[11px] text-clay-dark">History</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">Someone already added a carrier and it was reverted for buying duplicate labels</h3>
+              <p class="m-0 mb-3">PR #1932 ("Add FedEx Ground", Jun 2025) was reverted after eight days. When the FedEx API timed out with a 504, the job retried and bought a second label. That added up to 1,140 duplicate labels and about $11.2k in carrier charges. ADR-014 specifies idempotency keys for label purchases, but only <code class="font-mono text-[13px]">ups.ts</code> implements them.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>Sandbox never returns 504s, so every local and CI test passes. The first slow day at DHL repeats the FedEx incident.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[2].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[2].fix, '03')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '03'">Copy fix</span><span x-show="copied === '03'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['03']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: PR #1932 and revert a41c9e2 · docs/adr/014-idempotent-labels.md · labels/purchase.ts:57</p>
+            </article>
+
+            <!-- 04 -->
+            <article id="bs-04" x-show="show('concept')" :class="inc['04'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+                <span class="inline-flex border border-[#141413] rounded-full bg-[#141413] px-2.5 py-0.5 font-mono text-[11px] text-ivory">Missing concept</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">Cross-border shipments need a customs declaration, and the adapter interface never asks for one</h3>
+              <p class="m-0 mb-3">Every Acme carrier so far is domestic except Canada Post, which builds a <code class="font-mono text-[13px]">CommercialInvoice</code> (HS code, origin country, declared value per line) inside its own adapter. Most DHL Express volume is international. Only 61% of SKUs in the catalog have an <code class="font-mono text-[13px]">hs_code</code>.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>DHL accepts a blank declaration at label time. The parcel is then held at customs for 5–9 days and the customer is billed a broker fee. The bug shows up in support tickets, not in logs.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[3].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[3].fix, '04')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '04'">Copy fix</span><span x-show="copied === '04'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['04']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: customs/commercial-invoice.ts · carriers/canada-post.ts:112 · catalog query: 2,418 / 3,964 SKUs with hs_code</p>
+            </article>
+
+            <!-- 05 -->
+            <article id="bs-05" x-show="show('landmine')" :class="inc['05'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+                <span class="inline-flex border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-0.5 font-mono text-[11px] text-rust">Landmine</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">Tracking ingest drops repeated status codes, and DHL repeats them at every hub</h3>
+              <p class="m-0 mb-3"><code class="font-mono text-[13px]">tracking/ingest.ts</code> dedupes webhook events on <code class="font-mono text-[13px]">(tracking_number, status_code)</code> because UPS sometimes sends the same event twice. DHL sends a <code class="font-mono text-[13px]">PU</code> or <code class="font-mono text-[13px]">AF</code> code at each facility, and each one has a unique <code class="font-mono text-[13px]">event_id</code>.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>Only the first hub scan is kept, so orders show "Arrived at Leipzig hub" for a week while the parcel is already in Ohio. The estimated delivery date stops updating too.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[4].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[4].fix, '05')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '05'">Copy fix</span><span x-show="copied === '05'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['05']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: tracking/ingest.ts:29 · DHL Unified Tracking API event model</p>
+            </article>
+
+            <!-- 06 -->
+            <article id="bs-06" x-show="show('convention')" :class="inc['06'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">06</span>
+                <span class="inline-flex border border-[#d1cfc5] rounded-full bg-white px-2.5 py-0.5 font-mono text-[11px] text-[#3d3d3a]">Convention</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">Registering a carrier takes three steps, and only one is in the README</h3>
+              <p class="m-0 mb-3">A carrier is live only when it is (1) exported from <code class="font-mono text-[13px]">carriers/registry.ts</code>, (2) seeded into <code class="font-mono text-[13px]">carrier_accounts</code> by a migration (the merchant settings page reads the table, not the registry), and (3) listed in <code class="font-mono text-[13px]">__tests__/carrier-contract.spec.ts</code>, which runs the shared suite for void, rate, label, and track.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>Without the migration, DHL compiles, passes tests, and never appears in any merchant's carrier list. Two people have lost an afternoon to this, according to #shipping-eng.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[5].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[5].fix, '06')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '06'">Copy fix</span><span x-show="copied === '06'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['06']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: carriers/registry.ts · db/migrations/0071_seed_canada_post.sql · services/shipping/README.md</p>
+            </article>
+
+            <!-- 07 -->
+            <article id="bs-07" x-show="show('convention')" :class="inc['07'] ? '' : 'opacity-55'" class="bg-white border border-[#d1cfc5] rounded-xl p-6 transition-opacity">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">07</span>
+                <span class="inline-flex border border-[#d1cfc5] rounded-full bg-white px-2.5 py-0.5 font-mono text-[11px] text-[#3d3d3a]">Convention</span>
+              </div>
+              <h3 class="font-serif font-medium text-[20px] leading-snug text-[#141413] m-0 mb-2">Carrier tests replay recorded cassettes, and CI blocks the network</h3>
+              <p class="m-0 mb-3">Adapters are tested against HTTP cassettes in <code class="font-mono text-[13px]">__cassettes__/&lt;carrier&gt;/</code>. CI runs with <code class="font-mono text-[13px]">nock.disableNetConnect()</code>, so any un-recorded request fails. To record cassettes you need sandbox credentials from vault, which you'll have to request in #platform-access.</p>
+              <div class="grid sm:grid-cols-[110px_1fr] gap-1 sm:gap-3 bg-[#f0eee6] rounded-lg px-4 py-3 text-[14px] mb-4">
+                <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust pt-0.5">Why it bites</span>
+                <span>Tests pass locally (your laptop has network) and fail in CI with a vague "Nock: No match for request". The usual workaround of hand-written mocks is rejected in review.</span>
+              </div>
+              <div class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.08)] rounded-lg p-3">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1.5">Prompt fix</p>
+                <p class="font-mono text-[12.5px] text-[#141413] m-0 mb-3" x-text="spots[6].fix"></p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" @click="copy(spots[6].fix, '07')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"><span x-show="copied !== '07'">Copy fix</span><span x-show="copied === '07'" x-cloak class="text-olive">Copied ✓</span></button>
+                  <label class="inline-flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="inc['07']" class="accent-clay w-4 h-4"> Include in final prompt</label>
+                </div>
+              </div>
+              <p class="font-mono text-[11.5px] text-[#87867f] m-0 mt-3">Evidence: jest.setup.ts:4 · scripts/cassette-record.ts · CODEOWNERS (@acme/shipping-eng)</p>
+            </article>
+          </div>
+
+          <!-- Sticky checklist (desktop) -->
+          <aside class="hidden lg:block sticky top-6 bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-3">In the final prompt</p>
+            <ul class="list-none m-0 p-0 space-y-2 mb-4">
+              <template x-for="s in spots" :key="s.id">
+                <li class="flex items-center gap-2 text-[13.5px]">
+                  <input type="checkbox" x-model="inc[s.id]" :id="'side-' + s.id" class="accent-clay w-4 h-4">
+                  <label :for="'side-' + s.id" class="flex-1 cursor-pointer"><span class="font-mono text-xs text-[#87867f]" x-text="s.id"></span> <span x-text="s.label"></span></label>
+                  <a :href="'#bs-' + s.id" @click="filter = 'all'" class="font-mono text-xs text-[#87867f] hover:text-clay-dark" :aria-label="'Jump to blindspot ' + s.id">↗</a>
+                </li>
+              </template>
+            </ul>
+            <p class="font-mono text-xs m-0 mb-3"><b class="text-[#141413]" x-text="included.length"></b> of 7 included</p>
+            <a href="#final" class="block text-center bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3 py-2 hover:bg-clay-dark">Jump to final prompt ↓</a>
+          </aside>
+        </div>
+      </section>
+
+      <!-- Final prompt -->
+      <section class="mb-6 scroll-mt-6" id="final">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Your improved prompt</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5">Everything above, folded into the prompt you should actually give me. It rebuilds as you include or drop blindspots.</p>
+        <div class="bg-white border border-[#141413] rounded-xl overflow-hidden">
+          <div class="flex flex-wrap items-center gap-3 px-5 py-3 bg-[#f0eee6] border-b border-[#d1cfc5]">
+            <span class="font-mono text-xs"><b class="text-[#141413]" x-text="included.length"></b> constraints · <span x-text="finalPrompt.length"></span> chars</span>
+            <span class="flex-1"></span>
+            <button type="button" @click="copy(finalPrompt, 'final')" class="bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3 py-1.5 hover:bg-clay-dark focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="copied !== 'final'">Copy prompt</span><span x-show="copied === 'final'" x-cloak>Copied ✓</span>
+            </button>
+          </div>
+          <pre class="m-0 p-5 font-mono text-[12.5px] leading-relaxed text-[#141413] whitespace-pre-wrap break-words" x-text="finalPrompt"></pre>
+        </div>
+        <aside class="border-l-4 border-olive bg-white rounded-r-xl px-6 py-5 mt-6">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-1">Start here</p>
+          <p class="m-0">If you only take one thing, take 03. The duplicate-label bug cost real money once already, and nothing in the code warns you about it.</p>
+        </aside>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/blindspot-pass.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

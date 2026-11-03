@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Billing platform — weekly status, week 44</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .dot::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+      .dot-low::before { background: #788c5d; }
+      .dot-med::before { background: #d97757; }
+      .dot-high::before { background: #b04a3f; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Acme Ledger · billing-platform · weekly status</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-3">
+          Week 44: tax batching shipped, dunning v2 slipped a week
+        </h1>
+        <p class="font-mono text-xs text-[#87867f] m-0 mb-5">
+          Oct 26 – Nov 1, 2026 · acme/ledger @ main · 19 PRs · 11 deploys · generated Mon Nov 2, 08:10
+        </p>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Write the Monday status for billing-platform from last week's merged PRs, the deploy log and #billing-incidents.
+          Lead with what shipped and what slipped. Leadership reads it on their phones.
+        </div>
+      </header>
+
+      <!-- Stat band -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" aria-label="Week at a glance">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">PRs merged</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">19</p>
+          <p class="font-mono text-xs text-olive m-0">▲ 4 vs wk 43</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Deploys</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">11</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">0 rollbacks</p>
+        </div>
+        <div class="bg-white border border-[rgba(176,74,63,0.45)] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0">Incidents</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">1</p>
+          <p class="font-mono text-xs text-rust m-0">SEV-3 · 22 min</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Invoice run p50</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">37<span class="text-base text-[#87867f]"> min</span></p>
+          <p class="font-mono text-xs text-olive m-0">▼ 23 min · under 45-min SLO</p>
+        </div>
+      </section>
+
+      <!-- TL;DR -->
+      <section class="bg-white border border-[#d1cfc5] rounded-xl p-6 grid md:grid-cols-[120px_1fr] gap-4 mb-14" aria-label="TL;DR">
+        <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-clay-dark m-0">TL;DR</p>
+        <ul class="m-0 pl-4 list-disc marker:text-clay space-y-2">
+          <li><strong class="text-[#141413]">Nightly invoice run is back under SLO.</strong> Batched tax lookups (#2291) cut the run from ~63 to ~35 minutes from Wednesday on.</li>
+          <li><strong class="text-[#141413]">Dunning v2 slipped to Nov 9.</strong> The retry-schedule migration needs a backfill for 41k open invoices; we will not ship it half-migrated.</li>
+          <li><strong class="text-[#141413]">One SEV-3 Thursday:</strong> PDF receipts 404'd for 22 minutes after a bucket policy change. No data lost; <a class="text-clay-dark underline underline-offset-2" href="#asks">one decision needed from finance</a>.</li>
+        </ul>
+      </section>
+
+      <!-- Shipped / Slipped -->
+      <div class="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-8 mb-14 items-start">
+        <section id="shipped" class="min-w-0">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Shipped</h2>
+            <span class="font-mono text-xs text-olive">8 notable of 19</span>
+          </div>
+          <p class="text-[#87867f] m-0 mb-5 text-sm">Risk is the reviewer's call at merge time. All are live at 100% unless noted.</p>
+          <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+            <table class="w-full text-sm border-collapse min-w-[520px]">
+              <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+                <tr>
+                  <th class="px-4 py-2.5 font-medium w-[72px]">PR</th>
+                  <th class="px-4 py-2.5 font-medium">What changed</th>
+                  <th class="px-4 py-2.5 font-medium w-[120px]">Owner</th>
+                  <th class="px-4 py-2.5 font-medium w-[84px]">Risk</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#f0eee6]">
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2291</td><td class="px-4 py-3 align-top">Batch tax-rate lookups per region in the invoice run <span class="font-mono text-[11px] text-[#87867f]">jobs/invoice_run.go</span></td><td class="px-4 py-3 align-top text-[#87867f]">Hana Ito</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-med">Med</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2294</td><td class="px-4 py-3 align-top">Proration for mid-cycle seat changes (flag at 100%)</td><td class="px-4 py-3 align-top text-[#87867f]">Tomás Ruiz</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-high">High</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2296</td><td class="px-4 py-3 align-top">Idempotency keys on <code class="font-mono text-[12.5px]">POST /v1/refunds</code></td><td class="px-4 py-3 align-top text-[#87867f]">Ade Bello</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-med">Med</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2298</td><td class="px-4 py-3 align-top">Invoice PDF: show VAT ID for EU customers</td><td class="px-4 py-3 align-top text-[#87867f]">Lena Vogel</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-low">Low</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2301</td><td class="px-4 py-3 align-top">Receipts bucket: move to org-level policy (caused Thu SEV-3)</td><td class="px-4 py-3 align-top text-[#87867f]">Ade Bello</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-med">Med</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2303</td><td class="px-4 py-3 align-top">Stripe webhook handler: drop deprecated <code class="font-mono text-[12.5px]">charge.*</code> events</td><td class="px-4 py-3 align-top text-[#87867f]">Tomás Ruiz</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-low">Low</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2307</td><td class="px-4 py-3 align-top">Admin: per-customer credit balance history view</td><td class="px-4 py-3 align-top text-[#87867f]">Priya Shah</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-low">Low</td></tr>
+                <tr><td class="px-4 py-3 align-top font-mono text-xs text-clay-dark">#2310</td><td class="px-4 py-3 align-top">Un-quarantine 4 flaky ledger reconciliation tests</td><td class="px-4 py-3 align-top text-[#87867f]">Hana Ito</td><td class="px-4 py-3 align-top font-mono text-xs whitespace-nowrap dot dot-low">Low</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="font-mono text-[11px] text-[#87867f] mt-2.5 mb-0">+ 11 chores, dependency bumps and test fixes · full list: <span class="text-[#3d3d3a]">git log --merges v2026.43..v2026.44</span></p>
+        </section>
+
+        <section id="slipped" class="min-w-0">
+          <div class="flex items-baseline gap-3 mb-2">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Slipped</h2>
+            <span class="font-mono text-xs text-clay-dark">3 items</span>
+          </div>
+          <p class="text-[#87867f] m-0 mb-5 text-sm">Planned for week 44, not done. Each has a reason and a new date.</p>
+          <div class="space-y-3">
+            <article class="bg-white border border-[#d1cfc5] border-l-4 border-l-clay rounded-xl px-5 py-4">
+              <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                <span class="inline-flex border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2.5 py-0.5 font-mono text-[11px] text-clay-dark">slipped 1 wk</span>
+                <span class="font-mono text-[11px] text-[#87867f]">→ Nov 9 · Tomás Ruiz</span>
+              </div>
+              <h3 class="font-serif font-medium text-[17px] text-[#141413] m-0 mb-1">Dunning v2 retry schedules</h3>
+              <p class="text-sm m-0">Migration <span class="font-mono text-xs">0318_dunning_steps</span> needs a backfill for 41,206 open invoices. Dry run on staging took 3 h; splitting it into resumable batches.</p>
+            </article>
+            <article class="bg-white border border-[#d1cfc5] border-l-4 border-l-rust rounded-xl px-5 py-4">
+              <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                <span class="inline-flex border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2.5 py-0.5 font-mono text-[11px] text-rust">blocked</span>
+                <span class="font-mono text-[11px] text-[#87867f]">→ date TBD · Priya Shah</span>
+              </div>
+              <h3 class="font-serif font-medium text-[17px] text-[#141413] m-0 mb-1">Annual-plan discount codes</h3>
+              <p class="text-sm m-0">Waiting on finance to confirm whether discounts apply before or after tax in DE and FR. See <a href="#asks" class="text-clay-dark underline underline-offset-2">asks</a>.</p>
+            </article>
+            <article class="bg-white border border-[#d1cfc5] border-l-4 border-l-[#87867f] rounded-xl px-5 py-4">
+              <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                <span class="inline-flex border border-[#d1cfc5] rounded-full bg-white px-2.5 py-0.5 font-mono text-[11px]">deprioritized</span>
+                <span class="font-mono text-[11px] text-[#87867f]">→ wk 46 · Lena Vogel</span>
+              </div>
+              <h3 class="font-serif font-medium text-[17px] text-[#141413] m-0 mb-1">Usage export to customer S3</h3>
+              <p class="text-sm m-0">Pulled to staff the Thursday receipts incident and its follow-up (#2301 hardening). No customer has a date for this yet.</p>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <!-- Chart -->
+      <section id="trend" class="mb-14">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Nightly invoice run, last 14 nights</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-5 text-sm">Wall-clock minutes from first invoice to last. The SLO is 45 minutes so that receipts are mailed before 07:00 UTC.</p>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <div class="overflow-x-auto">
+            <svg viewBox="0 0 720 206" class="w-full min-w-[600px]" role="img" aria-label="Bar chart of invoice run duration over 14 nights. Week 43 ranged 47 to 71 minutes. Week 44 dropped from 68 to between 31 and 39 minutes after PR 2291 shipped Wednesday.">
+              <!-- gridlines + y labels -->
+              <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f" text-anchor="end">
+                <line x1="48" y1="20" x2="664" y2="20" stroke="#f0eee6" /><text x="40" y="23">80</text>
+                <line x1="48" y1="55" x2="664" y2="55" stroke="#f0eee6" /><text x="40" y="58">60</text>
+                <line x1="48" y1="90" x2="664" y2="90" stroke="#f0eee6" /><text x="40" y="93">40</text>
+                <line x1="48" y1="125" x2="664" y2="125" stroke="#f0eee6" /><text x="40" y="128">20</text>
+                <line x1="48" y1="160" x2="664" y2="160" stroke="#d1cfc5" stroke-width="1.5" /><text x="40" y="163">0</text>
+              </g>
+              <!-- week divider -->
+              <line x1="356" y1="14" x2="356" y2="186" stroke="#d1cfc5" stroke-dasharray="3 3" />
+              <!-- week 43 bars (oat) -->
+              <g fill="#e3dacc">
+                <rect x="56" y="51.5" width="28" height="108.5" rx="4" />
+                <rect x="100" y="58.5" width="28" height="101.5" rx="4" />
+                <rect x="144" y="44.5" width="28" height="115.5" rx="4" />
+                <rect x="188" y="35.75" width="28" height="124.25" rx="4" />
+                <rect x="232" y="48" width="28" height="112" rx="4" />
+                <rect x="276" y="74.25" width="28" height="85.75" rx="4" />
+                <rect x="320" y="77.75" width="28" height="82.25" rx="4" />
+              </g>
+              <!-- week 44 bars: clay over SLO, olive under -->
+              <rect x="364" y="41" width="28" height="119" rx="4" fill="#d97757" />
+              <rect x="408" y="49.75" width="28" height="110.25" rx="4" fill="#d97757" />
+              <g fill="#788c5d">
+                <rect x="452" y="91.75" width="28" height="68.25" rx="4" />
+                <rect x="496" y="97" width="28" height="63" rx="4" />
+                <rect x="540" y="93.5" width="28" height="66.5" rx="4" />
+                <rect x="584" y="105.75" width="28" height="54.25" rx="4" />
+                <rect x="628" y="102.25" width="28" height="57.75" rx="4" />
+              </g>
+              <!-- value labels inside bars -->
+              <g font-family="ui-monospace, monospace" font-size="10" text-anchor="middle">
+                <g fill="#3d3d3a">
+                  <text x="70" y="66">62</text><text x="114" y="73">58</text><text x="158" y="59">66</text><text x="202" y="50">71</text>
+                  <text x="246" y="62">64</text><text x="290" y="97">49</text><text x="334" y="100">47</text>
+                </g>
+                <g fill="#ffffff" font-weight="600">
+                  <text x="378" y="55">68</text><text x="422" y="64">63</text><text x="466" y="106">39</text><text x="510" y="111">36</text>
+                  <text x="554" y="108">38</text><text x="598" y="120">31</text><text x="642" y="116">33</text>
+                </g>
+              </g>
+              <!-- SLO line -->
+              <line x1="48" y1="81.25" x2="664" y2="81.25" stroke="#b04a3f" stroke-width="1.5" stroke-dasharray="6 4" />
+              <text x="670" y="84.5" font-family="ui-monospace, monospace" font-size="10" fill="#b04a3f">SLO 45m</text>
+              <!-- annotation -->
+              <line x1="466" y1="36" x2="466" y2="86" stroke="#141413" stroke-width="1" />
+              <circle cx="466" cy="36" r="2.5" fill="#141413" />
+              <text x="474" y="34" font-family="ui-monospace, monospace" font-size="10.5" fill="#141413">#2291 batched tax lookups</text>
+              <text x="474" y="47" font-family="ui-monospace, monospace" font-size="10" fill="#87867f">deployed Wed 02:14</text>
+              <!-- x labels -->
+              <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f" text-anchor="middle">
+                <text x="70" y="175">M</text><text x="114" y="175">T</text><text x="158" y="175">W</text><text x="202" y="175">T</text><text x="246" y="175">F</text><text x="290" y="175">S</text><text x="334" y="175">S</text>
+                <text x="378" y="175">M</text><text x="422" y="175">T</text><text x="466" y="175">W</text><text x="510" y="175">T</text><text x="554" y="175">F</text><text x="598" y="175">S</text><text x="642" y="175">S</text>
+              </g>
+              <g font-family="ui-serif, Georgia, serif" font-size="12" text-anchor="middle">
+                <text x="202" y="199" fill="#87867f">Week 43</text>
+                <text x="510" y="199" fill="#141413">Week 44</text>
+              </g>
+            </svg>
+          </div>
+          <div class="flex flex-wrap gap-x-5 gap-y-1.5 mt-3 font-mono text-[11px] text-[#87867f]">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-oat"></span>last week</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-clay"></span>this week, over SLO</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-olive"></span>this week, under SLO</span>
+            <span class="flex-1"></span>
+            <span>source: invoice_run_duration_seconds, Grafana "Billing / Nightly"</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Next week + asks -->
+      <div class="grid md:grid-cols-2 gap-8 mb-4 items-start">
+        <section id="next">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Next week</h2>
+          </div>
+          <ol class="m-0 p-0 list-none border border-[#d1cfc5] rounded-xl bg-white divide-y divide-[#f0eee6] text-sm">
+            <li class="px-4 py-3 grid grid-cols-[28px_1fr_auto] gap-2"><span class="font-mono text-xs text-[#87867f]">1</span><span>Ship dunning v2 with resumable backfill</span><span class="font-mono text-[11px] text-[#87867f]">Tomás</span></li>
+            <li class="px-4 py-3 grid grid-cols-[28px_1fr_auto] gap-2"><span class="font-mono text-xs text-[#87867f]">2</span><span>Receipts bucket: policy canary + 404 alert (SEV-3 follow-ups)</span><span class="font-mono text-[11px] text-[#87867f]">Ade</span></li>
+            <li class="px-4 py-3 grid grid-cols-[28px_1fr_auto] gap-2"><span class="font-mono text-xs text-[#87867f]">3</span><span>Proration: watch credit-note volume for 7 days, then remove flag</span><span class="font-mono text-[11px] text-[#87867f]">Tomás</span></li>
+            <li class="px-4 py-3 grid grid-cols-[28px_1fr_auto] gap-2"><span class="font-mono text-xs text-[#87867f]">4</span><span>Start annual-plan discounts once finance answers</span><span class="font-mono text-[11px] text-[#87867f]">Priya</span></li>
+          </ol>
+        </section>
+        <section id="asks" class="scroll-mt-6">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+            <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Asks</h2>
+          </div>
+          <aside class="border-l-4 border-clay bg-white rounded-r-xl px-6 py-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Decision needed · finance · by Wed Nov 4</p>
+            <p class="m-0 mb-3">Do annual-plan discounts apply <strong>before or after VAT</strong> in DE and FR? Engineering can build either; the answer changes invoice totals for about 1,900 EU customers.</p>
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-1">FYI · SRE</p>
+            <p class="m-0">Dunning backfill will run Nov 8, 01:00–04:00 UTC on the primary. Expect +15% write IOPS.</p>
+          </aside>
+        </section>
+      </div>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/status-report.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

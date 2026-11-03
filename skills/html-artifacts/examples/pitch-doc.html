@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bulk invoice editing is ready to ship — buy-in doc</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      details.obj > summary { list-style: none; }
+      details.obj > summary::-webkit-details-marker { display: none; }
+      details.obj > summary::after { content: "+"; margin-left: auto; font-family: ui-monospace, monospace; color: #87867f; }
+      details.obj[open] > summary::after { content: "–"; }
+      .risk li::before { content: ""; position: absolute; left: 0; top: 0.7em; width: 8px; height: 2px; background: #d97757; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[980px]" x-data="{ copied: false }">
+      <header class="mb-10">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-2.5">
+          <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] m-0">Ship proposal · Acme Ledger · Billing team</p>
+          <span class="inline-flex items-center gap-2 font-mono text-[11.5px] bg-oat text-[#3d3d3a] rounded-full px-3 py-1"><i class="w-1.5 h-1.5 rounded-full bg-clay"></i>2-minute read</span>
+        </div>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,46px)] leading-[1.1] tracking-tight m-0 mb-3">
+          Bulk invoice editing is ready to ship
+        </h1>
+        <p class="text-[16px] m-0 mb-6 max-w-[720px]">
+          The prototype, spec, and load test are summarized in one place.
+          <strong class="text-[#141413]">Ask: four sign-offs by Thu Nov 12</strong>, so the flag ramp can start Mon Nov 16.
+        </p>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px] mb-6">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Bulk edit is done and behind a flag. Package the prototype, <code class="font-mono text-[13px]">docs/specs/bulk-edit.md</code>,
+          and the load-test notes into one doc I can post in #ledger-launch to get sign-off. Lead with the demo.
+        </div>
+        <div class="flex flex-wrap items-center gap-2" aria-label="Sign-off status">
+          <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] mr-1">Sign-offs 1 / 4</span>
+          <a href="#needs" class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px] no-underline text-[#3d3d3a] hover:border-[#141413]">AO · eng <span class="text-[#87867f]">pending</span></a>
+          <a href="#needs" class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px] no-underline text-[#3d3d3a] hover:border-[#141413]">FB · security <span class="text-[#87867f]">pending</span></a>
+          <a href="#needs" class="inline-flex items-center gap-1.5 border border-[rgba(120,140,93,0.45)] rounded-full bg-[rgba(120,140,93,0.12)] px-2.5 py-1 font-mono text-[11.5px] no-underline text-olive">SP · design ✓</a>
+          <a href="#needs" class="inline-flex items-center gap-1.5 border border-[#d1cfc5] rounded-full bg-white px-2.5 py-1 font-mono text-[11.5px] no-underline text-[#3d3d3a] hover:border-[#141413]">RM · product <span class="text-[#87867f]">pending</span></a>
+        </div>
+      </header>
+
+      <article class="bg-white border border-[#d1cfc5] rounded-2xl p-[clamp(20px,4vw,44px)]">
+        <!-- 01 · Demo -->
+        <section aria-labelledby="h-demo">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+            <h2 id="h-demo" class="m-0 text-[24px] font-serif font-medium text-[#141413] tracking-tight">Watch it work</h2>
+          </div>
+
+          <div x-data="demo()" x-init="start()">
+            <div class="relative bg-[#f0eee6] border border-[#d1cfc5] rounded-xl overflow-hidden select-none" aria-label="Animated mock of bulk editing three invoices in Acme Ledger">
+              <div class="flex items-center gap-2 bg-white border-b border-[#e3dacc] px-3.5 py-2.5">
+                <i class="w-2.5 h-2.5 rounded-full bg-[#d1cfc5]"></i><i class="w-2.5 h-2.5 rounded-full bg-[#d1cfc5]"></i><i class="w-2.5 h-2.5 rounded-full bg-[#d1cfc5]"></i>
+                <span class="ml-2 font-mono text-[11px] text-[#87867f] truncate">Acme Ledger — Invoices · Outstanding</span>
+              </div>
+              <div class="p-3 sm:p-4 pb-16 sm:pb-16">
+                <div class="flex items-center justify-between gap-3 mb-2.5">
+                  <span class="font-mono text-[11px] text-clay-dark" x-text="sel.length + ' selected'">0 selected</span>
+                  <span class="font-sans text-[12.5px] font-semibold text-white rounded-lg px-3.5 py-1.5 transition-transform"
+                    :class="pressed ? 'bg-clay-dark scale-95' : (sel.length === 3 ? 'bg-clay' : 'bg-[#141413]')">Edit selected</span>
+                </div>
+                <div class="bg-white border border-[#e3dacc] rounded-lg overflow-hidden">
+                  <table class="w-full text-[12.5px] border-collapse">
+                    <thead class="bg-[#faf9f5] text-left font-mono text-[10.5px] uppercase tracking-[0.05em] text-[#87867f]">
+                      <tr>
+                        <th class="w-8 px-3 py-2"></th>
+                        <th class="px-2 py-2 font-medium">Invoice</th>
+                        <th class="px-2 py-2 font-medium hidden sm:table-cell">Customer</th>
+                        <th class="px-2 py-2 font-medium hidden md:table-cell text-right">Amount</th>
+                        <th class="px-2 py-2 font-medium">Terms</th>
+                        <th class="px-2 py-2 font-medium">Due</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#f0eee6]">
+                      <template x-for="(r, i) in rows" :key="r.id">
+                        <tr class="transition-colors" :class="sel.includes(i) ? 'bg-[rgba(217,119,87,0.08)]' : ''">
+                          <td class="px-3 py-2">
+                            <span class="grid place-items-center w-4 h-4 rounded border-[1.5px] transition text-[10px] leading-none text-white"
+                              :class="sel.includes(i) ? 'bg-clay border-clay' : 'bg-white border-[#d1cfc5]'" x-text="sel.includes(i) ? '✓' : ''"></span>
+                          </td>
+                          <td class="px-2 py-2 font-mono text-[#141413]" x-text="r.id"></td>
+                          <td class="px-2 py-2 hidden sm:table-cell" x-text="r.cust"></td>
+                          <td class="px-2 py-2 hidden md:table-cell text-right font-mono" x-text="r.amt"></td>
+                          <td class="px-2 py-2 font-mono" :class="applied && sel.includes(i) ? 'text-olive font-semibold' : ''" x-text="applied && sel.includes(i) ? 'Net 45' : r.terms"></td>
+                          <td class="px-2 py-2 font-mono" :class="applied && sel.includes(i) ? 'text-olive font-semibold' : ''" x-text="applied && sel.includes(i) ? r.due2 : r.due"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div x-cloak :class="modal ? 'opacity-100' : 'opacity-0 pointer-events-none'" class="absolute inset-0 bg-[rgba(20,20,19,0.38)] grid place-items-center p-4 transition-opacity duration-300">
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-[380px] p-5">
+                  <p class="font-sans text-[14px] font-semibold text-[#141413] m-0 mb-1">Edit 3 invoices</p>
+                  <p class="font-mono text-[11px] text-[#87867f] m-0 mb-3">Payment terms · Net 30 → Net 45</p>
+                  <ul class="list-none m-0 p-0 mb-3 space-y-1 font-mono text-[11.5px]">
+                    <li class="flex justify-between gap-2 bg-[#faf9f5] rounded px-2 py-1"><span>INV-2041</span><span><span class="text-[#87867f] line-through">Nov 30</span> → <span class="text-olive">Dec 15</span></span></li>
+                    <li class="flex justify-between gap-2 bg-[#faf9f5] rounded px-2 py-1"><span>INV-2047</span><span><span class="text-[#87867f] line-through">Dec 4</span> → <span class="text-olive">Dec 19</span></span></li>
+                    <li class="flex justify-between gap-2 bg-[#faf9f5] rounded px-2 py-1"><span>INV-2052</span><span><span class="text-[#87867f] line-through">Dec 9</span> → <span class="text-olive">Dec 24</span></span></li>
+                  </ul>
+                  <p class="text-[12px] text-[#87867f] m-0 mb-3">Amounts and tax unchanged · customers not notified</p>
+                  <div class="flex justify-end">
+                    <span class="font-sans text-[12.5px] font-semibold text-white rounded-lg px-3.5 py-1.5 transition-transform" :class="applyPressed ? 'bg-clay-dark scale-95' : 'bg-clay'">Apply to 3</span>
+                  </div>
+                </div>
+              </div>
+
+              <div x-cloak :class="toast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'" class="transition duration-300 absolute left-1/2 -translate-x-1/2 bottom-3 bg-[#141413] text-ivory rounded-lg px-3.5 py-2.5 flex items-center gap-3 shadow-lg max-w-[92%]">
+                <span class="grid place-items-center w-[18px] h-[18px] rounded-full bg-olive text-[10px]">✓</span>
+                <span class="text-[12.5px] whitespace-nowrap">Updated 3 invoices</span>
+                <span class="font-mono text-[11px] border border-[rgba(250,249,245,0.3)] rounded px-2 py-0.5 whitespace-nowrap">Undo · 30 s</span>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3 mt-2.5 font-mono text-[11px] text-[#87867f]">
+              <span x-text="caption">select → preview → apply → undo window</span>
+              <span class="flex gap-2">
+                <button type="button" @click="toggle()" class="border border-[#d1cfc5] bg-white rounded-lg px-3 py-1 text-[#3d3d3a] hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay" x-text="playing ? 'Ⅱ pause' : '▶ play'">Ⅱ pause</button>
+                <button type="button" @click="playing = true; play()" class="border border-[#d1cfc5] bg-white rounded-lg px-3 py-1 text-[#3d3d3a] hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">↻ replay</button>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 02 · Pitch -->
+        <section class="mt-10 pt-8 border-t border-[#f0eee6]" aria-labelledby="h-pitch">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+            <h2 id="h-pitch" class="m-0 text-[24px] font-serif font-medium text-[#141413] tracking-tight">The pitch</h2>
+          </div>
+          <p class="font-serif text-[18px] leading-[1.6] text-[#141413] max-w-[46em] m-0 mb-7">
+            Finance teams change payment terms in batches: at quarter end, after a customer renegotiates, or when the
+            collections policy changes. Today they do it one invoice at a time. That is <strong class="font-semibold">the top
+            workflow complaint from churned accounts with 200+ invoices a month</strong>. Bulk edit lets them select any set of open
+            invoices, preview exactly what will change, and apply it in one step with undo. It is built, flagged, load-tested on our
+            largest tenant, and reversible with one toggle. The only thing left is the four sign-offs below.
+          </p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="bg-[#faf9f5] border border-[#e3dacc] rounded-xl p-4">
+              <p class="font-serif text-[30px] leading-none text-[#141413] m-0 mb-1.5">34<span class="text-base text-[#87867f]">%</span></p>
+              <p class="text-[12.5px] m-0">of churned 200+/mo accounts named one-by-one editing</p>
+              <p class="font-mono text-[10.5px] text-[#87867f] m-0 mt-1.5">exit survey, n=118</p>
+            </div>
+            <div class="bg-[#faf9f5] border border-[#e3dacc] rounded-xl p-4">
+              <p class="font-serif text-[30px] leading-none text-[#141413] m-0 mb-1.5">212</p>
+              <p class="text-[12.5px] m-0">support tickets tagged <span class="font-mono text-[11.5px]">bulk-edit</span> in Q2–Q3</p>
+              <p class="font-mono text-[10.5px] text-[#87867f] m-0 mt-1.5">Zendesk tag report</p>
+            </div>
+            <div class="bg-[#faf9f5] border border-[#e3dacc] rounded-xl p-4">
+              <p class="font-serif text-[30px] leading-none text-[#141413] m-0 mb-1.5">2.8<span class="text-base text-[#87867f]"> s</span></p>
+              <p class="text-[12.5px] m-0">to apply an edit to 5,000 invoices</p>
+              <p class="font-mono text-[10.5px] text-[#87867f] m-0 mt-1.5">load test, Oct 28</p>
+            </div>
+            <div class="bg-[#faf9f5] border border-[#e3dacc] rounded-xl p-4">
+              <p class="font-serif text-[30px] leading-none text-[#141413] m-0 mb-1.5">1</p>
+              <p class="text-[12.5px] m-0">flag toggle to roll back, no migration to unwind</p>
+              <p class="font-mono text-[10.5px] text-[#87867f] m-0 mt-1.5">bulk_invoice_edit</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 03 · Objections -->
+        <section class="mt-10 pt-8 border-t border-[#f0eee6]" aria-labelledby="h-obj">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+            <h2 id="h-obj" class="m-0 text-[24px] font-serif font-medium text-[#141413] tracking-tight">What reviewers will ask</h2>
+          </div>
+          <div class="space-y-2.5">
+            <details class="obj border border-[#e3dacc] rounded-xl overflow-hidden group" open>
+              <summary class="cursor-pointer flex gap-3 items-baseline px-4 py-3 font-semibold text-[14.5px] text-[#141413] group-open:bg-[#f0eee6] group-open:border-b group-open:border-[#e3dacc]"><span class="font-mono text-[11px] text-clay-dark shrink-0">Q1</span>Can a bulk edit touch an invoice that's paid, void, or already synced to the customer's AP portal?</summary>
+              <div class="px-4 py-3.5 text-[14px]">
+                No. Locked states are filtered out on the server before the preview, and the preview lists them as
+                <span class="font-mono text-[12.5px] bg-[#f0eee6] border border-[#e3dacc] rounded px-1">skipped (locked)</span>. 22 state-matrix
+                tests cover every status × field pair.
+                <a href="#spec" class="block mt-2 font-mono text-[11.5px] text-clay-dark no-underline border-b border-dashed border-[#d1cfc5] w-fit">↗ spec §4.1 — Locked states</a>
+              </div>
+            </details>
+            <details class="obj border border-[#e3dacc] rounded-xl overflow-hidden group">
+              <summary class="cursor-pointer flex gap-3 items-baseline px-4 py-3 font-semibold text-[14.5px] text-[#141413] group-open:bg-[#f0eee6] group-open:border-b group-open:border-[#e3dacc]"><span class="font-mono text-[11px] text-clay-dark shrink-0">Q2</span>What if someone edits the wrong 300 invoices?</summary>
+              <div class="px-4 py-3.5 text-[14px]">
+                Each bulk edit is one batch with a 30-second in-app undo. After that, anyone with <span class="font-mono text-[12.5px] bg-[#f0eee6] border border-[#e3dacc] rounded px-1">invoices:write</span>
+                can revert the whole batch from the audit log for 30 days. Revert restores the prior field values and re-sends nothing.
+                <a href="#spec" class="block mt-2 font-mono text-[11.5px] text-clay-dark no-underline border-b border-dashed border-[#d1cfc5] w-fit">↗ spec §5 — Undo and revert</a>
+              </div>
+            </details>
+            <details class="obj border border-[#e3dacc] rounded-xl overflow-hidden group">
+              <summary class="cursor-pointer flex gap-3 items-baseline px-4 py-3 font-semibold text-[14.5px] text-[#141413] group-open:bg-[#f0eee6] group-open:border-b group-open:border-[#e3dacc]"><span class="font-mono text-[11px] text-clay-dark shrink-0">Q3</span>Will this hold up on our biggest accounts?</summary>
+              <div class="px-4 py-3.5 text-[14px]">
+                Edits run as a background job in batches of 250 on the tenant's own queue partition. Against a copy of our largest
+                tenant (48k open invoices), the job took 2.8 s for 5,000 invoices and 31 s for all 48k. API p95 stayed at 140 ms throughout.
+                <a href="#spec" class="block mt-2 font-mono text-[11.5px] text-clay-dark no-underline border-b border-dashed border-[#d1cfc5] w-fit">↗ implementation notes, Oct 28 — load test</a>
+              </div>
+            </details>
+            <details class="obj border border-[#e3dacc] rounded-xl overflow-hidden group">
+              <summary class="cursor-pointer flex gap-3 items-baseline px-4 py-3 font-semibold text-[14.5px] text-[#141413] group-open:bg-[#f0eee6] group-open:border-b group-open:border-[#e3dacc]"><span class="font-mono text-[11px] text-clay-dark shrink-0">Q4</span>Can it change amounts, tax, or currency?</summary>
+              <div class="px-4 py-3.5 text-[14px]">
+                No. The editable fields are terms, due date, memo, tags, and reminder schedule. Line items, tax, and currency are
+                rejected by the API schema, not just hidden in the UI, so a crafted request gets a 422.
+                <a href="#spec" class="block mt-2 font-mono text-[11.5px] text-clay-dark no-underline border-b border-dashed border-[#d1cfc5] w-fit">↗ spec §3 — Editable fields</a>
+              </div>
+            </details>
+            <details class="obj border border-[#e3dacc] rounded-xl overflow-hidden group">
+              <summary class="cursor-pointer flex gap-3 items-baseline px-4 py-3 font-semibold text-[14.5px] text-[#141413] group-open:bg-[#f0eee6] group-open:border-b group-open:border-[#e3dacc]"><span class="font-mono text-[11px] text-clay-dark shrink-0">Q5</span>Will customers get 300 “invoice updated” emails?</summary>
+              <div class="px-4 py-3.5 text-[14px]">
+                Nothing is re-sent by default. If the editor ticks “notify customers”, each customer gets one digest listing their
+                changed invoices, limited to one digest per recipient per hour.
+                <a href="#spec" class="block mt-2 font-mono text-[11.5px] text-clay-dark no-underline border-b border-dashed border-[#d1cfc5] w-fit">↗ spec §6 — Notifications</a>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <!-- 04 · Spec -->
+        <section id="spec" class="mt-10 pt-8 border-t border-[#f0eee6] scroll-mt-6" aria-labelledby="h-spec">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+            <h2 id="h-spec" class="m-0 text-[24px] font-serif font-medium text-[#141413] tracking-tight">Spec at a glance</h2>
+          </div>
+          <div class="overflow-x-auto border border-[#e3dacc] rounded-xl">
+            <table class="w-full min-w-[560px] text-[13.5px] border-collapse">
+              <thead class="bg-[#f0eee6] text-left font-mono text-[10.5px] uppercase tracking-[0.06em] text-[#87867f]">
+                <tr><th class="px-4 py-2.5 font-normal w-[140px]">Area</th><th class="px-4 py-2.5 font-normal">Decision</th><th class="px-4 py-2.5 font-normal w-[80px]">Ref</th></tr>
+              </thead>
+              <tbody class="divide-y divide-[#f0eee6] align-top">
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Fields</td><td class="px-4 py-2.5">Terms, due date, memo, tags, reminder schedule. Amounts, tax, and currency excluded.</td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§3</td></tr>
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Entry point</td><td class="px-4 py-2.5">Invoice list → multi-select → <b>Edit selected</b> → preview → apply</td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§2</td></tr>
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Permissions</td><td class="px-4 py-2.5"><span class="font-mono text-[12px]">invoices:write</span>; edits over 1,000 invoices need a second approver</td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§4.2</td></tr>
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Limits</td><td class="px-4 py-2.5">5,000 per edit from the UI, 25,000 via API; batches of 250, resumable</td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§5.2</td></tr>
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Audit</td><td class="px-4 py-2.5">One <span class="font-mono text-[12px]">audit.bulk_edit</span> event per batch with before/after; revert for 30 days</td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§5, §7</td></tr>
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Telemetry</td><td class="px-4 py-2.5"><span class="font-mono text-[12px]">bulk_edit_previewed</span>, <span class="font-mono text-[12px]">_applied</span>, <span class="font-mono text-[12px]">_undone</span>, <span class="font-mono text-[12px]">_reverted</span></td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§9</td></tr>
+                <tr><td class="px-4 py-2.5 font-semibold text-[#141413]">Flag</td><td class="px-4 py-2.5"><span class="font-mono text-[12px]">bulk_invoice_edit</span>: internal → 10% → 50% → 100% over two weeks</td><td class="px-4 py-2.5 font-mono text-[11px] text-[#87867f] whitespace-nowrap">§8</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 05 · Risk + needs -->
+        <section id="needs" class="mt-10 pt-8 border-t border-[#f0eee6] scroll-mt-6" aria-labelledby="h-needs">
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+            <h2 id="h-needs" class="m-0 text-[24px] font-serif font-medium text-[#141413] tracking-tight">Risk, rollback, and what I need from you</h2>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="risk border border-[#d1cfc5] border-l-4 border-l-clay rounded-xl bg-[#faf9f5] px-5 py-4">
+              <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-clay-dark m-0 mb-3">Risk and rollback</p>
+              <ul class="list-none m-0 p-0 space-y-2.5 text-[13.5px]">
+                <li class="relative pl-4"><strong class="text-[#141413]">Rollback is one toggle.</strong> Turn off <span class="font-mono text-[12px]">bulk_invoice_edit</span>. The only schema change is one additive table, so nothing needs unwinding.</li>
+                <li class="relative pl-4"><strong class="text-[#141413]">Blast radius is one tenant.</strong> Jobs run on the tenant's queue partition with a 60 s per-batch timeout, so one large edit cannot slow anyone else.</li>
+                <li class="relative pl-4"><strong class="text-[#141413]">Worst credible failure:</strong> a worker crash mid-edit leaves a partial batch. The job resumes from the last committed 250 and is idempotent per invoice id.</li>
+                <li class="relative pl-4"><strong class="text-[#141413]">Known gap:</strong> there is no CSV import of edits yet. It is listed in-product as coming soon and is phase 2.</li>
+              </ul>
+            </div>
+            <div class="border border-[#d1cfc5] border-l-4 border-l-olive rounded-xl bg-[#faf9f5] px-5 py-4">
+              <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-olive m-0 mb-1">What I need from you · by Thu Nov 12</p>
+              <ul class="list-none m-0 p-0 divide-y divide-[#e3dacc]">
+                <li class="flex gap-3 py-2.5">
+                  <span class="grid place-items-center shrink-0 w-8 h-8 rounded-full bg-oat text-clay-dark font-mono text-[11px]">AO</span>
+                  <div class="text-[13px] leading-snug min-w-0">
+                    <p class="m-0 flex flex-wrap items-baseline gap-x-2"><b class="text-[#141413] text-[13.5px]">Amara Okafor</b><span class="font-mono text-[10.5px] text-[#87867f]">Eng lead, Billing platform</span></p>
+                    <p class="m-0 mt-0.5">Approve running the job on the shared billing queue with per-tenant partitions (§5.2).</p>
+                  </div>
+                </li>
+                <li class="flex gap-3 py-2.5">
+                  <span class="grid place-items-center shrink-0 w-8 h-8 rounded-full bg-oat text-clay-dark font-mono text-[11px]">FB</span>
+                  <div class="text-[13px] leading-snug min-w-0">
+                    <p class="m-0 flex flex-wrap items-baseline gap-x-2"><b class="text-[#141413] text-[13.5px]">Felix Brandt</b><span class="font-mono text-[10.5px] text-[#87867f]">Security &amp; compliance</span></p>
+                    <p class="m-0 mt-0.5">Approve the audit event shape and 30-day revert retention (§5, §7).</p>
+                  </div>
+                </li>
+                <li class="flex gap-3 py-2.5">
+                  <span class="grid place-items-center shrink-0 w-8 h-8 rounded-full bg-[rgba(120,140,93,0.18)] text-olive font-mono text-[11px]">SP</span>
+                  <div class="text-[13px] leading-snug min-w-0">
+                    <p class="m-0 flex flex-wrap items-baseline gap-x-2"><b class="text-[#141413] text-[13.5px]">Sun-hee Park</b><span class="font-mono text-[10.5px] text-[#87867f]">Design</span><span class="font-mono text-[10.5px] text-olive">signed off Nov 1 ✓</span></p>
+                    <p class="m-0 mt-0.5">Preview modal and locked-invoice states. The demo above matches the final design.</p>
+                  </div>
+                </li>
+                <li class="flex gap-3 py-2.5">
+                  <span class="grid place-items-center shrink-0 w-8 h-8 rounded-full bg-oat text-clay-dark font-mono text-[11px]">RM</span>
+                  <div class="text-[13px] leading-snug min-w-0">
+                    <p class="m-0 flex flex-wrap items-baseline gap-x-2"><b class="text-[#141413] text-[13.5px]">Rafael Mendes</b><span class="font-mono text-[10.5px] text-[#87867f]">PM, Receivables</span></p>
+                    <p class="m-0 mt-0.5">Approve the ramp schedule (§8) and own the changelog entry.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-8 bg-oat rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <p class="font-serif text-[16.5px] text-[#141413] m-0 flex-1">
+              Everything above is built and tested behind the flag. Reply ✓ in the thread on your piece, or grab 15 minutes on my
+              calendar Tuesday. <b>Target: ramp starts Mon Nov 16.</b>
+            </p>
+            <button type="button" @click="navigator.clipboard.writeText($refs.slack.textContent.trim()).then(() => { copied = true; setTimeout(() => copied = false, 1400) })"
+              class="shrink-0 bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3.5 py-2 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="!copied">Copy Slack post</span><span x-show="copied" x-cloak>Copied ✓</span>
+            </button>
+          </div>
+          <pre x-ref="slack" class="hidden">*Bulk invoice editing is ready to ship* (flag: bulk_invoice_edit)
+Built, load-tested on our largest tenant (5k invoices in 2.8 s), one-toggle rollback.
+Need sign-off by Thu Nov 12 so the ramp can start Mon Nov 16:
+• Amara: shared billing queue with per-tenant partitions (§5.2)
+• Felix: audit event shape + 30-day revert retention (§5, §7)
+• Rafael: ramp schedule (§8) + changelog
+• Sun-hee: done ✓
+Full doc with demo, objections, and spec summary is in the thread.</pre>
+        </section>
+      </article>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/pitch-doc.md</span>
+      </footer>
+    </main>
+
+    <script>
+      function demo() {
+        return {
+          rows: [
+            { id: 'INV-2041', cust: 'Northwind Dental', amt: '$4,180.00', terms: 'Net 30', due: 'Nov 30', due2: 'Dec 15' },
+            { id: 'INV-2044', cust: 'Lumen Studio', amt: '$920.00', terms: 'Net 15', due: 'Nov 18', due2: 'Nov 18' },
+            { id: 'INV-2047', cust: 'Halvorsen Freight', amt: '$12,600.00', terms: 'Net 30', due: 'Dec 4', due2: 'Dec 19' },
+            { id: 'INV-2052', cust: 'Okapi Coffee Co.', amt: '$2,345.50', terms: 'Net 30', due: 'Dec 9', due2: 'Dec 24' },
+            { id: 'INV-2058', cust: 'Brightline Legal', amt: '$7,050.00', terms: 'Due on receipt', due: 'Nov 3', due2: 'Nov 3' }
+          ],
+          sel: [], pressed: false, modal: false, applyPressed: false, applied: false, toast: false,
+          playing: true, timers: [], caption: 'select → preview → apply → undo window',
+          at(ms, fn) { this.timers.push(setTimeout(fn, ms)); },
+          clear() { this.timers.forEach(clearTimeout); this.timers = []; },
+          reset() {
+            this.clear();
+            this.sel = []; this.pressed = false; this.modal = false;
+            this.applyPressed = false; this.applied = false; this.toast = false;
+          },
+          finalFrame() {
+            this.reset();
+            this.sel = [0, 2, 3]; this.applied = true; this.toast = true;
+            this.caption = 'final state · animation off (reduced motion)';
+          },
+          start() {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { this.playing = false; this.finalFrame(); return; }
+            this.play();
+          },
+          play() {
+            this.reset();
+            this.caption = 'selecting invoices…';
+            [0, 2, 3].forEach((row, n) => this.at(600 + n * 450, () => { this.sel.push(row); }));
+            this.at(2100, () => { this.pressed = true; this.caption = 'opening preview…'; });
+            this.at(2350, () => { this.pressed = false; this.modal = true; this.caption = 'preview: exactly what will change'; });
+            this.at(4300, () => { this.applyPressed = true; });
+            this.at(4550, () => { this.modal = false; this.applied = true; this.toast = true; this.caption = 'applied · 30 s undo window'; });
+            this.at(7800, () => { if (this.playing) this.play(); });
+          },
+          toggle() {
+            if (this.playing) { this.playing = false; this.clear(); this.caption = 'paused'; }
+            else { this.playing = true; this.play(); }
+          }
+        };
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Harbor UI — design system reference</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .checker { background-image: linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%); background-size: 12px 12px; background-position: 0 0,0 6px,6px -6px,-6px 0; }
+    </style>
+    <script>
+      function ds() {
+        return {
+          format: 'var',
+          exportTab: 'css',
+          toast: '',
+          toastTimer: null,
+          colors: [
+            { group: 'Brand', items: [
+              { token: 'harbor-900', hex: '#14304F', use: 'App bar, headings on paper' },
+              { token: 'harbor-700', hex: '#24507E', use: 'Primary button hover' },
+              { token: 'harbor-500', hex: '#3A78B5', use: 'Primary button, links' },
+              { token: 'harbor-100', hex: '#DCE8F4', use: 'Selected row, focus halo' },
+              { token: 'signal-600', hex: '#C2531F', use: 'Signal text on light' },
+              { token: 'signal-500', hex: '#E8743B', use: 'Delayed shipment, CTA badge' },
+            ]},
+            { group: 'Neutral', items: [
+              { token: 'ink-900', hex: '#16191D', use: 'Body text' },
+              { token: 'ink-600', hex: '#4A5059', use: 'Secondary text' },
+              { token: 'ink-400', hex: '#8A9099', use: 'Placeholders, icons' },
+              { token: 'fog-200', hex: '#DDE1E6', use: 'Borders, dividers' },
+              { token: 'fog-50', hex: '#F5F7F9', use: 'Table stripes, page bg' },
+              { token: 'white', hex: '#FFFFFF', use: 'Panels, inputs' },
+            ]},
+            { group: 'Semantic', items: [
+              { token: 'success', hex: '#2F7D4F', use: 'Delivered, in-SLA' },
+              { token: 'warning', hex: '#B7791F', use: 'At risk, customs hold' },
+              { token: 'danger', hex: '#C0392B', use: 'Failed, destructive' },
+              { token: 'info', hex: '#3A78B5', use: 'Alias of harbor-500', alias: 'harbor-500' },
+            ]},
+          ],
+          type: [
+            { token: 'display', size: 40, lh: 48, weight: 600, track: '-0.02em', sample: 'Rotterdam → Felixstowe', cls: 'text-[40px] leading-[48px] font-semibold tracking-[-0.02em]' },
+            { token: 'h1', size: 30, lh: 38, weight: 600, track: '-0.01em', sample: 'Shipments in transit', cls: 'text-[30px] leading-[38px] font-semibold tracking-[-0.01em]' },
+            { token: 'h2', size: 22, lh: 30, weight: 600, track: '0', sample: 'Container ACM-48213-NL', cls: 'text-[22px] leading-[30px] font-semibold' },
+            { token: 'body', size: 15, lh: 24, weight: 400, track: '0', sample: 'Customs cleared at 09:14. The carrier expects the container at the gate within 36 hours.', cls: 'text-[15px] leading-[24px]' },
+            { token: 'small', size: 13, lh: 20, weight: 400, track: '0', sample: 'Last scan 2 h ago · Port of Antwerp, berth 914', cls: 'text-[13px] leading-[20px]' },
+            { token: 'label', size: 12, lh: 16, weight: 600, track: '0.06em', sample: 'ETA · BILL OF LADING · WEIGHT', cls: 'text-[12px] leading-[16px] font-semibold tracking-[0.06em] uppercase' },
+            { token: 'mono', size: 13, lh: 20, weight: 400, track: '0', sample: 'MSKU 482137-0 · 22G1 · 24,180 kg', cls: 'font-mono text-[13px] leading-[20px] tabular-nums' },
+          ],
+          space: [ ['1', 2], ['2', 4], ['3', 8], ['4', 12], ['5', 16], ['6', 24], ['7', 32], ['8', 48], ['9', 64] ],
+          radius: [ ['sm', 4], ['md', 6], ['lg', 10], ['pill', 999] ],
+          shadow: [
+            ['sm', '0 1px 2px rgba(22,25,29,0.08)'],
+            ['md', '0 4px 12px rgba(22,25,29,0.10)'],
+            ['lg', '0 16px 32px rgba(22,25,29,0.16)'],
+          ],
+          lum(hex) {
+            const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+              .map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+            return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+          },
+          ratio(a, b) {
+            const x = this.lum(a), y = this.lum(b);
+            return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+          },
+          grade(r) { return r >= 7 ? 'AAA' : r >= 4.5 ? 'AA' : r >= 3 ? 'AA large' : 'decor only'; },
+          gradeClass(r) {
+            return r >= 4.5 ? 'text-olive border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)]'
+              : r >= 3 ? 'text-clay-dark border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)]'
+              : 'text-[#87867f] border-[#d1cfc5] bg-[#f0eee6]';
+          },
+          bestText(hex) { return this.ratio(hex, '#FFFFFF') >= this.ratio(hex, '#16191D') ? '#FFFFFF' : '#16191D'; },
+          colorValue(c) {
+            if (this.format === 'hex') return c.hex;
+            if (this.format === 'tw') return 'bg-' + c.token;
+            return 'var(--hb-' + c.token + ')';
+          },
+          copy(text, label) {
+            const done = () => {
+              this.toast = label || text;
+              clearTimeout(this.toastTimer);
+              this.toastTimer = setTimeout(() => this.toast = '', 1600);
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+              navigator.clipboard.writeText(text).then(done, () => this.legacyCopy(text, done));
+            } else { this.legacyCopy(text, done); }
+          },
+          legacyCopy(text, done) {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) {}
+            document.body.removeChild(ta);
+          },
+          typeCss(t) { return 'font: ' + t.weight + ' ' + t.size + 'px/' + t.lh + 'px var(--hb-font-' + (t.token === 'mono' ? 'mono' : 'sans') + ');' + (t.track !== '0' ? ' letter-spacing: ' + t.track + ';' : ''); },
+          allColors() { return this.colors.flatMap(g => g.items); },
+          get cssExport() {
+            const lines = [':root {', '  /* color */'];
+            this.allColors().forEach(c => lines.push('  --hb-' + c.token + ': ' + (c.alias ? 'var(--hb-' + c.alias + ')' : c.hex) + ';'));
+            lines.push('  /* type */');
+            this.type.forEach(t => lines.push('  --hb-text-' + t.token + ': ' + t.size + 'px/' + t.lh + 'px;'));
+            lines.push('  /* space */');
+            this.space.forEach(s => lines.push('  --hb-space-' + s[0] + ': ' + s[1] + 'px;'));
+            lines.push('  /* radius + elevation */');
+            this.radius.forEach(r => lines.push('  --hb-radius-' + r[0] + ': ' + r[1] + 'px;'));
+            this.shadow.forEach(s => lines.push('  --hb-shadow-' + s[0] + ': ' + s[1] + ';'));
+            lines.push('}');
+            return lines.join('\n');
+          },
+          get jsonExport() {
+            const out = { color: {}, text: {}, space: {}, radius: {}, shadow: {} };
+            this.allColors().forEach(c => out.color[c.token] = c.alias ? '{color.' + c.alias + '}' : c.hex);
+            this.type.forEach(t => out.text[t.token] = { size: t.size, lineHeight: t.lh, weight: t.weight, tracking: t.track });
+            this.space.forEach(s => out.space[s[0]] = s[1]);
+            this.radius.forEach(r => out.radius[r[0]] = r[1]);
+            this.shadow.forEach(s => out.shadow[s[0]] = s[1]);
+            return JSON.stringify(out, null, 2);
+          },
+          get themeExport() {
+            const lines = ['@theme {'];
+            this.allColors().forEach(c => lines.push('  --color-' + c.token + ': ' + c.hex + ';'));
+            this.space.forEach(s => lines.push('  --spacing-' + s[0] + ': ' + s[1] + 'px;'));
+            this.radius.forEach(r => lines.push('  --radius-' + r[0] + ': ' + r[1] + 'px;'));
+            this.shadow.forEach(s => lines.push('  --shadow-' + s[0] + ': ' + s[1] + ';'));
+            lines.push('}');
+            return lines.join('\n');
+          },
+          get exportText() { return this.exportTab === 'css' ? this.cssExport : this.exportTab === 'json' ? this.jsonExport : this.themeExport; },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]" x-data="ds()">
+      <header class="mb-8 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Acme Freight · design system reference</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Harbor UI tokens, as they exist in the repo today
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Pull every design token out of <code class="font-mono text-[13px]">packages/harbor-ui</code> and give me one page I can keep open
+          while building the new shipment tracker. Swatches, type, spacing, the core components, and let me copy values.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          Read from <span class="text-[#3d3d3a]">packages/harbor-ui/src/tokens.css</span> · <span class="text-[#3d3d3a]">tailwind.preset.ts</span> · <span class="text-[#3d3d3a]">src/components/*.tsx</span> · commit 8c2f1e4 · 41 tokens
+        </p>
+      </header>
+
+      <!-- Sticky toolbar -->
+      <div class="sticky top-0 z-10 -mx-6 px-6 py-3 mb-12 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5] flex flex-wrap gap-x-5 gap-y-2 items-center">
+        <nav class="flex flex-wrap gap-3 font-mono text-xs">
+          <a href="#color" class="text-[#87867f] hover:text-[#141413]">color</a>
+          <a href="#type" class="text-[#87867f] hover:text-[#141413]">type</a>
+          <a href="#space" class="text-[#87867f] hover:text-[#141413]">space</a>
+          <a href="#shape" class="text-[#87867f] hover:text-[#141413]">shape</a>
+          <a href="#components" class="text-[#87867f] hover:text-[#141413]">components</a>
+          <a href="#drift" class="text-rust hover:text-[#141413]">drift (4)</a>
+        </nav>
+        <span class="flex-1"></span>
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">Swatch copies</span>
+          <div class="inline-flex border border-[#d1cfc5] rounded-lg overflow-hidden bg-white" role="radiogroup" aria-label="Copy format">
+            <template x-for="f in [['var','CSS var'],['hex','hex'],['tw','class']]" :key="f[0]">
+              <button type="button" role="radio" :aria-checked="format === f[0]" @click="format = f[0]"
+                :class="format === f[0] ? 'bg-[#141413] text-ivory' : 'text-[#3d3d3a] hover:bg-[#f0eee6]'"
+                class="font-mono text-xs px-2.5 py-1.5 focus-visible:outline-2 focus-visible:outline-clay" x-text="f[1]"></button>
+            </template>
+          </div>
+        </div>
+        <a href="#export" class="bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3 py-1.5 hover:bg-[#3d3d3a]">Export all ↓</a>
+      </div>
+
+      <!-- 01 Color -->
+      <section class="mb-14 scroll-mt-20" id="color">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Color</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Click a swatch to copy it. Contrast is computed against white so you know which ones can carry text.</p>
+        <template x-for="g in colors" :key="g.group">
+          <div class="mb-8">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-3" x-text="g.group"></p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              <template x-for="c in g.items" :key="c.token">
+                <button type="button" @click="copy(colorValue(c), 'Copied ' + colorValue(c))"
+                  class="group text-left bg-white border border-[#d1cfc5] rounded-xl overflow-hidden hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+                  <span class="block h-20 relative border-b border-[#d1cfc5]" :style="{ background: c.hex }">
+                    <span class="absolute left-3 bottom-2 font-mono text-[11px] font-semibold" :style="{ color: bestText(c.hex) }">Aa</span>
+                    <span class="absolute right-2 top-2 font-mono text-[10px] rounded px-1.5 py-0.5 bg-white/85 text-[#141413] opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">copy</span>
+                  </span>
+                  <span class="block px-3 py-2.5">
+                    <span class="block font-mono text-[12.5px] text-[#141413]" x-text="c.token"></span>
+                    <span class="block font-mono text-[11.5px] text-[#87867f]" x-text="c.hex + (c.alias ? ' · alias' : '')"></span>
+                    <span class="block text-[12px] text-[#87867f] leading-snug mt-1 min-h-[2.4em]" x-text="c.use"></span>
+                    <span class="inline-flex mt-2 border rounded-full px-2 py-0.5 font-mono text-[10.5px]" :class="gradeClass(ratio(c.hex, '#FFFFFF'))"
+                      x-text="ratio(c.hex, '#FFFFFF').toFixed(1) + ':1 · ' + grade(ratio(c.hex, '#FFFFFF'))"></span>
+                  </span>
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
+        <aside class="border-l-4 border-clay bg-white rounded-r-xl px-6 py-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Gotcha</p>
+          <p class="m-0"><strong>signal-500 is only 3.0:1 on white</strong>, which passes for large text and fails for body copy. Use it for badges and fills.
+            For orange text on light backgrounds, use <code class="font-mono text-[13px]">signal-600</code> (4.6:1, AA). Six components in
+            <code class="font-mono text-[13px]">apps/ops</code> currently set 13px text in signal-500.</p>
+        </aside>
+      </section>
+
+      <!-- 02 Type -->
+      <section class="mb-14 scroll-mt-20" id="type">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Type scale</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">One family (<code class="font-mono text-[13px]">--hb-font-sans</code>, system UI stack) plus mono for container IDs and weights. Specimens use real tracker copy.</p>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl divide-y divide-[#f0eee6] overflow-hidden">
+          <template x-for="t in type" :key="t.token">
+            <div class="grid md:grid-cols-[1fr_200px_auto] gap-x-6 gap-y-2 items-baseline px-5 py-4">
+              <p class="m-0 text-[#16191D] truncate min-w-0" :class="t.cls" x-text="t.sample"></p>
+              <p class="m-0 font-mono text-xs text-[#87867f]">
+                <span class="text-[#141413]" x-text="'text-' + t.token"></span><br>
+                <span x-text="t.size + ' / ' + t.lh + ' · ' + t.weight + (t.track !== '0' ? ' · ' + t.track : '')"></span>
+              </p>
+              <button type="button" @click="copy(typeCss(t), 'Copied text-' + t.token + ' CSS')"
+                class="justify-self-start font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Copy CSS</button>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- 03 Space -->
+      <section class="mb-14 scroll-mt-20" id="space">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Spacing</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">A 4-based scale with a 2px hairline step. Bars are drawn at true size. Click a step to copy its variable.</p>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl px-5 py-6 overflow-x-auto">
+          <div class="flex items-end gap-6 min-w-[560px]">
+            <template x-for="s in space" :key="s[0]">
+              <button type="button" @click="copy('var(--hb-space-' + s[0] + ')', 'Copied --hb-space-' + s[0])"
+                class="flex flex-col items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-[#f0eee6] focus-visible:outline-2 focus-visible:outline-clay">
+                <span class="block bg-clay rounded-[2px]" :style="{ width: s[1] + 'px', height: s[1] + 'px' }"></span>
+                <span class="font-mono text-[11px] text-[#141413] text-center leading-tight"><span x-text="s[1]"></span><span class="block text-[#87867f]" x-text="'space-' + s[0]"></span></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 Shape -->
+      <section class="mb-14 scroll-mt-20" id="shape">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Radius &amp; elevation</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Elevation is only used for things that float: menus, the map popover, toasts. Cards stay flat with a fog-200 border.</p>
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl p-5 flex flex-wrap gap-4">
+            <template x-for="r in radius" :key="r[0]">
+              <button type="button" @click="copy('var(--hb-radius-' + r[0] + ')', 'Copied --hb-radius-' + r[0])"
+                class="w-[96px] h-[76px] bg-white border-2 border-[#3A78B5] flex flex-col justify-end items-start p-2.5 font-mono text-[11px] text-[#141413] hover:bg-[#DCE8F4] focus-visible:outline-2 focus-visible:outline-clay"
+                :style="{ borderRadius: Math.min(r[1], 38) + 'px' }">
+                <span x-text="r[1] === 999 ? '999px' : r[1] + 'px'"></span><span class="text-[#87867f]" x-text="'radius-' + r[0]"></span>
+              </button>
+            </template>
+          </div>
+          <div class="bg-[#F5F7F9] border border-[#d1cfc5] rounded-xl p-5 flex flex-wrap gap-5">
+            <template x-for="s in shadow" :key="s[0]">
+              <button type="button" @click="copy('var(--hb-shadow-' + s[0] + ')', 'Copied --hb-shadow-' + s[0])"
+                class="w-[132px] h-[84px] bg-white rounded-[10px] flex flex-col justify-end items-start p-3 font-mono text-[11px] text-[#141413] text-left focus-visible:outline-2 focus-visible:outline-clay"
+                :style="{ boxShadow: s[1] }">
+                <span x-text="'shadow-' + s[0]"></span><span class="text-[#87867f] text-[10px] leading-tight" x-text="s[1].replace('rgba(22,25,29,', 'ink / ').replace(')', '')"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 Components -->
+      <section class="mb-14 scroll-mt-20" id="components">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Core components, built from the tokens</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Default props only. For every intent and state of one component, ask for a variant sheet instead.</p>
+        <div class="grid md:grid-cols-2 gap-6">
+          <div>
+            <p class="font-mono text-xs text-[#87867f] m-0 mb-2">&lt;Button /&gt; · src/components/Button.tsx</p>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5 flex flex-wrap gap-3 items-center">
+              <button type="button" class="h-9 px-4 rounded-[6px] bg-[#3A78B5] hover:bg-[#24507E] text-white text-[14px] font-semibold">Book pickup</button>
+              <button type="button" class="h-9 px-4 rounded-[6px] bg-white border border-[#DDE1E6] text-[#16191D] text-[14px] font-semibold hover:bg-[#F5F7F9]">Export CSV</button>
+              <button type="button" class="h-9 px-3 rounded-[6px] text-[#4A5059] text-[14px] font-semibold hover:bg-[#F5F7F9]">Skip</button>
+              <button type="button" class="h-9 px-4 rounded-[6px] bg-[#C0392B] text-white text-[14px] font-semibold">Cancel booking</button>
+            </div>
+          </div>
+          <div>
+            <p class="font-mono text-xs text-[#87867f] m-0 mb-2">&lt;TextField /&gt; · src/components/TextField.tsx</p>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5 flex flex-wrap gap-3 items-center">
+              <input type="text" placeholder="Container or B/L number" aria-label="Search placeholder example" class="h-9 w-full sm:w-[220px] px-3 rounded-[6px] border border-[#DDE1E6] text-[14px] text-[#16191D] placeholder:text-[#8A9099] outline-none focus:border-[#3A78B5] focus:ring-4 focus:ring-[#DCE8F4]">
+              <input type="text" value="MSKU 482137-0" aria-label="Filled example" class="h-9 w-full sm:w-[180px] px-3 rounded-[6px] border border-[#DDE1E6] font-mono text-[13px] text-[#16191D] outline-none focus:border-[#3A78B5] focus:ring-4 focus:ring-[#DCE8F4]">
+            </div>
+          </div>
+          <div>
+            <p class="font-mono text-xs text-[#87867f] m-0 mb-2">&lt;StatusPill /&gt; · src/components/StatusPill.tsx</p>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5 flex flex-wrap gap-2.5 items-center">
+              <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[#F5F7F9] text-[#4A5059] text-[12px] font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-[#8A9099]"></span>Booked</span>
+              <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[#DCE8F4] text-[#24507E] text-[12px] font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-[#3A78B5]"></span>In transit</span>
+              <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[#FCE7DA] text-[#C2531F] text-[12px] font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-[#E8743B]"></span>Delayed</span>
+              <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[#E3F1E8] text-[#2F7D4F] text-[12px] font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-[#2F7D4F]"></span>Delivered</span>
+              <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[#F7E3E0] text-[#C0392B] text-[12px] font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-[#C0392B]"></span>Exception</span>
+            </div>
+          </div>
+          <div>
+            <p class="font-mono text-xs text-[#87867f] m-0 mb-2">&lt;ShipmentRow /&gt; · src/components/ShipmentRow.tsx</p>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+              <div class="flex items-center gap-3 border border-[#DDE1E6] rounded-[10px] px-4 py-3 bg-white">
+                <div class="min-w-0 flex-1">
+                  <p class="m-0 text-[15px] font-semibold text-[#16191D] truncate">Rotterdam → Felixstowe</p>
+                  <p class="m-0 font-mono text-[12px] text-[#8A9099] truncate">ACM-48213-NL · ETA Thu 14:00</p>
+                </div>
+                <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[#DCE8F4] text-[#24507E] text-[12px] font-semibold shrink-0">In transit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 06 Drift -->
+      <section class="mb-14 scroll-mt-20" id="drift">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">06</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Drift: raw values that bypass the tokens</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Found by grepping <code class="font-mono text-[13px]">apps/</code> for hex, px, and shadow literals. Fix these before the tracker copies them.</p>
+        <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+          <table class="w-full text-sm border-collapse min-w-[640px]">
+            <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+              <tr><th class="px-4 py-2.5 font-medium">Literal</th><th class="px-4 py-2.5 font-medium">Hits</th><th class="px-4 py-2.5 font-medium">Closest token</th><th class="px-4 py-2.5 font-medium">Example location</th></tr>
+            </thead>
+            <tbody class="divide-y divide-[#f0eee6]">
+              <tr><td class="px-4 py-3 font-mono text-[12.5px]"><span class="inline-block w-3 h-3 rounded-sm align-[-1px] mr-1.5 bg-[#14314F]"></span>#14314F</td><td class="px-4 py-3 font-mono">9 files</td><td class="px-4 py-3 font-mono text-olive">harbor-900 (ΔE 0.4)</td><td class="px-4 py-3 font-mono text-xs text-[#87867f]">apps/portal/src/Header.tsx:22</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-[12.5px]">padding: 10px</td><td class="px-4 py-3 font-mono">23</td><td class="px-4 py-3 font-mono text-clay-dark">none · between space-3 and space-4</td><td class="px-4 py-3 font-mono text-xs text-[#87867f]">apps/portal/src/tables/*.module.css</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-[12.5px]">0 2px 6px rgba(0,0,0,.2)</td><td class="px-4 py-3 font-mono">7</td><td class="px-4 py-3 font-mono text-clay-dark">shadow-md (lighter, warmer)</td><td class="px-4 py-3 font-mono text-xs text-[#87867f]">apps/ops/src/MapPopover.tsx:61</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-[12.5px]">font-size: 17px</td><td class="px-4 py-3 font-mono">5</td><td class="px-4 py-3 font-mono text-rust">none · scale jumps 15 → 22</td><td class="px-4 py-3 font-mono text-xs text-[#87867f]">apps/ops/src/Dispatch.tsx:118</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 07 Export -->
+      <section class="mb-6 scroll-mt-20" id="export">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">07</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Export</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">The same tokens in three shapes. Paste the Tailwind block into a prototype, or the JSON into a prompt.</p>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+          <div class="flex flex-wrap items-center gap-1 border-b border-[#d1cfc5] px-3" role="tablist">
+            <template x-for="t in [['css','tokens.css'],['json','tokens.json'],['tw','@theme (Tailwind v4)']]" :key="t[0]">
+              <button type="button" role="tab" @click="exportTab = t[0]" :aria-selected="exportTab === t[0]"
+                :class="exportTab === t[0] ? 'border-clay text-[#141413]' : 'border-transparent text-[#87867f]'"
+                class="font-mono text-xs px-3 py-2.5 border-b-2 -mb-px hover:text-[#141413] focus-visible:outline-2 focus-visible:outline-clay" x-text="t[1]"></button>
+            </template>
+            <span class="flex-1"></span>
+            <button type="button" @click="copy(exportText, 'Copied ' + exportText.split('\n').length + ' lines')"
+              class="my-2 bg-[#141413] text-ivory font-mono text-xs rounded-lg px-3 py-1.5 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-clay">Copy</button>
+          </div>
+          <div class="bg-[#141413] px-5 py-4 overflow-auto max-h-[360px]">
+            <pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed" x-text="exportText"></pre>
+          </div>
+        </div>
+      </section>
+
+      <div x-show="toast" x-cloak x-transition.opacity role="status" aria-live="polite"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 bg-[#141413] text-ivory font-mono text-xs rounded-full px-4 py-2 shadow-lg">
+        <span class="text-[#a3b37f]">✓</span> <span x-text="toast"></span>
+      </div>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/design-system.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

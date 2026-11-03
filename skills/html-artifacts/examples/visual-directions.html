@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shipment tracking card — four visual directions</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+      @custom-variant dark (&:where(.dark, .dark *));
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      @keyframes ping-dot { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(2.4); opacity: 0; } }
+      .ping::after { content: ""; position: absolute; inset: 0; border-radius: 9999px; background: #d97757; animation: ping-dot 1.6s ease-out infinite; }
+      @media (prefers-reduced-motion: reduce) { .ping::after { animation: none; } }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-4 sm:px-6 py-0" x-data="directions()">
+    <!-- Sticky toolbar: surface toggle -->
+    <div class="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5]">
+      <div class="mx-auto max-w-[1360px] flex flex-wrap gap-3 items-center">
+        <span class="font-mono text-xs text-[#141413]">Acme Freight · design exploration</span>
+        <span class="flex-1"></span>
+        <span class="font-mono text-xs text-[#87867f]">Surface</span>
+        <div role="group" aria-label="Preview surface" class="inline-flex border border-[#d1cfc5] rounded-lg overflow-hidden bg-white">
+          <button type="button" @click="dark = false" :aria-pressed="!dark"
+            :class="!dark ? 'bg-[#141413] text-ivory' : 'text-[#3d3d3a] hover:bg-[#f0eee6]'"
+            class="font-mono text-xs px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-clay">Light</button>
+          <button type="button" @click="dark = true" :aria-pressed="dark"
+            :class="dark ? 'bg-[#141413] text-ivory' : 'text-[#3d3d3a] hover:bg-[#f0eee6]'"
+            class="font-mono text-xs px-3 py-1.5 border-l border-[#d1cfc5] focus-visible:outline-2 focus-visible:outline-clay">Dark</button>
+        </div>
+      </div>
+    </div>
+
+    <main class="mx-auto max-w-[1360px] pt-12 pb-14">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Exploration · customer portal · shipment card</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Four directions for the shipment tracking card
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          I need the shipment status card for the customer portal, but I can't picture it. Render four genuinely different
+          directions with the same shipment so I can react to them, and let me check each on a dark surface too.
+        </div>
+        <p class="mt-5 mb-0 max-w-[720px]">
+          Every frame renders the <strong class="text-[#141413]">same shipment</strong>, so the only variable is the design.
+          Tap <span class="font-mono text-[12px] text-olive">steal</span> or <span class="font-mono text-[12px] text-rust">skip</span>
+          under any frame, pick a direction at the bottom, and copy the reply that assembles itself.
+        </p>
+      </header>
+
+      <!-- Shared dataset strip -->
+      <div class="mb-10 border border-dashed border-[#d1cfc5] rounded-xl bg-white px-5 py-3.5 font-mono text-[12px] text-[#3d3d3a] flex flex-wrap gap-x-5 gap-y-1.5">
+        <span class="text-[#87867f] uppercase tracking-[0.06em] text-[11px]">Shared data</span>
+        <span>ACM-48213</span><span>Rotterdam → Denver</span><span>3 pallets · 812 kg</span>
+        <span>4 of 6 milestones</span><span>last scan: Chicago rail hub, 2 h ago</span>
+        <span>ETA Thu 14 Nov, 10:00–14:00</span><span class="text-clay-dark">1 exception: customs hold +6 h (cleared)</span>
+      </div>
+
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-7 mb-12" aria-label="Directions">
+
+        <!-- D1 · Progress rail -->
+        <article class="bg-white border rounded-xl flex flex-col transition-shadow" :class="pick === 'd1' ? 'border-clay ring-2 ring-[rgba(217,119,87,0.35)]' : 'border-[#d1cfc5]'">
+          <header class="px-5 sm:px-6 pt-5 pb-4">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-1">Direction 1 / 4</p>
+            <h2 class="font-serif font-medium text-[22px] text-[#141413] m-0 mb-1">Progress rail</h2>
+            <p class="text-sm italic text-[#87867f] m-0">“A shipment is a journey. Show where it is on the line, and nothing else competes.”</p>
+          </header>
+          <div class="mx-5 sm:mx-6 border border-[#d1cfc5] rounded-lg overflow-hidden">
+            <div class="bg-[#f0eee6] px-3 py-1.5 font-mono text-[11px] text-[#87867f] flex items-center gap-1.5 truncate">
+              <span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5] mr-1.5"></span>portal.acme-freight.com/shipments/ACM-48213
+            </div>
+            <div class="p-5 sm:p-7 min-h-[300px] flex items-center justify-center transition-colors" :class="dark ? 'dark bg-[#1f1e1c]' : 'bg-[#f7f6f2]'">
+              <div class="w-full max-w-[440px] bg-white dark:bg-[#2b2a27] rounded-2xl shadow-sm border border-[#e6e3da] dark:border-[#3d3c38] p-5">
+                <div class="flex items-start justify-between gap-3 mb-6">
+                  <div>
+                    <p class="font-mono text-[11px] text-[#87867f] m-0">ACM-48213</p>
+                    <p class="text-[15px] font-semibold text-[#141413] dark:text-[#f0eee6] m-0">Rotterdam → Denver</p>
+                  </div>
+                  <span class="shrink-0 font-mono text-[11px] rounded-full px-2.5 py-1 bg-[rgba(217,119,87,0.12)] text-clay-dark dark:text-clay border border-[rgba(217,119,87,0.45)]">ETA Thu 14 Nov</span>
+                </div>
+                <div class="relative grid grid-cols-6">
+                  <div class="absolute left-[8.33%] right-[8.33%] top-[7px] h-[2px] bg-[#d1cfc5] dark:bg-[#4a4944]"></div>
+                  <div class="absolute left-[8.33%] w-[58.3%] top-[7px] h-[2px] bg-olive"></div>
+                  <div class="flex flex-col items-center gap-2 relative"><span class="size-4 rounded-full bg-olive"></span><span class="text-[10.5px] text-[#87867f]">Pickup</span></div>
+                  <div class="flex flex-col items-center gap-2 relative"><span class="size-4 rounded-full bg-olive"></span><span class="text-[10.5px] text-[#87867f]">Sailed</span></div>
+                  <div class="flex flex-col items-center gap-2 relative"><span class="size-4 rounded-full bg-olive"></span><span class="text-[10.5px] text-[#87867f]">Newark</span></div>
+                  <div class="flex flex-col items-center gap-2 relative"><span class="size-4 rounded-full bg-olive"></span><span class="text-[10.5px] text-[#87867f]">Customs</span></div>
+                  <div class="flex flex-col items-center gap-2 relative"><span class="ping relative size-4 rounded-full bg-clay"></span><span class="text-[10.5px] font-semibold text-[#141413] dark:text-[#f0eee6]">Rail</span></div>
+                  <div class="flex flex-col items-center gap-2 relative"><span class="size-4 rounded-full bg-white dark:bg-[#2b2a27] border-2 border-[#d1cfc5] dark:border-[#4a4944]"></span><span class="text-[10.5px] text-[#87867f]">Delivered</span></div>
+                </div>
+                <p class="text-[13px] text-[#3d3d3a] dark:text-[#c9c7bd] mt-5 mb-0">On the rail to Denver · last scan Chicago, 2 h ago</p>
+              </div>
+            </div>
+          </div>
+          <p class="px-5 sm:px-6 pt-4 m-0 text-sm">The rail answers "how far along?" before the reader reads a word. Weakest on phones, where six labels get cramped.</p>
+          <div class="px-5 sm:px-6 py-5 mt-auto flex flex-wrap gap-2">
+            <template x-for="c in chipsFor('d1')" :key="c.id">
+              <button type="button" @click="toggle(c.id)" :aria-pressed="isOn(c.id)" :class="chipClass(c)"
+                class="font-mono text-[11.5px] border rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="(isOn(c.id) ? '✓ ' : '') + c.kind + ' · ' + c.text"></button>
+            </template>
+          </div>
+        </article>
+
+        <!-- D2 · Editorial ETA -->
+        <article class="bg-white border rounded-xl flex flex-col transition-shadow" :class="pick === 'd2' ? 'border-clay ring-2 ring-[rgba(217,119,87,0.35)]' : 'border-[#d1cfc5]'">
+          <header class="px-5 sm:px-6 pt-5 pb-4">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-1">Direction 2 / 4</p>
+            <h2 class="font-serif font-medium text-[22px] text-[#141413] m-0 mb-1">Editorial ETA</h2>
+            <p class="text-sm italic text-[#87867f] m-0">“Customers ask one question: when. Answer it in type big enough to read across a warehouse.”</p>
+          </header>
+          <div class="mx-5 sm:mx-6 border border-[#d1cfc5] rounded-lg overflow-hidden">
+            <div class="bg-[#f0eee6] px-3 py-1.5 font-mono text-[11px] text-[#87867f] flex items-center gap-1.5 truncate">
+              <span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5] mr-1.5"></span>portal.acme-freight.com/shipments/ACM-48213
+            </div>
+            <div class="p-5 sm:p-7 min-h-[300px] flex items-center justify-center transition-colors" :class="dark ? 'dark bg-[#1f1e1c]' : 'bg-[#f7f6f2]'">
+              <div class="w-full max-w-[440px] px-1">
+                <p class="font-mono text-[11px] uppercase tracking-[0.1em] text-[#87867f] m-0 mb-1">Arriving</p>
+                <p class="font-serif text-[clamp(44px,8vw,64px)] leading-none text-[#141413] dark:text-[#f0eee6] m-0">Thursday</p>
+                <p class="font-serif text-[18px] text-[#3d3d3a] dark:text-[#c9c7bd] mt-2 mb-5">14 November, between 10:00 and 14:00</p>
+                <div class="h-px bg-[#d1cfc5] dark:bg-[#3d3c38] mb-4"></div>
+                <p class="text-[14.5px] text-[#3d3d3a] dark:text-[#c9c7bd] m-0 mb-3">
+                  Your three pallets cleared customs in Newark and are on the rail to Denver. We last saw them in Chicago two hours ago.
+                </p>
+                <p class="text-[13px] m-0 text-clay-dark dark:text-clay underline underline-offset-4 decoration-1">See every scan →</p>
+              </div>
+            </div>
+          </div>
+          <p class="px-5 sm:px-6 pt-4 m-0 text-sm">Calm and readable on any device. Hides the scan history, which ops-minded customers will go looking for.</p>
+          <div class="px-5 sm:px-6 py-5 mt-auto flex flex-wrap gap-2">
+            <template x-for="c in chipsFor('d2')" :key="c.id">
+              <button type="button" @click="toggle(c.id)" :aria-pressed="isOn(c.id)" :class="chipClass(c)"
+                class="font-mono text-[11.5px] border rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="(isOn(c.id) ? '✓ ' : '') + c.kind + ' · ' + c.text"></button>
+            </template>
+          </div>
+        </article>
+
+        <!-- D3 · Dense ledger -->
+        <article class="bg-white border rounded-xl flex flex-col transition-shadow" :class="pick === 'd3' ? 'border-clay ring-2 ring-[rgba(217,119,87,0.35)]' : 'border-[#d1cfc5]'">
+          <header class="px-5 sm:px-6 pt-5 pb-4">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-1">Direction 3 / 4</p>
+            <h2 class="font-serif font-medium text-[22px] text-[#141413] m-0 mb-1">Scan ledger</h2>
+            <p class="text-sm italic text-[#87867f] m-0">“Freight managers reconcile. Give them every scan, timestamped, and let the exception stand out.”</p>
+          </header>
+          <div class="mx-5 sm:mx-6 border border-[#d1cfc5] rounded-lg overflow-hidden">
+            <div class="bg-[#f0eee6] px-3 py-1.5 font-mono text-[11px] text-[#87867f] flex items-center gap-1.5 truncate">
+              <span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5] mr-1.5"></span>portal.acme-freight.com/shipments/ACM-48213
+            </div>
+            <div class="p-4 sm:p-5 min-h-[300px] flex items-center transition-colors" :class="dark ? 'dark bg-[#1f1e1c]' : 'bg-[#f7f6f2]'">
+              <div class="w-full font-mono text-[11.5px] bg-white dark:bg-[#141413] border border-[#e6e3da] dark:border-[#3d3c38] rounded-md overflow-x-auto">
+                <div class="flex flex-wrap gap-x-4 gap-y-1 px-3 py-2 border-b border-[#e6e3da] dark:border-[#3d3c38] text-[#141413] dark:text-[#e8e6de]">
+                  <span>ACM-48213</span><span class="text-[#87867f]">3 PLT · 812 kg</span><span>ETA 11-14 10:00–14:00</span><span class="text-clay-dark dark:text-clay">EXC 1</span>
+                </div>
+                <table class="w-full min-w-[420px] border-collapse">
+                  <thead class="text-left text-[10px] uppercase tracking-[0.06em] text-[#87867f]">
+                    <tr><th class="px-3 py-1.5 font-medium">Time (local)</th><th class="px-3 py-1.5 font-medium">Location</th><th class="px-3 py-1.5 font-medium">Event</th></tr>
+                  </thead>
+                  <tbody class="text-[#3d3d3a] dark:text-[#c9c7bd]">
+                    <tr class="border-t border-[#f0eee6] dark:border-[#2b2a27]"><td class="px-3 py-1.5">11-12 08:40</td><td class="px-3 py-1.5">Chicago IL</td><td class="px-3 py-1.5 text-[#141413] dark:text-[#f0eee6]">Departed rail hub</td></tr>
+                    <tr class="border-t border-[#f0eee6] dark:border-[#2b2a27]"><td class="px-3 py-1.5">11-11 22:15</td><td class="px-3 py-1.5">Newark NJ</td><td class="px-3 py-1.5">Loaded to rail</td></tr>
+                    <tr class="border-t border-[#f0eee6] dark:border-[#2b2a27] bg-[rgba(217,119,87,0.12)]"><td class="px-3 py-1.5">11-11 16:02</td><td class="px-3 py-1.5">Newark NJ</td><td class="px-3 py-1.5 text-clay-dark dark:text-clay">Customs hold released · +6 h</td></tr>
+                    <tr class="border-t border-[#f0eee6] dark:border-[#2b2a27]"><td class="px-3 py-1.5">11-11 09:47</td><td class="px-3 py-1.5">Newark NJ</td><td class="px-3 py-1.5">Discharged from vessel</td></tr>
+                    <tr class="border-t border-[#f0eee6] dark:border-[#2b2a27]"><td class="px-3 py-1.5">11-03 05:30</td><td class="px-3 py-1.5">Rotterdam NL</td><td class="px-3 py-1.5">Sailed · MV Nordlys</td></tr>
+                    <tr class="border-t border-[#f0eee6] dark:border-[#2b2a27]"><td class="px-3 py-1.5">11-02 14:10</td><td class="px-3 py-1.5">Rotterdam NL</td><td class="px-3 py-1.5">Picked up</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <p class="px-5 sm:px-6 pt-4 m-0 text-sm">Nothing is hidden and the exception is impossible to miss. Reads like a back-office tool, not a customer surface.</p>
+          <div class="px-5 sm:px-6 py-5 mt-auto flex flex-wrap gap-2">
+            <template x-for="c in chipsFor('d3')" :key="c.id">
+              <button type="button" @click="toggle(c.id)" :aria-pressed="isOn(c.id)" :class="chipClass(c)"
+                class="font-mono text-[11.5px] border rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="(isOn(c.id) ? '✓ ' : '') + c.kind + ' · ' + c.text"></button>
+            </template>
+          </div>
+        </article>
+
+        <!-- D4 · Route illustration -->
+        <article class="bg-white border rounded-xl flex flex-col transition-shadow" :class="pick === 'd4' ? 'border-clay ring-2 ring-[rgba(217,119,87,0.35)]' : 'border-[#d1cfc5]'">
+          <header class="px-5 sm:px-6 pt-5 pb-4">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-[#87867f] m-0 mb-1">Direction 4 / 4</p>
+            <h2 class="font-serif font-medium text-[22px] text-[#141413] m-0 mb-1">Route sketch</h2>
+            <p class="text-sm italic text-[#87867f] m-0">“Distance is abstract. Draw the trip so the remaining bit looks short and friendly.”</p>
+          </header>
+          <div class="mx-5 sm:mx-6 border border-[#d1cfc5] rounded-lg overflow-hidden">
+            <div class="bg-[#f0eee6] px-3 py-1.5 font-mono text-[11px] text-[#87867f] flex items-center gap-1.5 truncate">
+              <span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5]"></span><span class="size-2 rounded-full bg-[#d1cfc5] mr-1.5"></span>portal.acme-freight.com/shipments/ACM-48213
+            </div>
+            <div class="p-5 sm:p-7 min-h-[300px] flex items-center justify-center transition-colors" :class="dark ? 'dark bg-[#1f1e1c]' : 'bg-[#f7f6f2]'">
+              <div class="w-full max-w-[440px] bg-white dark:bg-[#2b2a27] rounded-3xl border border-[#e6e3da] dark:border-[#3d3c38] p-5">
+                <svg viewBox="0 0 400 130" class="w-full h-auto" role="img" aria-label="Route from Rotterdam to Denver, about three quarters complete, currently past Chicago">
+                  <path d="M 24 96 C 110 10, 190 10, 250 60 S 340 110, 376 70" fill="none" stroke="#d1cfc5" stroke-width="4" stroke-dasharray="2 9" stroke-linecap="round" />
+                  <path d="M 24 96 C 110 10, 190 10, 250 60 S 300 96, 312 92" fill="none" stroke="#788c5d" stroke-width="4" stroke-linecap="round" />
+                  <circle cx="24" cy="96" r="7" fill="#788c5d" />
+                  <circle cx="376" cy="70" r="8" fill="none" stroke="#d97757" stroke-width="3" />
+                  <circle cx="312" cy="92" r="11" fill="#d97757" />
+                  <rect x="306" y="88" width="12" height="7" rx="1.5" fill="#faf9f5" />
+                  <text x="6" y="122" text-anchor="start" font-family="ui-monospace, monospace" font-size="11" fill="#87867f">Rotterdam</text>
+                  <text x="250" y="40" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" fill="#87867f">Newark</text>
+                  <text x="312" y="120" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" fill="#d97757">Chicago</text>
+                  <text x="376" y="50" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" fill="#87867f">Denver</text>
+                </svg>
+                <p class="text-[17px] font-semibold text-[#141413] dark:text-[#f0eee6] mt-3 mb-1">About 1,600 km to go</p>
+                <p class="text-[13.5px] text-[#3d3d3a] dark:text-[#c9c7bd] m-0">Your pallets are rolling through the Midwest. See you Thursday between 10 and 2!</p>
+              </div>
+            </div>
+          </div>
+          <p class="px-5 sm:px-6 pt-4 m-0 text-sm">Warm and memorable, and the remaining distance feels concrete. The curve is decorative and not real geography, which some customers will read as wrong.</p>
+          <div class="px-5 sm:px-6 py-5 mt-auto flex flex-wrap gap-2">
+            <template x-for="c in chipsFor('d4')" :key="c.id">
+              <button type="button" @click="toggle(c.id)" :aria-pressed="isOn(c.id)" :class="chipClass(c)"
+                class="font-mono text-[11.5px] border rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="(isOn(c.id) ? '✓ ' : '') + c.kind + ' · ' + c.text"></button>
+            </template>
+          </div>
+        </article>
+      </section>
+
+      <!-- Compare at a glance -->
+      <section class="mb-12" aria-labelledby="glance">
+        <div class="flex items-baseline gap-3 mb-4">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">→</span>
+          <h2 id="glance" class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">At a glance</h2>
+        </div>
+        <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+          <table class="w-full min-w-[640px] text-sm border-collapse">
+            <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+              <tr><th class="px-4 py-2.5 font-medium">Direction</th><th class="px-4 py-2.5 font-medium">Answers first</th><th class="px-4 py-2.5 font-medium">Density</th><th class="px-4 py-2.5 font-medium">Phone at 360px</th><th class="px-4 py-2.5 font-medium">Dark surface</th></tr>
+            </thead>
+            <tbody class="divide-y divide-[#f0eee6]">
+              <tr><td class="px-4 py-3 font-mono text-xs">D1 · rail</td><td class="px-4 py-3">How far along</td><td class="px-4 py-3">Low</td><td class="px-4 py-3 text-clay-dark">Labels cramp</td><td class="px-4 py-3 text-olive">Holds up</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">D2 · editorial</td><td class="px-4 py-3">When it arrives</td><td class="px-4 py-3">Low</td><td class="px-4 py-3 text-olive">Best</td><td class="px-4 py-3 text-olive">Holds up</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">D3 · ledger</td><td class="px-4 py-3">What happened</td><td class="px-4 py-3">High</td><td class="px-4 py-3 text-rust">Scrolls sideways</td><td class="px-4 py-3 text-olive">Holds up</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">D4 · route</td><td class="px-4 py-3">How far to go</td><td class="px-4 py-3">Medium</td><td class="px-4 py-3 text-olive">Good</td><td class="px-4 py-3 text-clay-dark">Map strokes faint</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Reply assembler -->
+      <section class="sticky bottom-4 z-10 bg-white border border-[#141413] rounded-xl p-4 sm:p-5 shadow-lg" aria-labelledby="reply-h">
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <h2 id="reply-h" class="m-0 font-serif font-medium text-[19px] text-[#141413]">Your reply</h2>
+          <div role="radiogroup" aria-label="Pick a direction" class="flex flex-wrap gap-1.5">
+            <template x-for="d in dirs" :key="d.id">
+              <button type="button" role="radio" @click="pick = d.id" :aria-checked="pick === d.id"
+                :class="pick === d.id ? 'bg-[#141413] text-ivory border-[#141413]' : 'bg-white text-[#3d3d3a] border-[#d1cfc5] hover:border-[#141413]'"
+                class="font-mono text-[11.5px] border rounded-lg px-2.5 py-1 focus-visible:outline-2 focus-visible:outline-clay" x-text="d.label"></button>
+            </template>
+          </div>
+          <span class="flex-1"></span>
+          <span class="font-mono text-[11px] text-[#87867f]" x-text="on.length + ' chips selected'"></span>
+          <button type="button" @click="on = []" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Clear chips</button>
+          <button type="button" @click="copy()" class="font-mono text-xs bg-[#141413] text-ivory rounded-lg px-3 py-1.5 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-clay">
+            <span x-show="!copied">Copy reply</span><span x-show="copied" x-cloak>Copied ✓</span>
+          </button>
+        </div>
+        <pre class="m-0 font-mono text-[12.5px] bg-[#f0eee6] rounded-lg p-3 whitespace-pre-wrap max-h-[160px] overflow-y-auto" x-text="reply"></pre>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/visual-directions.md</span>
+      </footer>
+    </main>
+
+    <script>
+      function directions() {
+        return {
+          dark: false,
+          pick: 'd2',
+          copied: false,
+          dirs: [
+            { id: 'd1', label: 'D1 · progress rail' },
+            { id: 'd2', label: 'D2 · editorial ETA' },
+            { id: 'd3', label: 'D3 · scan ledger' },
+            { id: 'd4', label: 'D4 · route sketch' },
+          ],
+          chips: [
+            { id: 'd1-rail', dir: 'd1', kind: 'steal', text: 'the six-dot progress rail' },
+            { id: 'd1-eta', dir: 'd1', kind: 'steal', text: 'ETA pill in the card header' },
+            { id: 'd1-labels', dir: 'd1', kind: 'skip', text: 'tiny step labels' },
+            { id: 'd2-weekday', dir: 'd2', kind: 'steal', text: 'the big serif weekday' },
+            { id: 'd2-sentence', dir: 'd2', kind: 'steal', text: 'one plain-language status sentence' },
+            { id: 'd2-hidden', dir: 'd2', kind: 'skip', text: 'hiding scans behind a link' },
+            { id: 'd3-exc', dir: 'd3', kind: 'steal', text: 'exception row tinted clay' },
+            { id: 'd3-ledger', dir: 'd3', kind: 'steal', text: 'full scan ledger as an expandable' },
+            { id: 'd3-mono', dir: 'd3', kind: 'skip', text: 'all-mono type for customers' },
+            { id: 'd4-km', dir: 'd4', kind: 'steal', text: 'the "km to go" line' },
+            { id: 'd4-map', dir: 'd4', kind: 'skip', text: 'fake-geography curve' },
+            { id: 'd4-tone', dir: 'd4', kind: 'skip', text: 'exclamation-mark tone' },
+          ],
+          on: ['d1-rail', 'd2-sentence', 'd3-exc'],
+          chipsFor(dir) { return this.chips.filter(c => c.dir === dir); },
+          isOn(id) { return this.on.includes(id); },
+          toggle(id) { this.on = this.isOn(id) ? this.on.filter(x => x !== id) : [...this.on, id]; },
+          chipClass(c) {
+            if (!this.isOn(c.id)) return 'bg-white border-[#d1cfc5] text-[#3d3d3a] hover:border-[#141413]';
+            return c.kind === 'steal'
+              ? 'bg-[rgba(120,140,93,0.12)] border-[rgba(120,140,93,0.6)] text-olive'
+              : 'bg-[rgba(176,74,63,0.10)] border-[rgba(176,74,63,0.5)] text-rust';
+          },
+          tag(c) { return c.text + ' (' + c.dir.toUpperCase() + ')'; },
+          get reply() {
+            const d = this.dirs.find(x => x.id === this.pick);
+            const picked = this.chips.filter(c => this.isOn(c.id));
+            const steals = picked.filter(c => c.kind === 'steal').map(c => this.tag(c));
+            const skips = picked.filter(c => c.kind === 'skip').map(c => this.tag(c));
+            const lines = ['Go with ' + (d ? d.label : '[pick a direction]') + (this.dark ? ' (I checked it on dark).' : '.')];
+            if (steals.length) lines.push('Steal: ' + steals.join('; ') + '.');
+            if (skips.length) lines.push('Skip: ' + skips.join('; ') + '.');
+            if (!steals.length && !skips.length) lines.push('(Tap steal/skip chips under each frame to add details.)');
+            lines.push('Then build it as src/portal/ShipmentCard.tsx against GET /v2/shipments/:id, light and dark.');
+            return lines.join('\n');
+          },
+          copy() {
+            const text = this.reply;
+            const done = () => { this.copied = true; setTimeout(() => this.copied = false, 1400); };
+            const fallback = () => {
+              const ta = document.createElement('textarea');
+              ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+              document.body.appendChild(ta); ta.select();
+              try { document.execCommand('copy'); done(); } catch (e) {}
+              ta.remove();
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+            else fallback();
+          },
+        };
+      }
+    </script>
+  </body>
+</html>

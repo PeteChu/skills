@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PR #904 — Stream build logs over SSE</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      .kw { color: #d97757; } .str { color: #a3b37f; } .fn { color: #c9b98a; } .cm { color: #87867f; }
+      .gone { color: #e08a7f; text-decoration: line-through; text-decoration-color: rgba(224,138,127,.6); }
+      .new { background: rgba(120,140,93,.22); border-radius: 3px; }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+      .bullets li::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 10px; vertical-align: 2px; background: #87867f; }
+      .bullets.after li::before { background: #788c5d; }
+      .bullets.before li::before { background: #b04a3f; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-5 sm:px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Pull request · acme/ci</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(30px,5vw,42px)] leading-[1.12] tracking-tight m-0 mb-4">
+          #904: Stream build logs over SSE instead of polling
+        </h1>
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[12px] mb-6">
+          <span>6 files</span>
+          <span><span class="text-olive">+304</span> / <span class="text-rust">−105</span></span>
+          <span class="border border-[#d1cfc5] bg-white rounded-md px-2 py-0.5">nh/log-sse → main</span>
+          <span>author <span class="text-[#141413]">Noor Haddad</span></span>
+          <span class="text-[#87867f]">flag: log_stream_sse</span>
+        </div>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Write up PR #904 for reviewers. Explain why we're doing it, show before vs. after, walk through each file with the why,
+          and tell them exactly where to focus. Priya and Sam haven't touched the log pipeline since it was built.
+        </div>
+      </header>
+
+      <div class="grid lg:grid-cols-[minmax(0,1fr)_210px] gap-10 items-start">
+        <div class="min-w-0">
+          <!-- TL;DR -->
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-6 grid md:grid-cols-[100px_1fr] gap-3 md:gap-4 mb-14">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-clay-dark m-0 pt-1">TL;DR</p>
+            <p class="m-0 text-[15.5px]">The build page polled <code class="font-mono text-[13.5px]">GET /builds/:id/log?after=N</code> every 2 s. A log line could take up to 2 s to appear, and at peak 600 open tabs generated 18k Postgres reads a minute. This PR pushes lines over <strong class="text-[#141413]">Server-Sent Events</strong> fed by Redis pub/sub. Lines arrive in about 140 ms, and database reads drop by about 93%. Polling stays as an automatic fallback.</p>
+          </div>
+
+          <!-- Why -->
+          <section id="why" class="mb-14 scroll-mt-6">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Why</h2>
+            </div>
+            <p class="max-w-[720px] m-0 mb-6">Polling was fine when builds were short and few people watched them. Two things changed: the monorepo's test stage now prints for 11 minutes, and release days put 600 people on build pages at once. Each tab asks "anything new?" 30 times a minute, and the answer is usually no.</p>
+
+            <div class="grid md:grid-cols-2 gap-5 mb-6">
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0 mb-3">Before</p>
+                <ul class="bullets before list-none m-0 p-0 space-y-2 text-[14.5px]">
+                  <li>Browser polls every 2 s with <code class="font-mono text-[13px]">setInterval</code></li>
+                  <li>Every poll is a Postgres range read on <code class="font-mono text-[13px]">log_chunks</code></li>
+                  <li>Lines appear 0–2 s late, in bursts</li>
+                  <li>Background tabs keep polling (throttled to 1/min by the browser)</li>
+                </ul>
+              </div>
+              <div class="bg-white border border-olive rounded-xl p-5">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-3">After</p>
+                <ul class="bullets after list-none m-0 p-0 space-y-2 text-[14.5px]">
+                  <li>One <code class="font-mono text-[13px]">EventSource</code> per tab, server pushes lines</li>
+                  <li>Runner publishes chunks to Redis, and the stream fans them out</li>
+                  <li>Postgres is read once on connect (backfill), then never</li>
+                  <li>Reconnects resume from <code class="font-mono text-[13px]">Last-Event-ID</code> with no gaps or dupes</li>
+                </ul>
+              </div>
+            </div>
+
+            <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl p-5 mb-6">
+              <div class="overflow-x-auto">
+                <svg viewBox="0 0 760 210" class="w-full min-w-[620px] h-auto" role="img" aria-label="Ten seconds of log lines: with polling, lines appear only at the next 2-second tick; with streaming, each appears about 0.1 seconds after it is written">
+                  <defs>
+                    <marker id="a-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b04a3f" /></marker>
+                  </defs>
+                  <g font-family="ui-monospace, monospace" font-size="11">
+                    <text x="0" y="52" fill="#141413">polling</text>
+                    <text x="0" y="66" fill="#87867f" font-size="10">every 2 s</text>
+                    <line x1="100" y1="58" x2="740" y2="58" stroke="#d1cfc5" stroke-width="2" />
+                    <!-- poll ticks at 0,2,4,6,8,10 s → x=100+64*t -->
+                    <line x1="100" y1="44" x2="100" y2="72" stroke="#87867f" />
+                    <line x1="228" y1="44" x2="228" y2="72" stroke="#87867f" />
+                    <line x1="356" y1="44" x2="356" y2="72" stroke="#87867f" />
+                    <line x1="484" y1="44" x2="484" y2="72" stroke="#87867f" />
+                    <line x1="612" y1="44" x2="612" y2="72" stroke="#87867f" />
+                    <line x1="740" y1="44" x2="740" y2="72" stroke="#87867f" />
+                    <!-- events at 0.7,1.1,3.4,6.2,6.3,8.9 s -->
+                    <circle cx="145" cy="34" r="4" fill="#87867f" /><circle cx="170" cy="34" r="4" fill="#87867f" />
+                    <circle cx="318" cy="34" r="4" fill="#87867f" /><circle cx="497" cy="34" r="4" fill="#87867f" />
+                    <circle cx="503" cy="34" r="4" fill="#87867f" /><circle cx="670" cy="34" r="4" fill="#87867f" />
+                    <path d="M145 34 Q 190 22 226 46" fill="none" stroke="#b04a3f" stroke-width="1.5" marker-end="url(#a-r)" />
+                    <path d="M170 34 Q 200 26 226 46" fill="none" stroke="#b04a3f" stroke-width="1.5" marker-end="url(#a-r)" />
+                    <path d="M318 34 Q 340 26 354 46" fill="none" stroke="#b04a3f" stroke-width="1.5" marker-end="url(#a-r)" />
+                    <path d="M497 34 Q 560 14 610 46" fill="none" stroke="#b04a3f" stroke-width="1.5" marker-end="url(#a-r)" />
+                    <path d="M670 34 Q 710 22 738 46" fill="none" stroke="#b04a3f" stroke-width="1.5" marker-end="url(#a-r)" />
+                    <text x="560" y="90" fill="#b04a3f" text-anchor="middle">line at 6.2 s shows at 8.0 s</text>
+
+                    <text x="0" y="152" fill="#141413">streaming</text>
+                    <text x="0" y="166" fill="#87867f" font-size="10">SSE push</text>
+                    <line x1="100" y1="158" x2="740" y2="158" stroke="#d1cfc5" stroke-width="2" />
+                    <circle cx="145" cy="134" r="4" fill="#87867f" /><circle cx="170" cy="134" r="4" fill="#87867f" />
+                    <circle cx="318" cy="134" r="4" fill="#87867f" /><circle cx="497" cy="134" r="4" fill="#87867f" />
+                    <circle cx="503" cy="134" r="4" fill="#87867f" /><circle cx="670" cy="134" r="4" fill="#87867f" />
+                    <line x1="145" y1="138" x2="151" y2="154" stroke="#788c5d" stroke-width="2" /><circle cx="151" cy="158" r="5" fill="#788c5d" />
+                    <line x1="170" y1="138" x2="176" y2="154" stroke="#788c5d" stroke-width="2" /><circle cx="176" cy="158" r="5" fill="#788c5d" />
+                    <line x1="318" y1="138" x2="324" y2="154" stroke="#788c5d" stroke-width="2" /><circle cx="324" cy="158" r="5" fill="#788c5d" />
+                    <line x1="497" y1="138" x2="503" y2="154" stroke="#788c5d" stroke-width="2" /><circle cx="503" cy="158" r="5" fill="#788c5d" />
+                    <line x1="503" y1="138" x2="509" y2="154" stroke="#788c5d" stroke-width="2" /><circle cx="509" cy="158" r="5" fill="#788c5d" />
+                    <line x1="670" y1="138" x2="676" y2="154" stroke="#788c5d" stroke-width="2" /><circle cx="676" cy="158" r="5" fill="#788c5d" />
+
+                    <text x="100" y="196" fill="#87867f" text-anchor="middle">0 s</text>
+                    <text x="228" y="196" fill="#87867f" text-anchor="middle">2 s</text>
+                    <text x="356" y="196" fill="#87867f" text-anchor="middle">4 s</text>
+                    <text x="484" y="196" fill="#87867f" text-anchor="middle">6 s</text>
+                    <text x="612" y="196" fill="#87867f" text-anchor="middle">8 s</text>
+                    <text x="740" y="196" fill="#87867f" text-anchor="end">10 s</text>
+                  </g>
+                </svg>
+              </div>
+              <figcaption class="font-mono text-xs text-[#87867f] mt-3">Same six log lines (gray dots = written by the runner). Polling delivers them only on the next tick (rust). Streaming delivers each one in about 0.1 s (olive).</figcaption>
+            </figure>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">p95 line latency</p>
+                <p class="font-serif text-[32px] leading-none text-[#141413] mt-2 mb-1">140<span class="text-base text-[#87867f]"> ms</span></p>
+                <p class="font-mono text-xs text-olive m-0">▼ from 2.1 s</p>
+              </div>
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">PG reads / min at peak</p>
+                <p class="font-serif text-[32px] leading-none text-[#141413] mt-2 mb-1">1.2<span class="text-base text-[#87867f]">k</span></p>
+                <p class="font-mono text-xs text-olive m-0">▼ from 18k (−93%)</p>
+              </div>
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Open conns / logs pod</p>
+                <p class="font-serif text-[32px] leading-none text-[#141413] mt-2 mb-1">~150</p>
+                <p class="font-mono text-xs text-clay-dark m-0">▲ new cost, see focus #2</p>
+              </div>
+            </div>
+            <p class="font-mono text-xs text-[#87867f] mt-3 mb-0">Measured on staging with a replayed release-day load: 600 tabs, 40 concurrent builds, 4 logs pods.</p>
+          </section>
+
+          <!-- File tour -->
+          <section id="tour" class="mb-14 scroll-mt-6">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">File by file</h2>
+            </div>
+            <p class="max-w-[720px] m-0 mb-6 text-[#87867f]">The files are in reading order, not alphabetical. Start with the new endpoint, then the producer that feeds it, then the client. Tests and infra come last.</p>
+
+            <div class="space-y-3">
+              <details id="f-stream" class="fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" open>
+                <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-x-3 gap-y-1 items-center bg-[#f0eee6]">
+                  <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">services/logs/src/stream.ts</span>
+                  <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(120,140,93,0.12)] text-olive border border-[rgba(120,140,93,0.45)]">new</span>
+                  <span class="font-mono text-xs text-olive">+94</span>
+                </summary>
+                <div class="p-5">
+                  <p class="m-0 mb-4"><strong class="text-[#141413]">The heart of the PR.</strong> On connect it backfills from Postgres starting at <code class="font-mono text-[13px]">Last-Event-ID</code>, then subscribes to <code class="font-mono text-[13px]">build:{id}:log</code> in Redis. Each event's <code class="font-mono text-[13px]">id</code> is the byte offset, so the browser's built-in reconnect resumes exactly where it stopped. A 15 s heartbeat keeps the ALB from closing idle streams.</p>
+                  <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed">router.<span class="fn">get</span>(<span class="str">'/builds/:id/log/stream'</span>, <span class="kw">async</span> (req, res) =&gt; {
+  res.<span class="fn">writeHead</span>(<span class="str">200</span>, SSE_HEADERS);           <span class="cm">// incl. X-Accel-Buffering: no</span>
+  <span class="kw">let</span> offset = <span class="fn">Number</span>(req.<span class="fn">get</span>(<span class="str">'Last-Event-ID'</span>) ?? <span class="str">0</span>);
+
+  <span class="cm">// subscribe FIRST, buffer, then backfill: no gap between the two</span>
+  <span class="kw">const</span> sub = <span class="kw">await</span> pubsub.<span class="fn">subscribe</span>(<span class="str">`build:${req.params.id}:log`</span>);
+  <span class="kw">for</span> (<span class="kw">const</span> c <span class="kw">of</span> <span class="kw">await</span> <span class="fn">readChunks</span>(req.params.id, offset)) offset = <span class="fn">send</span>(res, c);
+  sub.<span class="fn">on</span>(<span class="str">'chunk'</span>, (c) =&gt; { <span class="kw">if</span> (c.end &gt; offset) offset = <span class="fn">send</span>(res, c); });
+
+  <span class="kw">const</span> beat = <span class="fn">setInterval</span>(() =&gt; res.<span class="fn">write</span>(<span class="str">': ping\n\n'</span>), <span class="str">15_000</span>);
+  req.<span class="fn">on</span>(<span class="str">'close'</span>, () =&gt; { <span class="fn">clearInterval</span>(beat); sub.<span class="fn">close</span>(); });
+});</pre>
+                  </div>
+                </div>
+              </details>
+
+              <details id="f-sink" class="fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" open>
+                <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-x-3 gap-y-1 items-center bg-[#f0eee6]">
+                  <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">services/runner/src/logSink.ts</span>
+                  <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-white text-[#3d3d3a] border border-[#d1cfc5]">mod</span>
+                  <span class="font-mono text-xs"><span class="text-olive">+18</span> <span class="text-rust">−6</span></span>
+                </summary>
+                <div class="p-5">
+                  <p class="m-0 mb-4"><strong class="text-[#141413]">The producer.</strong> After a chunk is committed to <code class="font-mono text-[13px]">log_chunks</code>, the sink publishes it. Publishing <em>after</em> commit means a subscriber can never see a line that a later backfill wouldn't also return. I also removed the 500 ms batching timer. It existed to make polling cheaper and now only adds latency.</p>
+                  <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="gone">  this.timer = setInterval(() =&gt; this.flush(), 500);</span>
+  <span class="kw">async</span> <span class="fn">write</span>(chunk: Chunk) {
+    <span class="kw">await</span> db.log_chunks.<span class="fn">insert</span>(chunk);
+<span class="new">    <span class="kw">await</span> redis.<span class="fn">publish</span>(<span class="str">`build:${chunk.buildId}:log`</span>, <span class="fn">encode</span>(chunk));</span>
+  }</pre>
+                  </div>
+                </div>
+              </details>
+
+              <details id="f-hook" class="fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden" open>
+                <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-x-3 gap-y-1 items-center bg-[#f0eee6]">
+                  <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">apps/web/src/hooks/useBuildLog.ts</span>
+                  <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-white text-[#3d3d3a] border border-[#d1cfc5]">mod</span>
+                  <span class="font-mono text-xs"><span class="text-olive">+41</span> <span class="text-rust">−58</span></span>
+                </summary>
+                <div class="p-5">
+                  <p class="m-0">The <code class="font-mono text-[13px]">setInterval</code> loop and its <code class="font-mono text-[13px]">after=N</code> bookkeeping are gone. The hook opens an <code class="font-mono text-[13px]">EventSource</code>, appends by offset, and ignores any chunk at or below the last offset it has, so duplicate delivery is harmless. After 3 failed reconnects in 30 s it falls back to the old poller (kept as <code class="font-mono text-[13px]">pollBuildLog()</code>), and it says so in the log header.</p>
+                </div>
+              </details>
+
+              <details id="f-tests" class="fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+                <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-x-3 gap-y-1 items-center bg-[#f0eee6]">
+                  <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">services/logs/test/stream.test.ts, useBuildLog.test.ts</span>
+                  <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(120,140,93,0.12)] text-olive border border-[rgba(120,140,93,0.45)]">tests</span>
+                  <span class="font-mono text-xs"><span class="text-olive">+148</span> <span class="text-rust">−40</span></span>
+                </summary>
+                <div class="p-5">
+                  <p class="m-0">The server tests run against real Redis and Postgres (testcontainers). They include the race I was most worried about: a chunk published <em>during</em> backfill must appear exactly once. The client tests use a fake <code class="font-mono text-[13px]">EventSource</code> to drive reconnect with <code class="font-mono text-[13px]">Last-Event-ID</code> and the fallback to polling.</p>
+                </div>
+              </details>
+
+              <details id="f-infra" class="fold scroll-mt-6 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden">
+                <summary class="cursor-pointer px-4 py-3 flex flex-wrap gap-x-3 gap-y-1 items-center bg-[#f0eee6]">
+                  <span class="flex-1 min-w-0 font-mono text-[13px] text-[#141413] break-all">infra/alb.tf</span>
+                  <span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-white text-[#3d3d3a] border border-[#d1cfc5]">mod</span>
+                  <span class="font-mono text-xs"><span class="text-olive">+3</span> <span class="text-rust">−1</span></span>
+                </summary>
+                <div class="p-5">
+                  <p class="m-0">This adds a target group for <code class="font-mono text-[13px]">/builds/*/log/stream</code> with <code class="font-mono text-[13px]">deregistration_delay = 5</code>, so deploys don't wait 300 s for long-lived streams to drain. Clients reconnect and resume anyway.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <!-- Focus -->
+          <section id="focus" class="mb-14 scroll-mt-6">
+            <div class="flex items-baseline gap-3 mb-5">
+              <span class="font-mono text-xs bg-clay text-white px-2 py-0.5 rounded-lg">03</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Where to focus your review</h2>
+            </div>
+            <ol class="list-none m-0 p-0 space-y-4">
+              <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 grid grid-cols-[36px_1fr] gap-3">
+                <span class="font-serif text-[26px] leading-none text-clay">1</span>
+                <div>
+                  <p class="font-semibold text-[#141413] m-0 mb-1">Subscribe-then-backfill ordering</p>
+                  <p class="m-0 text-[14.5px]"><a href="#f-stream" class="font-mono text-[13px] text-clay-dark underline underline-offset-2">stream.ts:6–8</a>. If these two lines are swapped, a chunk published between the backfill read and the subscribe is lost forever. The <code class="font-mono text-[13px]">c.end &gt; offset</code> check is what makes the overlap safe. Please convince yourself it can't drop or duplicate a line.</p>
+                </div>
+              </li>
+              <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 grid grid-cols-[36px_1fr] gap-3">
+                <span class="font-serif text-[26px] leading-none text-clay">2</span>
+                <div>
+                  <p class="font-semibold text-[#141413] m-0 mb-1">Connection count per pod</p>
+                  <p class="m-0 text-[14.5px]">Each tab now holds one open connection and one Redis subscription. At about 150 per pod we're far from Node's limits, but each subscription costs a Redis client. I share one subscriber per pod and fan out in memory (<code class="font-mono text-[13px]">pubsub.ts</code>, unchanged). Sanity-check that assumption against the Redis maxclients of 10k.</p>
+                </div>
+              </li>
+              <li class="bg-white border border-[#d1cfc5] rounded-xl p-5 grid grid-cols-[36px_1fr] gap-3">
+                <span class="font-serif text-[26px] leading-none text-clay">3</span>
+                <div>
+                  <p class="font-semibold text-[#141413] m-0 mb-1">What I deliberately did not do</p>
+                  <p class="m-0 text-[14.5px]">No WebSockets, because we only need server → client. No log search or ANSI parsing changes. I did not delete the poller, which stays for one release as the fallback. Each of these is a clean follow-up, and bundling them would make this PR hard to review.</p>
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <!-- Test plan -->
+          <section id="tests" class="mb-14 scroll-mt-6">
+            <div class="flex items-baseline gap-3 mb-5">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Test plan</h2>
+            </div>
+            <ul class="list-none m-0 p-0 bg-white border border-[#d1cfc5] rounded-xl divide-y divide-[#f0eee6]">
+              <li class="flex gap-3 px-5 py-3.5"><span class="text-olive font-mono">✓</span><div><p class="m-0">Unit and integration: backfill/publish race, resume from Last-Event-ID, heartbeat, client fallback</p><p class="m-0 font-mono text-xs text-[#87867f]">22 cases · real Redis + Postgres</p></div></li>
+              <li class="flex gap-3 px-5 py-3.5"><span class="text-olive font-mono">✓</span><div><p class="m-0">Staging replay of release-day load: 600 tabs × 40 builds for 20 min</p><p class="m-0 font-mono text-xs text-[#87867f]">p95 140 ms · 0 dropped lines (diffed against DB)</p></div></li>
+              <li class="flex gap-3 px-5 py-3.5"><span class="text-olive font-mono">✓</span><div><p class="m-0">Kill a logs pod mid-stream. Clients reconnect to another pod and resume with no gaps.</p></div></li>
+              <li class="flex gap-3 px-5 py-3.5"><span class="text-[#87867f] font-mono">○</span><div><p class="m-0">Corporate proxy that buffers responses (one enterprise customer)</p><p class="m-0 font-mono text-xs text-[#87867f]">will verify with them during the 10% ramp; fallback covers it</p></div></li>
+            </ul>
+          </section>
+
+          <!-- Rollout -->
+          <section id="rollout" class="scroll-mt-6">
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+              <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Rollout</h2>
+            </div>
+            <p class="max-w-[720px] m-0 mb-5">This ships behind <code class="font-mono text-[13.5px]">log_stream_sse</code>. With the flag off, the client polls exactly as it does today. The publish in the runner is harmless with no subscribers.</p>
+            <div class="grid sm:grid-cols-3 gap-4">
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5"><p class="font-mono text-xs text-[#87867f] m-0">Day 0</p><p class="font-serif text-[24px] text-[#141413] m-0 my-1">internal</p><p class="m-0 text-[14px]">Acme engineers only. Watch the fallback-to-poll rate.</p></div>
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5"><p class="font-mono text-xs text-[#87867f] m-0">Day 2</p><p class="font-serif text-[24px] text-[#141413] m-0 my-1">10%</p><p class="m-0 text-[14px]">Alert if fallback is above 2% of sessions or Redis CPU is above 60%.</p></div>
+              <div class="bg-white border border-[#d1cfc5] rounded-xl p-5"><p class="font-mono text-xs text-[#87867f] m-0">Day 5</p><p class="font-serif text-[24px] text-[#141413] m-0 my-1">100%</p><p class="m-0 text-[14px]">Delete the 500 ms batching path in a follow-up PR.</p></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Sticky TOC -->
+        <nav class="hidden lg:block sticky top-6 border-l border-[#d1cfc5] pl-5 text-[13.5px]" aria-label="In this PR">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-3">In this PR</p>
+          <ul class="list-none m-0 p-0 space-y-2">
+            <li><a href="#why" class="hover:text-clay-dark">Why</a></li>
+            <li><a href="#tour" class="hover:text-clay-dark">File by file</a>
+              <ul class="list-none m-0 mt-2 pl-3 space-y-1.5 font-mono text-[12px] text-[#87867f]">
+                <li><a href="#f-stream" class="hover:text-clay-dark">stream.ts</a></li>
+                <li><a href="#f-sink" class="hover:text-clay-dark">logSink.ts</a></li>
+                <li><a href="#f-hook" class="hover:text-clay-dark">useBuildLog.ts</a></li>
+                <li><a href="#f-tests" class="hover:text-clay-dark">tests</a></li>
+                <li><a href="#f-infra" class="hover:text-clay-dark">alb.tf</a></li>
+              </ul>
+            </li>
+            <li><a href="#focus" class="text-clay-dark font-semibold hover:underline">Where to focus</a></li>
+            <li><a href="#tests" class="hover:text-clay-dark">Test plan</a></li>
+            <li><a href="#rollout" class="hover:text-clay-dark">Rollout</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/pr-writeup.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Transfer-sent toast — animation sandbox</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      input[type="range"] { accent-color: #d97757; }
+    </style>
+    <script>
+      const PRESETS = [
+        { key: 'expo-out', label: 'Expo out', v: [0.16, 1, 0.3, 1] },
+        { key: 'spring', label: 'Spring-ish', v: [0.34, 1.56, 0.64, 1] },
+        { key: 'emphasized', label: 'Emphasized', v: [0.2, 0, 0, 1] },
+        { key: 'ease-in-out', label: 'Ease-in-out', v: [0.42, 0, 0.58, 1] },
+        { key: 'linear', label: 'Linear', v: [0, 0, 1, 1] },
+      ];
+      const CURRENT = { dur: 420, v: [0.42, 0, 0.58, 1], dist: 24, scale: 1 };
+
+      function sandbox() {
+        return {
+          presets: PRESETS,
+          dur: 240, x1: 0.16, y1: 1, x2: 0.3, y2: 1, dist: 12, scale: 0.98,
+          slow: false, loop: false, exit: false,
+          p: 1, raf: null, loopTimer: null,
+          init() { setTimeout(() => this.replay(), 350); },
+          bez(a, b, t) { const u = 1 - t; return 3 * u * u * t * a + 3 * u * t * t * b + t * t * t; },
+          yAt(x, v) {
+            const c = v || [this.x1, this.y1, this.x2, this.y2];
+            let lo = 0, hi = 1, t = x;
+            for (let i = 0; i < 32; i++) {
+              t = (lo + hi) / 2;
+              if (this.bez(c[0], c[2], t) < x) lo = t; else hi = t;
+            }
+            return this.bez(c[1], c[3], t);
+          },
+          f(n) { return String(+(+n).toFixed(2)); },
+          get easing() { return 'cubic-bezier(' + [this.x1, this.y1, this.x2, this.y2].map(n => this.f(n)).join(', ') + ')'; },
+          get presetName() {
+            const hit = this.presets.find(p => p.v[0] == this.x1 && p.v[1] == this.y1 && p.v[2] == this.x2 && p.v[3] == this.y2);
+            return hit ? hit.key : 'custom';
+          },
+          use(p) { [this.x1, this.y1, this.x2, this.y2] = p.v; this.replay(); },
+          X(x) { return 40 + x * 200; },
+          Y(y) { return 210 - y * 120; },
+          curve(v) { return 'M ' + this.X(0) + ' ' + this.Y(0) + ' C ' + this.X(v[0]) + ' ' + this.Y(v[1]) + ', ' + this.X(v[2]) + ' ' + this.Y(v[3]) + ', ' + this.X(1) + ' ' + this.Y(1); },
+          get tunedPath() { return this.curve([+this.x1, +this.y1, +this.x2, +this.y2]); },
+          get currentPath() { return this.curve(CURRENT.v); },
+          get frames() {
+            return Array.from({ length: 9 }, (_, i) => {
+              const x = i / 8, y = this.yAt(x);
+              return { ms: Math.round(x * this.dur), y, off: (1 - y) * this.dist, sc: this.scale + (1 - this.scale) * y, op: Math.max(0, Math.min(1, y)) };
+            });
+          },
+          get arrival() {
+            for (let i = 0; i <= 200; i++) { if (this.yAt(i / 200) >= 0.95) return Math.round(i / 200 * this.dur); }
+            return this.dur;
+          },
+          get currentArrival() {
+            for (let i = 0; i <= 200; i++) { if (this.yAt(i / 200, CURRENT.v) >= 0.95) return Math.round(i / 200 * CURRENT.dur); }
+            return CURRENT.dur;
+          },
+          get overshoot() {
+            let m = 1; for (let i = 0; i <= 100; i++) m = Math.max(m, this.yAt(i / 100));
+            return Math.round((m - 1) * 100);
+          },
+          get exitDur() { return Math.round(this.dur * 0.75); },
+          kf(dist, scale) {
+            return [
+              { opacity: 0, transform: 'translateY(' + dist + 'px) scale(' + scale + ')' },
+              { opacity: 1, transform: 'translateY(0) scale(1)' },
+            ];
+          },
+          play(el, dur, easing, dist, scale, k) {
+            el.getAnimations().forEach(a => a.cancel());
+            el.animate(this.kf(dist, scale), { duration: dur * k, easing, fill: 'both' });
+            if (this.exit) {
+              el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(' + Math.round(dist / 2) + 'px)' }],
+                { duration: Math.round(dur * 0.75) * k, delay: (dur + 1600) * k, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+            }
+          },
+          replay() {
+            const k = this.slow ? 4 : 1;
+            this.play(this.$refs.before, CURRENT.dur, 'cubic-bezier(' + CURRENT.v.join(', ') + ')', CURRENT.dist, CURRENT.scale, k);
+            this.play(this.$refs.after, +this.dur, this.easing, +this.dist, +this.scale, k);
+            cancelAnimationFrame(this.raf); clearTimeout(this.loopTimer);
+            const start = performance.now(), total = this.dur * k;
+            const tick = (now) => { this.p = Math.min(1, (now - start) / total); if (this.p < 1) this.raf = requestAnimationFrame(tick); };
+            this.p = 0; this.raf = requestAnimationFrame(tick);
+            if (this.loop) {
+              const longest = Math.max(CURRENT.dur, +this.dur) + (this.exit ? 1600 + Math.max(CURRENT.dur, +this.dur) : 900);
+              this.loopTimer = setTimeout(() => this.replay(), longest * k + 500);
+            }
+          },
+          reset() { this.dur = 240; this.dist = 12; this.scale = 0.98; this.use(PRESETS[0]); },
+          get css() {
+            const s = +this.scale === 1 ? '' : ' scale(' + this.f(this.scale) + ')';
+            let out = '/* apps/wallet/src/ui/Toast.module.css */\n' +
+              '.toast {\n  animation: toast-in ' + this.dur + 'ms ' + this.easing + ' both;\n}\n' +
+              '@keyframes toast-in {\n  from { opacity: 0; transform: translateY(' + this.dist + 'px)' + s + '; }\n  to   { opacity: 1; transform: none; }\n}\n';
+            if (this.exit) {
+              out += '.toast[data-leaving] {\n  animation: toast-out ' + this.exitDur + 'ms cubic-bezier(0.4, 0, 1, 1) forwards;\n}\n' +
+                '@keyframes toast-out {\n  to { opacity: 0; transform: translateY(' + Math.round(this.dist / 2) + 'px); }\n}\n';
+            }
+            out += '@media (prefers-reduced-motion: reduce) {\n  .toast { animation: toast-fade 120ms linear both; }\n}\n' +
+              '@keyframes toast-fade { from { opacity: 0; } }';
+            return out;
+          },
+          copied: false,
+          copy() {
+            const done = () => { this.copied = true; setTimeout(() => this.copied = false, 1400); };
+            if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(this.css).then(done, () => this.legacy(done));
+            else this.legacy(done);
+          },
+          legacy(done) {
+            const ta = document.createElement('textarea'); ta.value = this.css; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+          },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]" x-data="sandbox()"
+      @keydown.window="if ($event.key === 'r' && !['INPUT','TEXTAREA'].includes($event.target.tagName)) replay()">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Prototype · acme-wallet · motion</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Tune the "Transfer sent" toast entrance
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          The transfer-sent toast feels slow and floaty. Give me a sandbox where I can play with duration and easing next to what we
+          ship today, then hand me CSS I can paste into <code class="font-mono text-[13px]">Toast.module.css</code>.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          Today: <span class="text-[#3d3d3a]">420ms ease-in-out · translateY(24px)</span> in apps/wallet/src/ui/Toast.module.css:12 · press <kbd class="border border-[#d1cfc5] bg-white rounded px-1.5">R</kbd> to replay
+        </p>
+      </header>
+
+      <!-- Bench -->
+      <section class="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start mb-12" aria-label="Sandbox">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <button type="button" @click="replay()"
+              class="bg-[#141413] text-ivory font-mono text-xs rounded-lg px-4 py-2 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-clay">▶ Replay both</button>
+            <label class="flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="slow" class="accent-clay"> slow-mo ×4</label>
+            <label class="flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="loop" @change="loop && replay()" class="accent-clay"> loop</label>
+            <label class="flex items-center gap-2 font-mono text-xs cursor-pointer"><input type="checkbox" x-model="exit" class="accent-clay"> include exit</label>
+            <span class="flex-1"></span>
+            <span class="font-mono text-[11px] text-[#87867f]" x-text="'progress ' + Math.round(p * 100) + '%'"></span>
+          </div>
+          <div class="grid grid-cols-2 gap-3 sm:gap-4">
+            <!-- Lane: current -->
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Shipped today</p>
+              <div class="relative h-[300px] rounded-[22px] bg-[#f0eee6] border border-[#d1cfc5] overflow-hidden p-4">
+                <div class="space-y-2.5" aria-hidden="true">
+                  <div class="h-3 w-24 rounded bg-[#d1cfc5]"></div>
+                  <div class="h-16 rounded-xl bg-white"></div>
+                  <div class="h-10 rounded-xl bg-white/70"></div>
+                  <div class="h-10 rounded-xl bg-white/70"></div>
+                </div>
+                <div x-ref="before" class="absolute left-3 right-3 bottom-4 flex items-center gap-2.5 bg-[#141413] text-ivory rounded-xl px-3.5 py-3 shadow-lg">
+                  <span class="w-5 h-5 rounded-full bg-olive text-white text-[11px] leading-5 text-center shrink-0">✓</span>
+                  <span class="text-[13px] leading-tight min-w-0"><strong class="font-semibold">Transfer sent</strong><span class="block text-[#b8b6ac] truncate">$250.00 to Maya Okafor</span></span>
+                  <span class="ml-auto font-mono text-[11px] text-clay shrink-0">Undo</span>
+                </div>
+              </div>
+              <p class="font-mono text-[11px] text-[#87867f] mt-2 mb-0">420ms · ease-in-out · 24px</p>
+            </div>
+            <!-- Lane: tuned -->
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-2">Your settings</p>
+              <div class="relative h-[300px] rounded-[22px] bg-[#f0eee6] border-2 border-clay overflow-hidden p-4">
+                <div class="space-y-2.5" aria-hidden="true">
+                  <div class="h-3 w-24 rounded bg-[#d1cfc5]"></div>
+                  <div class="h-16 rounded-xl bg-white"></div>
+                  <div class="h-10 rounded-xl bg-white/70"></div>
+                  <div class="h-10 rounded-xl bg-white/70"></div>
+                </div>
+                <div x-ref="after" class="absolute left-3 right-3 bottom-4 flex items-center gap-2.5 bg-[#141413] text-ivory rounded-xl px-3.5 py-3 shadow-lg">
+                  <span class="w-5 h-5 rounded-full bg-olive text-white text-[11px] leading-5 text-center shrink-0">✓</span>
+                  <span class="text-[13px] leading-tight min-w-0"><strong class="font-semibold">Transfer sent</strong><span class="block text-[#b8b6ac] truncate">$250.00 to Maya Okafor</span></span>
+                  <span class="ml-auto font-mono text-[11px] text-clay shrink-0">Undo</span>
+                </div>
+              </div>
+              <p class="font-mono text-[11px] text-clay-dark mt-2 mb-0" x-text="dur + 'ms · ' + presetName + ' · ' + dist + 'px · scale ' + f(scale)"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Easing preset</p>
+          <div class="flex flex-wrap gap-1.5 mb-5">
+            <template x-for="pr in presets" :key="pr.key">
+              <button type="button" @click="use(pr)" :aria-pressed="presetName === pr.key"
+                :class="presetName === pr.key ? 'bg-[rgba(217,119,87,0.12)] border-clay text-clay-dark' : 'bg-white border-[#d1cfc5] hover:border-[#141413]'"
+                class="border rounded-full px-2.5 py-1 font-mono text-[11.5px] focus-visible:outline-2 focus-visible:outline-clay" x-text="pr.label"></button>
+            </template>
+          </div>
+          <div class="space-y-3.5">
+            <label class="block">
+              <span class="flex justify-between font-mono text-xs"><span>duration</span><span class="text-[#141413]" x-text="dur + ' ms'"></span></span>
+              <input type="range" min="80" max="1000" step="10" x-model.number="dur" @change="replay()" class="w-full">
+            </label>
+            <label class="block">
+              <span class="flex justify-between font-mono text-xs"><span>distance</span><span class="text-[#141413]" x-text="dist + ' px'"></span></span>
+              <input type="range" min="0" max="48" step="2" x-model.number="dist" @change="replay()" class="w-full">
+            </label>
+            <label class="block">
+              <span class="flex justify-between font-mono text-xs"><span>start scale</span><span class="text-[#141413]" x-text="f(scale)"></span></span>
+              <input type="range" min="0.9" max="1" step="0.01" x-model.number="scale" @change="replay()" class="w-full">
+            </label>
+          </div>
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mt-6 mb-2">cubic-bezier handles</p>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+            <label class="block"><span class="flex justify-between font-mono text-xs"><span>x1</span><span x-text="f(x1)"></span></span><input type="range" min="0" max="1" step="0.01" x-model.number="x1" @change="replay()" class="w-full"></label>
+            <label class="block"><span class="flex justify-between font-mono text-xs"><span>y1</span><span x-text="f(y1)"></span></span><input type="range" min="-0.6" max="1.6" step="0.01" x-model.number="y1" @change="replay()" class="w-full"></label>
+            <label class="block"><span class="flex justify-between font-mono text-xs"><span>x2</span><span x-text="f(x2)"></span></span><input type="range" min="0" max="1" step="0.01" x-model.number="x2" @change="replay()" class="w-full"></label>
+            <label class="block"><span class="flex justify-between font-mono text-xs"><span>y2</span><span x-text="f(y2)"></span></span><input type="range" min="-0.6" max="1.6" step="0.01" x-model.number="y2" @change="replay()" class="w-full"></label>
+          </div>
+          <div class="flex gap-2 mt-5">
+            <button type="button" @click="reset()" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Reset to recommended</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Readouts -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12" aria-label="Readouts">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Feels arrived (95%)</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1"><span x-text="arrival"></span><span class="text-base text-[#87867f]"> ms</span></p>
+          <p class="font-mono text-xs m-0" :class="arrival < currentArrival ? 'text-olive' : 'text-rust'" x-text="(arrival < currentArrival ? '▼ ' : '▲ ') + Math.abs(currentArrival - arrival) + ' ms vs today (' + currentArrival + ')'"></p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Overshoot</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1"><span x-text="overshoot"></span><span class="text-base text-[#87867f]"> %</span></p>
+          <p class="font-mono text-xs m-0" :class="overshoot > 6 ? 'text-clay-dark' : 'text-[#87867f]'" x-text="overshoot > 6 ? 'reads playful; check money UI' : 'settles without bounce'"></p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Frames @ 60 Hz</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1" x-text="Math.round(dur / 16.67)"></p>
+          <p class="font-mono text-xs text-[#87867f] m-0">enter only</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Travel</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1"><span x-text="dist"></span><span class="text-base text-[#87867f]"> px</span></p>
+          <p class="font-mono text-xs text-[#87867f] m-0" x-text="'today 24 px · ' + (dist <= 16 ? 'tight' : 'long throw')"></p>
+        </div>
+      </section>
+
+      <!-- Curve + filmstrip -->
+      <section class="mb-12 scroll-mt-6" id="curve">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">The curve, and what it does to the toast</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Steep at the start means the toast arrives early and spends its remaining time settling. The filmstrip samples nine equal slices of time.</p>
+        <div class="grid md:grid-cols-[300px_minmax(0,1fr)] gap-6 items-start">
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl p-4">
+            <svg viewBox="0 0 270 290" class="w-full h-auto" role="img" aria-label="Easing curve: progress over time for your settings in clay, today's ease-in-out in gray, with control handles">
+              <rect x="40" y="90" width="200" height="120" fill="#faf9f5" stroke="#d1cfc5"/>
+              <rect x="40" y="18" width="200" height="72" fill="rgba(217,119,87,0.06)"/>
+              <text x="236" y="32" text-anchor="end" font-family="ui-monospace, monospace" font-size="10" fill="#b85c3e">overshoot zone</text>
+              <path d="M40 210 L240 90" stroke="#d1cfc5" stroke-dasharray="3 4" fill="none"/>
+              <path :d="currentPath" stroke="#87867f" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+              <line :x1="X(0)" :y1="Y(0)" :x2="X(x1)" :y2="Y(y1)" stroke="#d97757" stroke-width="1" opacity=".6"/>
+              <line :x1="X(1)" :y1="Y(1)" :x2="X(x2)" :y2="Y(y2)" stroke="#d97757" stroke-width="1" opacity=".6"/>
+              <path :d="tunedPath" stroke="#d97757" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <circle :cx="X(x1)" :cy="Y(y1)" r="5" fill="#fff" stroke="#d97757" stroke-width="2"/>
+              <circle :cx="X(x2)" :cy="Y(y2)" r="5" fill="#fff" stroke="#d97757" stroke-width="2"/>
+              <circle :cx="X(p)" :cy="Y(yAt(p))" r="5" fill="#141413"/>
+              <g font-family="ui-monospace, monospace" font-size="10" fill="#87867f">
+                <text x="34" y="94" text-anchor="end">1</text>
+                <text x="34" y="214" text-anchor="end">0</text>
+                <text x="140" y="232" text-anchor="middle">time →</text>
+                <text x="16" y="150" text-anchor="middle" transform="rotate(-90 16 150)">progress →</text>
+              </g>
+              <g font-family="ui-monospace, monospace" font-size="10.5">
+                <line x1="40" y1="256" x2="60" y2="256" stroke="#d97757" stroke-width="3"/><text x="66" y="260" fill="#3d3d3a">yours</text>
+                <line x1="120" y1="256" x2="140" y2="256" stroke="#87867f" stroke-width="2" stroke-dasharray="6 4"/><text x="146" y="260" fill="#3d3d3a">today</text>
+                <circle cx="50" cy="276" r="4" fill="#141413"/><text x="66" y="280" fill="#3d3d3a">playhead</text>
+              </g>
+            </svg>
+            <figcaption class="font-mono text-[11.5px] text-[#141413] mt-1 break-all" x-text="easing"></figcaption>
+          </figure>
+          <div>
+            <div class="bg-white border border-[#d1cfc5] rounded-xl p-4 overflow-x-auto">
+              <div class="grid grid-cols-9 gap-1.5 min-w-[560px]">
+                <template x-for="(fr, i) in frames" :key="i">
+                  <div>
+                    <div class="relative h-[92px] rounded-lg bg-[#f0eee6] overflow-hidden">
+                      <div class="absolute left-1.5 right-1.5 h-5 rounded-md bg-[#141413]"
+                        :style="{ bottom: '10px', transform: 'translateY(' + fr.off + 'px) scale(' + fr.sc + ')', opacity: fr.op }"></div>
+                      <div class="absolute left-0 right-0 border-t border-dashed border-clay" style="bottom: 30px"></div>
+                    </div>
+                    <p class="font-mono text-[10.5px] text-center m-0 mt-1.5 text-[#141413]" x-text="fr.ms + 'ms'"></p>
+                    <p class="font-mono text-[10px] text-center m-0 text-[#87867f]" x-text="Math.round(fr.y * 100) + '%'"></p>
+                  </div>
+                </template>
+              </div>
+              <p class="font-mono text-[11px] text-[#87867f] mt-3 mb-0">Dashed line = the toast's top edge at rest. Each slice draws the toast at its offset, scale, and opacity.</p>
+            </div>
+            <div class="mt-5 bg-white border border-[#d1cfc5] rounded-xl p-4">
+              <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-3">Lifecycle</p>
+              <div class="flex h-8 rounded-md overflow-hidden font-mono text-[11px] text-white">
+                <div class="bg-clay flex items-center px-2 whitespace-nowrap overflow-hidden" :style="{ flexGrow: dur }" x-text="'enter ' + dur"></div>
+                <div class="bg-[#87867f] flex items-center px-2 whitespace-nowrap overflow-hidden" style="flex-grow: 1600">hold 1600</div>
+                <div class="flex items-center px-2 whitespace-nowrap overflow-hidden" :class="exit ? 'bg-[#141413]' : 'bg-[#d1cfc5] text-[#3d3d3a]'" :style="{ flexGrow: exitDur }" x-text="'exit ' + exitDur"></div>
+              </div>
+              <p class="font-mono text-[11px] text-[#87867f] mt-2 mb-0">Exit is 75% of enter with an ease-in, so leaving never competes with arriving.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Output -->
+      <section class="mb-12 scroll-mt-6" id="css">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Copy-paste CSS</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Regenerated from the controls above. It includes a reduced-motion fallback so the toast still appears without movement.</p>
+        <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+          <div class="bg-[#141413] rounded-xl overflow-hidden">
+            <div class="flex items-center gap-2 px-5 py-2.5 border-b border-white/10">
+              <span class="font-mono text-[11px] text-[#87867f] flex-1">Toast.module.css</span>
+              <button type="button" @click="copy()" class="font-mono text-xs border border-white/20 text-ivory rounded-lg px-3 py-1.5 hover:border-white focus-visible:outline-2 focus-visible:outline-clay">
+                <span x-show="!copied">Copy CSS</span><span x-show="copied" x-cloak class="text-[#a3b37f]">Copied ✓</span>
+              </button>
+            </div>
+            <pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed" x-text="css"></pre>
+          </div>
+          <aside class="border-l-4 border-olive bg-white rounded-r-xl px-6 py-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-1">What to feel for</p>
+            <ul class="m-0 pl-4 space-y-2 text-[14px]">
+              <li>Today's toast is only half visible at 210ms. Expo-out at 240ms is half visible by about 25ms and settled by about 100ms, so the toast reads as an immediate response.</li>
+              <li>Spring overshoot reads as playful. On a money confirmation it can feel unsure, so keep overshoot under 5%.</li>
+              <li>A throw of 24px from the bottom edge looks like it slides in from off-screen. 12px reads as the toast appearing in place.</li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/animation-sandbox.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

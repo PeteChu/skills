@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Implementation notes — per-tenant rate limiting</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      code { font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace; font-size: 0.88em; background: #f0eee6; border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1100px]" x-data="{ f: 'all', show(t) { return this.f === 'all' || this.f === t } }">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Implementation notes · acme-gateway · during the build</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Per-tenant rate limiting: four places the code overruled the plan
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Build per-tenant rate limiting from <code>docs/plans/tenant-rate-limits.md</code>. Keep an implementation-notes log as you go.
+          When the code forces you off the plan, take the conservative option, log it as a deviation, and keep going. Don't stop to ask.
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-4 mb-0">
+          docs/notes/tenant-rate-limits.md · branch feat/tenant-rate-limits · run 09:12–15:31 · 23 commits
+        </p>
+      </header>
+
+      <!-- Summary -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" aria-label="Summary">
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Log entries</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">12</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">over 6 h 19 m</p>
+        </div>
+        <div class="bg-white border border-[rgba(217,119,87,0.55)] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0">Deviations</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">4</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">each took the safer path</p>
+        </div>
+        <div class="bg-white border border-[rgba(176,74,63,0.45)] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-rust m-0">Need your call</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">2</p>
+          <p class="font-mono text-xs text-[#87867f] m-0">product, not code</p>
+        </div>
+        <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Plan steps</p>
+          <p class="font-serif text-[34px] leading-none text-[#141413] mt-2 mb-1">4<span class="text-base text-[#87867f]"> / 8 as written</span></p>
+          <p class="font-mono text-xs text-olive m-0">all 8 resolved</p>
+        </div>
+      </section>
+
+      <div class="grid lg:grid-cols-[minmax(0,1fr)_290px] gap-10 items-start">
+        <!-- Log -->
+        <section class="min-w-0" aria-label="Log">
+          <div class="sticky top-0 z-10 -mx-2 px-2 py-3 mb-4 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5] flex flex-wrap gap-2 items-center" role="toolbar" aria-label="Filter entries">
+            <template x-for="c in [['all','All',12],['dev','Deviations',4],['human','For you',2],['disc','Discoveries',2],['plan','As planned',4]]" :key="c[0]">
+              <button type="button" @click="f = c[0]" :aria-pressed="f === c[0]"
+                :class="f === c[0] ? 'bg-[#141413] text-ivory border-[#141413]' : 'bg-white text-[#3d3d3a] border-[#d1cfc5] hover:border-[#141413]'"
+                class="font-mono text-xs border rounded-full px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay">
+                <span x-text="c[1]"></span> <span class="opacity-60" x-text="c[2]"></span>
+              </button>
+            </template>
+          </div>
+
+          <ol class="relative m-0 p-0 list-none">
+            <span class="absolute left-[55px] top-3 bottom-3 w-0.5 bg-[#d1cfc5]" aria-hidden="true"></span>
+
+            <!-- 1 plan -->
+            <li x-show="show('plan')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] gap-x-0 pb-6">
+              <span class="font-mono text-xs text-[#87867f] pt-1">09:12</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-ivory border-2 border-olive"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(120,140,93,0.45)] rounded-full bg-[rgba(120,140,93,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-olive">As planned</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Step 1: token bucket in Redis via a Lua script</h3>
+                <p class="m-0 text-[14.5px]"><code>internal/ratelimit/bucket.go</code> wraps <code>bucket.lua</code> with go-redis <code>Script.Run</code>, so EVALSHA falls back to EVAL after a failover. Unit tests run against miniredis.</p>
+              </div>
+            </li>
+
+            <!-- 2 discovery -->
+            <li x-show="show('disc')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-[#87867f] pt-1">09:40</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-ivory border-2 border-[#87867f]"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-[#87867f]">Discovery</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Tenant identity only exists after <code>authn.Middleware</code></h3>
+                <p class="m-0 text-[14.5px]">Registered the limiter between <code>authn</code> and <code>proxy.Handler</code> in <code>cmd/gateway/router.go:58</code>. Unauthenticated routes such as <code>/v1/auth/token</code> are already IP-limited in nginx, so I left them alone.</p>
+              </div>
+            </li>
+
+            <!-- 3 deviation 1 -->
+            <li x-show="show('dev')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-clay-dark pt-1">10:05</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-clay"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-clay-dark">Deviation 1 of 4</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-3">API-key tokens carry <code>org_id</code>, not <code>tenant_id</code></h3>
+                <dl class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden text-[14px] divide-y divide-[#f0eee6]">
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Plan said</dt><dd class="m-0">Key buckets by the <code>tenant_id</code> JWT claim.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Code revealed</dt><dd class="m-0">Tokens minted in <code>authn/apikey.go</code> only set <code>org_id</code>. That was 31% of yesterday's traffic. Their <code>tenant_id</code> is <code>""</code>, so they would all have shared one bucket.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3 bg-[rgba(217,119,87,0.08)]"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-clay-dark pt-0.5">Conservative call</dt><dd class="m-0">Resolve org → tenant with the existing <code>tenants.ResolveOrg()</code> (LRU, 5 min TTL). If that fails, apply the lowest tier (20 rps) under <code>rl:unresolved:&lt;org_id&gt;</code>. Never use a shared bucket.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Revisit</dt><dd class="m-0">Should unresolved orgs fail open instead? That's a product call. <a href="#h1" class="text-clay-dark underline underline-offset-2" @click.prevent="f = 'all'; $nextTick(() => document.getElementById('h1').scrollIntoView({ behavior: 'smooth' }))">Logged for you</a>.</dd></div>
+                </dl>
+              </div>
+            </li>
+
+            <!-- 4 plan -->
+            <li x-show="show('plan')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-[#87867f] pt-1">10:48</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-ivory border-2 border-olive"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(120,140,93,0.45)] rounded-full bg-[rgba(120,140,93,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-olive">As planned</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Step 3: 429 with <code>Retry-After</code> and <code>X-RateLimit-*</code> headers</h3>
+                <p class="m-0 text-[14.5px]">The body uses the problem+json shape from <code>docs/api/errors.md</code>, with <code>type: rate_limited</code>. Contract tests updated in <code>api/contract/errors_test.go</code>.</p>
+              </div>
+            </li>
+
+            <!-- 5 deviation 2 -->
+            <li x-show="show('dev')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-clay-dark pt-1">11:20</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-clay"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-clay-dark">Deviation 2 of 4</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-3">Failing closed on Redis errors would turn a blip into an outage</h3>
+                <dl class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden text-[14px] divide-y divide-[#f0eee6]">
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Plan said</dt><dd class="m-0">If Redis is unreachable, reject with 429 to protect upstreams.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Code revealed</dt><dd class="m-0">The limiter shares <code>redis.Shared</code> with sessions, and <code>internal/sessions</code> already fails <em>open</em> after 50 ms. Failing closed here would make every Redis hiccup a full API outage, which is stricter than the behavior we already accept.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3 bg-[rgba(217,119,87,0.08)]"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-clay-dark pt-0.5">Conservative call</dt><dd class="m-0">Fall back to an in-process bucket per pod sized <code>limit ÷ 6</code> (HPA <code>minReplicas</code>). Redis timeout is 30 ms. Count fallbacks in <code>ratelimit_degraded_total</code>.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Revisit</dt><dd class="m-0">At 20 pods the effective limit is 3.3× the configured one. That's fine for minutes, not for hours. Alert after 5 min degraded.</dd></div>
+                </dl>
+              </div>
+            </li>
+
+            <!-- 6 discovery -->
+            <li x-show="show('disc')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-[#87867f] pt-1">12:02</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-ivory border-2 border-[#87867f]"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-[#87867f]">Discovery</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">A load-test harness with real tenant mixes already exists</h3>
+                <p class="m-0 text-[14.5px]"><code>tools/loadgen</code> ships with traffic profiles exported from billing. I used <code>--profile=prod-oct</code> instead of writing the synthetic generator the plan described.</p>
+              </div>
+            </li>
+
+            <!-- 7 deviation 3 -->
+            <li x-show="show('dev')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-clay-dark pt-1">13:05</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-clay"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-clay-dark">Deviation 3 of 4</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-3">Limits already live in plan entitlements, so I dropped the new table</h3>
+                <dl class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden text-[14px] divide-y divide-[#f0eee6]">
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Plan said</dt><dd class="m-0">Add a <code>tenant_limits</code> table (migration 0093) and admin CRUD.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Code revealed</dt><dd class="m-0"><code>config/plans.yaml</code> already defines <code>api_rps</code> and <code>api_burst</code> per plan, and billing reads them through <code>entitlements.Get()</code>. A second source of truth would drift.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3 bg-[rgba(217,119,87,0.08)]"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-clay-dark pt-0.5">Conservative call</dt><dd class="m-0">Read limits from entitlements. No migration and no admin UI in this PR, which also shrinks the diff by ~400 lines.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Revisit</dt><dd class="m-0">Sales wants per-tenant overrides. Add a thin override layer on top of entitlements rather than a parallel table.</dd></div>
+                </dl>
+              </div>
+            </li>
+
+            <!-- 8 plan -->
+            <li x-show="show('plan')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-[#87867f] pt-1">13:40</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-ivory border-2 border-olive"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(120,140,93,0.45)] rounded-full bg-[rgba(120,140,93,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-olive">As planned</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Step 7: metrics and the "Gateway / Rate limits" dashboard</h3>
+                <p class="m-0 text-[14.5px]"><code>ratelimit_requests_total{tier,decision}</code>. Tenant ID is not a label, as the plan said, to keep cardinality bounded. The top-20 limited tenants come from a log query instead.</p>
+              </div>
+            </li>
+
+            <!-- 9 deviation 4 -->
+            <li x-show="show('dev')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-clay-dark pt-1">14:22</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-clay"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-clay-dark">Deviation 4 of 4</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-3">Webhook ingress is exempt, in shadow mode</h3>
+                <dl class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden text-[14px] divide-y divide-[#f0eee6]">
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Plan said</dt><dd class="m-0">Every route behind the gateway is limited.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Code revealed</dt><dd class="m-0"><code>/hooks/stripe</code> and <code>/hooks/github</code> are called by providers that back off exponentially on 429. Stripe backs off for up to 3 days, so a burst limit would delay <code>invoice.paid</code> events.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3 bg-[rgba(217,119,87,0.08)]"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-clay-dark pt-0.5">Conservative call</dt><dd class="m-0">Exempt <code>/hooks/*</code> and <code>/healthz</code> through the route allowlist. Record them as <code>decision="shadow"</code> so we can see what <em>would</em> have been limited.</dd></div>
+                  <div class="grid sm:grid-cols-[150px_1fr] gap-x-4 gap-y-1 px-4 py-3"><dt class="font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f] pt-0.5">Revisit</dt><dd class="m-0">Provider IP ranges are published. A generous per-provider bucket may be better than a blanket exemption.</dd></div>
+                </dl>
+              </div>
+            </li>
+
+            <!-- 10 plan -->
+            <li x-show="show('plan')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6">
+              <span class="font-mono text-xs text-[#87867f] pt-1">14:50</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-ivory border-2 border-olive"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(120,140,93,0.45)] rounded-full bg-[rgba(120,140,93,0.12)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-olive">As planned</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Step 8: load test within budget</h3>
+                <p class="m-0 text-[14.5px]">2,000 rps across 40 tenants: p99 overhead <strong class="text-[#141413]">+0.9 ms</strong> against a 2 ms budget. 429s only for the 3 tenants configured over their limit. Report in <code>docs/notes/loadtest-2026-11-02.txt</code>.</p>
+              </div>
+            </li>
+
+            <!-- 11 human -->
+            <li id="h1" x-show="show('human')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)] pb-6 scroll-mt-20">
+              <span class="font-mono text-xs text-rust pt-1">15:10</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-rust"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-rust">For you</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Unresolved orgs: strict 20 rps, or fail open?</h3>
+                <p class="m-0 text-[14.5px]">From deviation 1. Today 0.4% of API-key requests have an org that <code>ResolveOrg()</code> can't map, mostly from orgs deleted mid-trial. Strict is what shipped. Fail-open is a one-line change in <code>keyfor.go:41</code>, but it would let a deleted org's keys run unlimited.</p>
+              </div>
+            </li>
+
+            <!-- 12 human -->
+            <li x-show="show('human')" class="relative grid grid-cols-[46px_20px_minmax(0,1fr)]">
+              <span class="font-mono text-xs text-rust pt-1">15:31</span>
+              <span class="mx-auto mt-2 w-3 h-3 rounded-full bg-rust"></span>
+              <div class="pl-3">
+                <span class="inline-flex border border-[rgba(176,74,63,0.45)] rounded-full bg-[rgba(176,74,63,0.10)] px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.05em] text-rust">For you</span>
+                <h3 class="font-serif font-medium text-[18px] text-[#141413] mt-2 mb-1">Enterprise contracts promise more than <code>plans.yaml</code> gives</h3>
+                <p class="m-0 text-[14.5px]"><code>plans.yaml</code> sets Enterprise <code>api_rps: 400</code>, but the Enterprise order-form template says "not less than 500 requests per second". I left <code>ratelimit.enforce</code> <strong class="text-[#141413]">off for the enterprise tier</strong> (log-only) until someone decides which number is right.</p>
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        <!-- Sidebar -->
+        <aside class="lg:sticky lg:top-6 space-y-5">
+          <div class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 px-4 pt-3 pb-2">Plan vs. build</p>
+            <ol class="m-0 p-0 list-none divide-y divide-[#f0eee6] text-[13.5px]">
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">1</span><span>Redis token bucket</span><span class="font-mono text-[11px] text-olive">as planned</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">2</span><span>Key by tenant</span><span class="font-mono text-[11px] text-clay-dark">changed · D1</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">3</span><span>429 + headers</span><span class="font-mono text-[11px] text-olive">as planned</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">4</span><span>Fail closed on Redis error</span><span class="font-mono text-[11px] text-clay-dark">reversed · D2</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">5</span><span>Limits table + admin</span><span class="font-mono text-[11px] text-clay-dark">dropped · D3</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">6</span><span>Limit every route</span><span class="font-mono text-[11px] text-clay-dark">narrowed · D4</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">7</span><span>Metrics + dashboard</span><span class="font-mono text-[11px] text-olive">as planned</span></li>
+              <li class="px-4 py-2 grid grid-cols-[20px_1fr_auto] gap-2 items-baseline"><span class="font-mono text-[11px] text-[#87867f]">8</span><span>Load test</span><span class="font-mono text-[11px] text-olive">as planned</span></li>
+            </ol>
+          </div>
+          <div class="border-l-4 border-olive bg-white rounded-r-xl px-5 py-4 text-[13.5px]">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-1">What "conservative" meant here</p>
+            <p class="m-0">Pick the option that is easiest to loosen later and never widens access or blast radius. Every call above can be reversed with a config or one-line change.</p>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Fold back -->
+      <section class="mt-14 bg-[#141413] text-[#e8e6de] rounded-2xl px-6 py-7 sm:px-8" x-data="{ copied: false }">
+        <div class="flex flex-wrap items-start gap-4 mb-4">
+          <div class="flex-1 min-w-[220px]">
+            <p class="font-mono text-[11px] uppercase tracking-[0.08em] text-clay m-0 mb-1.5">Fold back into the plan</p>
+            <h2 class="font-serif font-medium text-[26px] text-ivory m-0 mb-1">What this changes about attempt #2</h2>
+            <p class="m-0 text-[14px] text-[#b8b6ac]">Paste these into the next plan or prompt so the next run starts from today's surprises instead of rediscovering them.</p>
+          </div>
+          <button type="button"
+            @click="navigator.clipboard.writeText($refs.bullets.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1400) })"
+            class="font-mono text-xs border border-[#3d3d3a] bg-[#1f1f1d] text-ivory rounded-lg px-3 py-1.5 hover:border-clay focus-visible:outline-2 focus-visible:outline-clay">
+            <span x-show="!copied">Copy bullets</span><span x-show="copied" x-cloak class="text-[#a3b37f]">Copied ✓</span>
+          </button>
+        </div>
+        <ol class="m-0 pl-5 list-decimal marker:text-clay marker:font-mono space-y-2.5 text-[14.5px]">
+          <li><strong class="text-ivory">Name the identity resolver, not the claim.</strong> Callers arrive with <span class="font-mono text-[13px] text-[#c9b98a]">tenant_id</span> (user JWTs) or only <span class="font-mono text-[13px] text-[#c9b98a]">org_id</span> (API keys, 31% of traffic). The plan should say to use <span class="font-mono text-[13px] text-[#c9b98a]">tenants.ResolveOrg()</span> and what happens when it fails.</li>
+          <li><strong class="text-ivory">State the failure policy relative to neighbors.</strong> Shared Redis already fails open for sessions. Any new Redis consumer needs its fail-open or fail-closed choice and per-pod fallback sizing written down before the build.</li>
+          <li><strong class="text-ivory">Search for the existing source of truth before adding a table.</strong> <span class="font-mono text-[13px] text-[#c9b98a]">plans.yaml</span> entitlements already held limits. Add a "prior art" step to the plan template.</li>
+          <li><strong class="text-ivory">List inbound callers that aren't users.</strong> Webhook providers react badly to 429s. Decide exemptions or provider-specific buckets up front.</li>
+        </ol>
+        <pre x-ref="bullets" class="hidden">1. Name the identity resolver, not the claim: callers arrive with tenant_id (user JWTs) or only org_id (API keys, 31% of traffic). Use tenants.ResolveOrg() and specify what happens when it fails.
+2. State the failure policy relative to neighbors: shared Redis already fails open for sessions. Write down fail-open or fail-closed and per-pod fallback sizing before the build.
+3. Search for the existing source of truth before adding a table: plans.yaml entitlements already held api_rps/api_burst. Add a "prior art" step to the plan template.
+4. List inbound callers that aren't users: webhook providers (Stripe, GitHub) back off on 429. Decide exemptions or provider-specific buckets up front.</pre>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/implementation-notes.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

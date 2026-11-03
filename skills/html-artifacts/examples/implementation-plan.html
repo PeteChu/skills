@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Implementation plan — recurring invoices</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      .kw { color: #d97757; } .str { color: #a3b37f; } .fn { color: #c9b98a; } .cm { color: #87867f; }
+      .chg { background: rgba(217,119,87,.22); border-radius: 3px; }
+      .tl::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: #d1cfc5; }
+      .tl-dot { position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: #87867f; outline: 3px solid #faf9f5; }
+      .tl-dot.impact { background: #d97757; } .tl-dot.done { background: #788c5d; }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+    </style>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-5 sm:px-6 py-14 lg:py-16" x-data="plan()">
+    <main class="mx-auto max-w-[1100px]">
+      <header class="mb-10 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Implementation plan · Acme Billing</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Recurring invoices
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Write the implementation plan for recurring invoices so I can hand it to Dana on Monday. Milestones, how data
+          flows from the schedule editor to a sent invoice, mockups of the new screens, the code most likely to go wrong,
+          risks, and open questions. Flag any call you made that I might want to change.
+        </div>
+      </header>
+
+      <!-- Summary strip -->
+      <div class="grid grid-cols-2 md:grid-cols-4 border border-[#d1cfc5] rounded-xl bg-white overflow-hidden mb-6">
+        <div class="p-4 sm:p-5 border-b md:border-b-0 border-r border-[#d1cfc5]">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Effort</p>
+          <p class="font-serif text-[28px] leading-tight text-clay-dark m-0 mt-1">~8 dev-days</p>
+        </div>
+        <div class="p-4 sm:p-5 border-b md:border-b-0 md:border-r border-[#d1cfc5]">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Packages</p>
+          <p class="font-serif text-[28px] leading-tight text-[#141413] m-0 mt-1">3</p>
+        </div>
+        <div class="p-4 sm:p-5 border-r border-[#d1cfc5]">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">New tables</p>
+          <p class="font-serif text-[28px] leading-tight text-[#141413] m-0 mt-1">2</p>
+        </div>
+        <div class="p-4 sm:p-5">
+          <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0">Flag</p>
+          <p class="font-mono text-[14px] text-[#141413] m-0 mt-2.5 break-all">recurring_invoices_v1</p>
+        </div>
+      </div>
+
+      <nav class="flex flex-wrap gap-2 mb-14 font-mono text-[12px]" aria-label="Sections">
+        <a href="#milestones" class="border border-[#d1cfc5] bg-white rounded-full px-3 py-1 hover:border-[#141413]">01 Milestones</a>
+        <a href="#flow" class="border border-[#d1cfc5] bg-white rounded-full px-3 py-1 hover:border-[#141413]">02 Data flow</a>
+        <a href="#decisions" class="border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-3 py-1 hover:border-clay">03 Decisions to check</a>
+        <a href="#mockups" class="border border-[#d1cfc5] bg-white rounded-full px-3 py-1 hover:border-[#141413]">04 Mockups</a>
+        <a href="#code" class="border border-[#d1cfc5] bg-white rounded-full px-3 py-1 hover:border-[#141413]">05 Key code</a>
+        <a href="#risks" class="border border-[#d1cfc5] bg-white rounded-full px-3 py-1 hover:border-[#141413]">06 Risks</a>
+        <a href="#questions" class="border border-[#d1cfc5] bg-white rounded-full px-3 py-1 hover:border-[#141413]">07 Open questions</a>
+      </nav>
+
+      <!-- 01 Milestones -->
+      <section class="mb-14 scroll-mt-6" id="milestones">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Milestones</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Four slices. Each one is a reviewable PR that lands green on CI behind the flag. Customers see nothing until slice 4.</p>
+        <ol class="tl relative list-none m-0 pl-0">
+          <li class="relative pl-8 pb-7">
+            <span class="tl-dot impact"></span>
+            <div class="grid md:grid-cols-[150px_1fr] gap-x-6 gap-y-1">
+              <span class="font-mono text-xs text-[#87867f] pt-0.5">Days 1–2</span>
+              <div>
+                <h3 class="m-0 text-[16px] font-semibold text-[#141413]">Schema &amp; domain model</h3>
+                <p class="m-0 mt-1">Migration <code class="font-mono text-[13px]">0057</code> adds <code class="font-mono text-[13px]">invoice_schedules</code> and <code class="font-mono text-[13px]">schedule_runs</code>. A pure <code class="font-mono text-[13px]">nextPeriod()</code> in billing-core gets full unit coverage before anything calls it.</p>
+                <p class="m-0 mt-2 flex flex-wrap gap-1.5"><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">packages/billing-core</span><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">migration 0057</span></p>
+              </div>
+            </div>
+          </li>
+          <li class="relative pl-8 pb-7">
+            <span class="tl-dot impact"></span>
+            <div class="grid md:grid-cols-[150px_1fr] gap-x-6 gap-y-1">
+              <span class="font-mono text-xs text-[#87867f] pt-0.5">Days 3–4</span>
+              <div>
+                <h3 class="m-0 text-[16px] font-semibold text-[#141413]">Scheduler tick</h3>
+                <p class="m-0 mt-1">A 5-minute job in <code class="font-mono text-[13px]">services/scheduler</code> claims due schedules and calls <code class="font-mono text-[13px]">generateInvoice()</code>. The job is idempotent on <code class="font-mono text-[13px]">(schedule_id, period_start)</code>, so overlapping ticks cannot double-bill.</p>
+                <p class="m-0 mt-2 flex flex-wrap gap-1.5"><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">services/scheduler</span><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">packages/billing-core</span></p>
+              </div>
+            </div>
+          </li>
+          <li class="relative pl-8 pb-7">
+            <span class="tl-dot"></span>
+            <div class="grid md:grid-cols-[150px_1fr] gap-x-6 gap-y-1">
+              <span class="font-mono text-xs text-[#87867f] pt-0.5">Days 5–6</span>
+              <div>
+                <h3 class="m-0 text-[16px] font-semibold text-[#141413]">Schedule editor UI</h3>
+                <p class="m-0 mt-1">A "Repeat" panel on the invoice form and a <em>Recurring</em> badge in the invoice list. The editor previews the next three dates using the same <code class="font-mono text-[13px]">nextPeriod()</code> the server runs.</p>
+                <p class="m-0 mt-2 flex flex-wrap gap-1.5"><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">apps/dashboard</span></p>
+              </div>
+            </div>
+          </li>
+          <li class="relative pl-8">
+            <span class="tl-dot"></span>
+            <div class="grid md:grid-cols-[150px_1fr] gap-x-6 gap-y-1">
+              <span class="font-mono text-xs text-[#87867f] pt-0.5">Days 7–8</span>
+              <div>
+                <h3 class="m-0 text-[16px] font-semibold text-[#141413]">Emails, flag ramp, docs</h3>
+                <p class="m-0 mt-1">Reuse the <code class="font-mono text-[13px]">invoice.sent</code> template with a "next invoice on…" footer. Ramp: Acme staff → 5 design-partner accounts → everyone over one week.</p>
+                <p class="m-0 mt-2 flex flex-wrap gap-1.5"><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">packages/mailer</span><span class="font-mono text-[11px] border border-[#d1cfc5] rounded-full bg-white px-2 py-0.5">flags.yaml</span></p>
+              </div>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 02 Data flow -->
+      <section class="mb-14 scroll-mt-6" id="flow">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Data flow</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Saving a schedule is a plain write. Everything interesting happens later, on the scheduler path (clay), which runs without a user present.</p>
+        <div class="overflow-x-auto bg-white border border-[#d1cfc5] rounded-xl p-5">
+          <svg viewBox="0 0 960 320" class="w-full min-w-[720px] h-auto" role="img" aria-label="Data flow: schedule editor to API to invoice_schedules; scheduler tick claims due rows, generates invoices into invoices and schedule_runs, then the email worker sends to the customer">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#87867f" /></marker>
+              <marker id="arr-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97757" /></marker>
+            </defs>
+            <g font-family="ui-monospace, monospace">
+              <rect x="20" y="30" width="190" height="60" rx="8" fill="#faf9f5" stroke="#d1cfc5" />
+              <text x="115" y="56" text-anchor="middle" font-size="12.5" fill="#141413">ScheduleEditor</text>
+              <text x="115" y="74" text-anchor="middle" font-size="10.5" fill="#87867f">apps/dashboard</text>
+              <rect x="270" y="30" width="190" height="60" rx="8" fill="#faf9f5" stroke="#d1cfc5" />
+              <text x="365" y="56" text-anchor="middle" font-size="12.5" fill="#141413">schedules.upsert</text>
+              <text x="365" y="74" text-anchor="middle" font-size="10.5" fill="#87867f">API · zod-validated</text>
+              <rect x="520" y="30" width="190" height="60" rx="8" fill="#f0eee6" stroke="#d1cfc5" />
+              <text x="615" y="56" text-anchor="middle" font-size="12.5" fill="#141413">invoice_schedules</text>
+              <text x="615" y="74" text-anchor="middle" font-size="10.5" fill="#87867f">postgres · next_run_at</text>
+
+              <rect x="520" y="140" width="190" height="60" rx="8" fill="#fff" stroke="#d97757" stroke-width="2" />
+              <text x="615" y="166" text-anchor="middle" font-size="12.5" fill="#141413">scheduler tick</text>
+              <text x="615" y="184" text-anchor="middle" font-size="10.5" fill="#b85c3e">every 5 min</text>
+              <rect x="760" y="140" width="180" height="60" rx="8" fill="#fff" stroke="#d97757" stroke-width="2" />
+              <text x="850" y="166" text-anchor="middle" font-size="12.5" fill="#141413">generateInvoice()</text>
+              <text x="850" y="184" text-anchor="middle" font-size="10.5" fill="#b85c3e">billing-core</text>
+
+              <rect x="760" y="250" width="180" height="60" rx="8" fill="#f0eee6" stroke="#d97757" stroke-width="2" />
+              <text x="850" y="276" text-anchor="middle" font-size="12.5" fill="#141413">invoices + runs</text>
+              <text x="850" y="294" text-anchor="middle" font-size="10.5" fill="#87867f">one txn</text>
+              <rect x="520" y="250" width="190" height="60" rx="8" fill="#faf9f5" stroke="#d1cfc5" />
+              <text x="615" y="276" text-anchor="middle" font-size="12.5" fill="#141413">mailer worker</text>
+              <text x="615" y="294" text-anchor="middle" font-size="10.5" fill="#87867f">invoice.sent</text>
+              <rect x="270" y="250" width="190" height="60" rx="8" fill="#faf9f5" stroke="#d1cfc5" />
+              <text x="365" y="276" text-anchor="middle" font-size="12.5" fill="#141413">customer inbox</text>
+              <text x="365" y="294" text-anchor="middle" font-size="10.5" fill="#87867f">PDF + pay link</text>
+
+              <line x1="210" y1="60" x2="266" y2="60" stroke="#87867f" stroke-width="1.5" marker-end="url(#arr)" />
+              <text x="238" y="50" text-anchor="middle" font-size="10" fill="#87867f">save</text>
+              <line x1="460" y1="60" x2="516" y2="60" stroke="#87867f" stroke-width="1.5" marker-end="url(#arr)" />
+              <text x="488" y="50" text-anchor="middle" font-size="10" fill="#87867f">UPSERT</text>
+              <line x1="615" y1="90" x2="615" y2="136" stroke="#d97757" stroke-width="2" marker-end="url(#arr-c)" />
+              <text x="625" y="118" font-size="10" fill="#b85c3e">claim due rows</text>
+              <line x1="710" y1="170" x2="756" y2="170" stroke="#d97757" stroke-width="2" marker-end="url(#arr-c)" />
+              <line x1="850" y1="200" x2="850" y2="246" stroke="#d97757" stroke-width="2" marker-end="url(#arr-c)" />
+              <text x="840" y="228" text-anchor="end" font-size="10" fill="#b85c3e">ON CONFLICT DO NOTHING</text>
+              <line x1="760" y1="280" x2="714" y2="280" stroke="#87867f" stroke-width="1.5" marker-end="url(#arr)" />
+              <text x="737" y="270" text-anchor="middle" font-size="10" fill="#87867f">enqueue</text>
+              <line x1="520" y1="280" x2="464" y2="280" stroke="#87867f" stroke-width="1.5" marker-end="url(#arr)" />
+              <text x="492" y="270" text-anchor="middle" font-size="10" fill="#87867f">send</text>
+              <text x="20" y="160" font-size="11" fill="#87867f">user present ↑</text>
+              <text x="20" y="180" font-size="11" fill="#b85c3e">no user present ↓</text>
+              <line x1="20" y1="120" x2="500" y2="120" stroke="#d1cfc5" stroke-dasharray="4 5" />
+            </g>
+          </svg>
+        </div>
+        <p class="font-mono text-xs text-[#87867f] mt-3 mb-0">Clay = runs unattended and must be idempotent. Gray = request/response or fire-and-forget.</p>
+      </section>
+
+      <!-- 03 Decisions -->
+      <section class="mb-14 scroll-mt-6" id="decisions">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-clay text-white px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Decisions you might want to change</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">I made two judgment calls. Toggle either one to see the alternative. The migration in section 05 and the hand-off summary at the bottom follow your choice.</p>
+        <div class="grid lg:grid-cols-2 gap-6">
+          <article class="bg-white border rounded-xl p-6 flex flex-col gap-4" :class="d1 === 'alt' ? 'border-clay' : 'border-[#d1cfc5]'">
+            <header class="flex items-start justify-between gap-3">
+              <div>
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Choice ① · timing</p>
+                <h3 class="font-serif font-medium text-[20px] text-[#141413] m-0">When is the invoice created?</h3>
+              </div>
+              <button type="button" @click="d1 = d1 === 'pick' ? 'alt' : 'pick'" :aria-pressed="d1 === 'alt'"
+                class="shrink-0 font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="d1 === 'pick' ? 'View alternative →' : '← Plan’s pick'"></button>
+            </header>
+            <div x-show="d1 === 'pick'">
+              <p class="font-mono text-[11px] text-olive m-0 mb-1.5">PLAN’S PICK · draft 3 days ahead</p>
+              <p class="m-0 mb-2">The tick creates a <strong>draft</strong> at <code class="font-mono text-[13px]">period_start − 3d</code> and finalizes it on the due date. Owners can fix a line item before it goes out.</p>
+              <p class="text-sm text-[#87867f] m-0">Cost: a second state transition (draft → open) and a "review upcoming" list in the UI. Adds about ½ day.</p>
+            </div>
+            <div x-show="d1 === 'alt'" x-cloak>
+              <p class="font-mono text-[11px] text-clay-dark m-0 mb-1.5">ALTERNATIVE · generate at due time</p>
+              <p class="m-0 mb-2">The tick creates and sends the invoice on the due date in one step. That gives one fewer state and no new UI list.</p>
+              <p class="text-sm text-[#87867f] m-0">Pick this if your customers rarely edit recurring invoices. Mistakes then need a credit note instead of an edit.</p>
+            </div>
+          </article>
+
+          <article class="bg-white border rounded-xl p-6 flex flex-col gap-4" :class="d2 === 'alt' ? 'border-clay' : 'border-[#d1cfc5]'">
+            <header class="flex items-start justify-between gap-3">
+              <div>
+                <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-1">Choice ② · data model</p>
+                <h3 class="font-serif font-medium text-[20px] text-[#141413] m-0">How is the repeat rule stored?</h3>
+              </div>
+              <button type="button" @click="d2 = d2 === 'pick' ? 'alt' : 'pick'" :aria-pressed="d2 === 'alt'"
+                class="shrink-0 font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"
+                x-text="d2 === 'pick' ? 'View alternative →' : '← Plan’s pick'"></button>
+            </header>
+            <div x-show="d2 === 'pick'">
+              <p class="font-mono text-[11px] text-olive m-0 mb-1.5">PLAN’S PICK · explicit columns</p>
+              <p class="m-0 mb-2"><code class="font-mono text-[13px]">interval_unit</code>, <code class="font-mono text-[13px]">interval_count</code>, <code class="font-mono text-[13px]">anchor_day</code>. This covers weekly, monthly, quarterly, and yearly, which is every request in the support backlog. It is queryable and has a check constraint.</p>
+              <p class="text-sm text-[#87867f] m-0">Cost: "2nd Tuesday of the month" needs a migration later.</p>
+            </div>
+            <div x-show="d2 === 'alt'" x-cloak>
+              <p class="font-mono text-[11px] text-clay-dark m-0 mb-1.5">ALTERNATIVE · RRULE string</p>
+              <p class="m-0 mb-2">One <code class="font-mono text-[13px]">rrule text</code> column (RFC 5545), parsed with the <code class="font-mono text-[13px]">rrule</code> package. It handles any calendar pattern.</p>
+              <p class="text-sm text-[#87867f] m-0">Pick this if you expect calendar-style rules soon. It adds a dependency, cannot be queried in SQL, and needs about 1 extra day for validation and editor UX.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 04 Mockups -->
+      <section class="mb-14 scroll-mt-6" id="mockups">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Mockups</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">These are not pixel-final. They exist to settle where the repeat panel lives and what the list shows.</p>
+        <div class="grid md:grid-cols-2 gap-6">
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <figcaption class="px-4 py-2.5 bg-[#f0eee6] border-b border-[#d1cfc5] font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">A · Repeat panel on the invoice form</figcaption>
+            <div class="p-5 text-[13.5px]">
+              <div class="border border-[#d1cfc5] rounded-lg p-4">
+                <label class="flex items-center gap-2 font-semibold text-[#141413] mb-3"><input type="checkbox" checked disabled class="accent-clay"> Repeat this invoice</label>
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                  <span>Every</span><span class="border border-[#d1cfc5] rounded-md px-2.5 py-1 bg-[#faf9f5] font-mono">1</span>
+                  <span class="border border-[#d1cfc5] rounded-md px-2.5 py-1 bg-[#faf9f5]">month ▾</span>
+                  <span>on day</span><span class="border border-[#d1cfc5] rounded-md px-2.5 py-1 bg-[#faf9f5] font-mono">1</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 mb-4">
+                  <span>Ends</span><span class="border border-clay rounded-md px-2.5 py-1 bg-[rgba(217,119,87,0.12)]">after 12 invoices</span><span class="border border-[#d1cfc5] rounded-md px-2.5 py-1">never</span>
+                </div>
+                <div class="bg-[#f0eee6] rounded-md px-3 py-2 font-mono text-[12px]">
+                  <span class="text-[#87867f]">Next:</span> 1 Dec · 1 Jan · 1 Feb <span class="text-[#87867f]">(drafts 3 days before)</span>
+                </div>
+              </div>
+            </div>
+          </figure>
+          <figure class="m-0 bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+            <figcaption class="px-4 py-2.5 bg-[#f0eee6] border-b border-[#d1cfc5] font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">B · Invoice list with recurring rows</figcaption>
+            <div class="p-5 text-[13.5px]">
+              <div class="border border-[#d1cfc5] rounded-lg divide-y divide-[#f0eee6]">
+                <div class="flex items-center gap-3 px-4 py-3"><span class="font-mono text-[12px] text-[#87867f] w-16">INV-2291</span><span class="flex-1 truncate text-[#141413]">Northwind Cafés</span><span class="font-mono text-[10.5px] rounded-full px-2 py-0.5 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">↻ monthly</span><span class="font-mono text-[12px]">€480</span></div>
+                <div class="flex items-center gap-3 px-4 py-3"><span class="font-mono text-[12px] text-[#87867f] w-16">INV-2290</span><span class="flex-1 truncate text-[#141413]">Halden &amp; Pike LLP</span><span class="font-mono text-[10.5px] rounded-full px-2 py-0.5 bg-[rgba(120,140,93,0.12)] text-olive border border-[rgba(120,140,93,0.45)]">paid</span><span class="font-mono text-[12px]">€1,250</span></div>
+                <div class="flex items-center gap-3 px-4 py-3 bg-[#faf9f5]"><span class="font-mono text-[12px] text-[#87867f] w-16">draft</span><span class="flex-1 truncate text-[#141413]">Northwind Cafés <span class="text-[#87867f]">· sends 1 Dec</span></span><span class="font-mono text-[10.5px] rounded-full px-2 py-0.5 border border-[#d1cfc5]">review</span><span class="font-mono text-[12px]">€480</span></div>
+                <div class="flex items-center gap-3 px-4 py-3"><span class="font-mono text-[12px] text-[#87867f] w-16">INV-2287</span><span class="flex-1 truncate text-[#141413]">Orbit Dental</span><span class="font-mono text-[10.5px] rounded-full px-2 py-0.5 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">↻ quarterly</span><span class="font-mono text-[12px]">€2,100</span></div>
+              </div>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 05 Key code -->
+      <section class="mb-14 scroll-mt-6" id="code">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Key code</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[720px] m-0 mb-6">These are the two pieces most likely to be done wrong: the schema, where the rule shape follows choice ②, and the idempotent tick.</p>
+        <div class="grid lg:grid-cols-2 gap-6">
+          <div class="min-w-0">
+            <p class="font-mono text-xs text-[#87867f] m-0 mb-2">packages/billing-core/migrations/0057_recurring.sql <span x-show="d2 === 'alt'" x-cloak class="text-clay-dark">· RRULE variant</span></p>
+            <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">create table</span> invoice_schedules (
+  id            uuid <span class="kw">primary key</span>,
+  account_id    uuid <span class="kw">not null references</span> accounts,
+  template_id   uuid <span class="kw">not null references</span> invoices,
+<span x-show="d2 === 'pick'"><span class="chg">  interval_unit  text <span class="kw">check</span> (interval_unit <span class="kw">in</span>
+                 (<span class="str">'week'</span>,<span class="str">'month'</span>,<span class="str">'year'</span>)),
+  interval_count int  <span class="kw">not null default</span> <span class="str">1</span>,
+  anchor_day     int  <span class="kw">check</span> (anchor_day <span class="kw">between</span> <span class="str">1</span> <span class="kw">and</span> <span class="str">31</span>),</span>
+</span><span x-show="d2 === 'alt'" x-cloak><span class="chg">  rrule          text <span class="kw">not null</span>, <span class="cm">-- 'FREQ=MONTHLY;BYMONTHDAY=1'</span></span>
+</span>  timezone      text <span class="kw">not null</span>,  <span class="cm">-- account tz, not UTC</span>
+  next_run_at   timestamptz <span class="kw">not null</span>,
+  ends_after    int,             <span class="cm">-- null = never</span>
+  paused_at     timestamptz
+);
+
+<span class="kw">create table</span> schedule_runs (
+  schedule_id   uuid <span class="kw">references</span> invoice_schedules,
+  period_start  date <span class="kw">not null</span>,
+  invoice_id    uuid <span class="kw">references</span> invoices,
+  <span class="kw">primary key</span> (schedule_id, period_start)
+);</pre>
+            </div>
+          </div>
+          <div class="min-w-0">
+            <p class="font-mono text-xs text-[#87867f] m-0 mb-2">services/scheduler/src/jobs/recurringTick.ts</p>
+            <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
+<pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">export async function</span> <span class="fn">recurringTick</span>(db: Db, now = <span class="kw">new</span> <span class="fn">Date</span>()) {
+  <span class="kw">const</span> due = <span class="kw">await</span> db.<span class="fn">claimDueSchedules</span>({
+    before: <span x-show="d1 === 'pick'"><span class="fn">addDays</span>(now, <span class="str">3</span>)</span><span x-show="d1 === 'alt'" x-cloak>now</span>, limit: <span class="str">200</span>,
+  }); <span class="cm">// FOR UPDATE SKIP LOCKED</span>
+
+  <span class="kw">for</span> (<span class="kw">const</span> s <span class="kw">of</span> due) {
+    <span class="kw">const</span> period = <span class="fn">nextPeriod</span>(s, s.timezone);
+    <span class="kw">await</span> db.<span class="fn">tx</span>(<span class="kw">async</span> (tx) =&gt; {
+      <span class="kw">const</span> run = <span class="kw">await</span> tx.<span class="fn">insertRun</span>(s.id, period.start)
+        .<span class="fn">onConflictDoNothing</span>();
+      <span class="kw">if</span> (!run) <span class="kw">return</span>;   <span class="cm">// another tick won</span>
+      <span class="kw">const</span> inv = <span class="kw">await</span> <span class="fn">generateInvoice</span>(tx, s, period, {
+        status: <span x-show="d1 === 'pick'"><span class="str">'draft'</span></span><span x-show="d1 === 'alt'" x-cloak><span class="str">'open'</span></span>,
+      });
+      <span class="kw">await</span> tx.<span class="fn">advance</span>(s.id, period.next);
+    });
+  }
+}</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 06 Risks -->
+      <section class="mb-14 scroll-mt-6" id="risks">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">06</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Risks &amp; mitigations</h2>
+        </div>
+        <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white mt-5">
+          <table class="w-full min-w-[640px] text-sm border-collapse">
+            <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+              <tr><th class="px-4 py-2.5 font-medium w-[38%]">Risk</th><th class="px-4 py-2.5 font-medium w-[80px]">Sev</th><th class="px-4 py-2.5 font-medium">Mitigation</th></tr>
+            </thead>
+            <tbody class="divide-y divide-[#f0eee6]">
+              <tr><td class="px-4 py-3 align-top">Two scheduler pods overlap and bill the same period twice.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(176,74,63,0.10)] text-rust border border-[rgba(176,74,63,0.45)]">HIGH</span></td><td class="px-4 py-3 align-top">Primary key on <code class="font-mono text-[12.5px]">(schedule_id, period_start)</code> plus <code class="font-mono text-[12.5px]">SKIP LOCKED</code>. A test runs two ticks concurrently against the real database.</td></tr>
+              <tr><td class="px-4 py-3 align-top">Anchor day 31 in February, or 29 in a non-leap year.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">MED</span></td><td class="px-4 py-3 align-top">Clamp to the last day of the month inside <code class="font-mono text-[12.5px]">nextPeriod()</code>. Table-driven tests cover all 12 months × days 28–31.</td></tr>
+              <tr><td class="px-4 py-3 align-top">Invoice dated the wrong day for accounts far from UTC.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 bg-[rgba(217,119,87,0.12)] text-clay-dark border border-[rgba(217,119,87,0.45)]">MED</span></td><td class="px-4 py-3 align-top">Store the account timezone on the schedule and compute periods in local time. Never derive the date from <code class="font-mono text-[12.5px]">now()</code> in SQL.</td></tr>
+              <tr><td class="px-4 py-3 align-top">The template invoice is edited mid-cycle, so future invoices change silently.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] rounded-full px-2 py-0.5 border border-[#d1cfc5]">LOW</span></td><td class="px-4 py-3 align-top">Show "affects the next invoice on 1 Dec" on save. The draft window (choice ①) gives a second chance.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 07 Open questions -->
+      <section class="mb-14 scroll-mt-6" id="questions">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">07</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Open questions</h2>
+        </div>
+        <div class="grid md:grid-cols-2 gap-5 mt-5">
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-semibold text-[#141413] m-0 mb-1.5">Pause, or only cancel?</p>
+            <p class="m-0 mb-3 text-[14.5px]"><code class="font-mono text-[13px]">paused_at</code> is in the schema already. The UI for resuming (skip missed periods or back-bill them?) is the hard part. Leaning toward "skip missed" for v1.</p>
+            <p class="font-mono text-[11.5px] text-clay-dark m-0">Decide with · product, before slice 3</p>
+          </div>
+          <div class="bg-white border border-[#d1cfc5] rounded-xl p-5">
+            <p class="font-semibold text-[#141413] m-0 mb-1.5">Proration when the price changes</p>
+            <p class="m-0 mb-3 text-[14.5px]">Out of scope for v1: changes apply from the next period. Finance needs to confirm that this is acceptable for the 5 design-partner accounts on annual plans.</p>
+            <p class="font-mono text-[11.5px] text-clay-dark m-0">Decide with · finance, before ramp</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mechanical, collapsed -->
+      <details class="fold border border-[#d1cfc5] rounded-xl bg-white overflow-hidden mb-12">
+        <summary class="cursor-pointer px-4 py-3 flex gap-3 items-center bg-[#f0eee6]">
+          <span class="flex-1 font-mono text-[13px] text-[#141413]">Mechanical work: 6 tasks, ~½ day, already in the estimate</span>
+          <span class="font-mono text-xs text-[#87867f]">safe to skip</span>
+        </summary>
+        <ul class="m-0 p-5 pl-9 list-disc marker:text-clay space-y-1.5 text-[14.5px]">
+          <li>Register <code class="font-mono text-[13px]">recurringTick</code> in <code class="font-mono text-[13px]">services/scheduler/src/jobs/index.ts</code> and add it to the stuck-job alert.</li>
+          <li>Add both tables to the fixture loader and <code class="font-mono text-[13px]">scripts/reset-test-db.sh</code>.</li>
+          <li>Create <code class="font-mono text-[13px]">recurring_invoices_v1</code> in <code class="font-mono text-[13px]">flags.yaml</code>, default off.</li>
+          <li>Move <code class="font-mono text-[13px]">formatMoney</code> from <code class="font-mono text-[13px]">apps/dashboard/utils</code> to <code class="font-mono text-[13px]">billing-core</code> so the mailer can use it.</li>
+          <li>Extend <code class="font-mono text-[13px]">openapi.yaml</code> with <code class="font-mono text-[13px]">/schedules</code> and regenerate the client.</li>
+          <li>Add a "Recurring" filter to the invoice list query (index already exists).</li>
+        </ul>
+      </details>
+
+      <!-- Hand-off -->
+      <aside class="border-l-4 border-olive bg-white rounded-r-xl px-6 py-5">
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0">Hand-off summary</h2>
+          <span class="flex-1"></span>
+          <span class="font-mono text-[11px] text-[#87867f]" x-text="(d1 === 'alt' || d2 === 'alt') ? 'includes your changes' : 'plan as written'"></span>
+          <button type="button" @click="copy()" class="font-mono text-xs bg-[#141413] text-ivory rounded-lg px-3 py-1.5 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-clay">
+            <span x-show="!copied">Copy as Markdown</span><span x-show="copied" x-cloak>Copied ✓</span>
+          </button>
+        </div>
+        <pre class="m-0 font-mono text-[12.5px] bg-[#f0eee6] rounded-lg p-4 whitespace-pre-wrap" x-text="summary"></pre>
+      </aside>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/implementation-plan.md</span>
+      </footer>
+    </main>
+
+    <script>
+      function plan() {
+        return {
+          d1: 'pick',
+          d2: 'pick',
+          copied: false,
+          get summary() {
+            const timing = this.d1 === 'pick'
+              ? 'Draft 3 days ahead, finalize on due date'
+              : 'Generate and send on the due date (no draft step)';
+            const rule = this.d2 === 'pick'
+              ? 'Explicit columns: interval_unit, interval_count, anchor_day'
+              : 'RRULE text column parsed with `rrule` (+1 day)';
+            const days = 8 - (this.d1 === 'alt' ? 0.5 : 0) + (this.d2 === 'alt' ? 1 : 0);
+            return [
+              '## Recurring invoices: plan (flag recurring_invoices_v1)',
+              '- Effort: ~' + days + ' dev-days across billing-core, scheduler, dashboard',
+              '- Timing: ' + timing,
+              '- Repeat rule: ' + rule,
+              '- Slices: schema → scheduler tick → editor UI → emails + ramp',
+              '- Idempotency: PK (schedule_id, period_start) + SKIP LOCKED',
+              '- Open: pause semantics (product), proration (finance)',
+            ].join('\n');
+          },
+          copy() {
+            const text = this.summary;
+            const done = () => { this.copied = true; setTimeout(() => this.copied = false, 1400); };
+            const fallback = () => {
+              const ta = document.createElement('textarea');
+              ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+              document.body.appendChild(ta); ta.select();
+              try { document.execCommand('copy'); done(); } catch (e) {}
+              ta.remove();
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+            else fallback();
+          },
+        };
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Semantics map — recur (Python) to acme-scheduler (TypeScript)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      [x-cloak] { display: none !important; }
+      .kw { color: #d97757; }
+      .str { color: #a3b37f; }
+      .fn { color: #c9b98a; }
+      .cm { color: #87867f; }
+      mark.lk { background: rgba(217,119,87,.20); color: inherit; border-radius: 3px; padding: 0 2px; cursor: help; transition: background-color 120ms; }
+      mark.lk.on { background: rgba(217,119,87,.55); outline: 1px solid #d97757; }
+      mark.lk sup, .nmark { font-family: ui-monospace, monospace; font-size: 9.5px; color: #e8a58c; margin-left: 1px; }
+      .nmark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 999px; background: #e3dacc; color: #141413; font-size: 11px; flex: none; }
+    </style>
+    <script>
+      function portMap() {
+        return {
+          p: null,
+          on(id) { return { on: this.p === id }; },
+          note(id) { return this.p === id ? 'border-color:#d97757;background:rgba(217,119,87,0.08)' : ''; },
+          copied: '',
+          copy(text, key) {
+            navigator.clipboard.writeText(text).then(() => { this.copied = key; setTimeout(() => (this.copied = ''), 1600); });
+          },
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1240px]" x-data="portMap()">
+      <header class="mb-12 max-w-[860px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">acme-scheduler · semantics map · before porting</p>
+        <div class="flex flex-wrap items-start gap-x-4 gap-y-2 mb-5">
+          <h1 class="text-[#141413] font-serif font-medium text-[clamp(30px,4.6vw,42px)] leading-[1.12] tracking-tight m-0">
+            <span class="italic text-clay-dark">recur</span> (Python) → <span class="font-mono text-[0.72em]">src/scheduler/cron/</span> (TypeScript)
+          </h1>
+          <span class="mt-2 inline-flex items-center gap-1.5 border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] px-2.5 py-1 font-mono text-[11.5px] text-clay-dark">awaiting confirmation</span>
+        </div>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px] mb-5">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          <code class="font-mono text-[13px]">vendor/recur</code> is the cron library our old Python worker used, and customers depend on exactly when
+          their jobs fire. Port it to TypeScript in <code class="font-mono text-[13px]">src/scheduler/cron/</code>, but first show me a semantics map
+          so I can confirm you understood it.
+        </div>
+        <p class="m-0 mb-4">What the library does, how each behavior maps to TypeScript, and every place the port cannot be a literal
+          translation. Nothing gets implemented until you sign off on this page.</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1">source: <strong class="text-[#141413]">vendor/recur</strong> · Python 3.11 · 840 LOC</span>
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1">target: <strong class="text-[#141413]">src/scheduler/cron/</strong> · Luxon 3</span>
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1">read: parse.py · expand.py · match.py · tz.py · <strong class="text-[#141413]">31 tests</strong></span>
+          <span class="font-mono text-[11.5px] bg-white border border-[#d1cfc5] rounded-lg px-2.5 py-1">live schedules: <strong class="text-[#141413]">212</strong></span>
+        </div>
+      </header>
+
+      <!-- 01 what it does -->
+      <section class="mb-14">
+        <div class="flex items-baseline gap-3 mb-5">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">01</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">What the library actually does</h2>
+        </div>
+        <ul class="list-none m-0 p-0 bg-white border border-[#d1cfc5] rounded-xl divide-y divide-[#f0eee6] max-w-[980px]">
+          <li class="px-5 py-3.5 text-[14.5px]"><strong class="text-[#141413]">Parses five fields</strong> (<code class="font-mono text-[13px]">parse.py</code>): lists, inclusive ranges, steps, month and day names. Sunday may be written <code class="font-mono text-[13px]">0</code> or <code class="font-mono text-[13px]">7</code>.</li>
+          <li class="px-5 py-3.5 text-[14.5px]"><strong class="text-[#141413]">Day-of-month and day-of-week are OR'd</strong> when both are restricted, and AND'd when either is <code class="font-mono text-[13px]">*</code>. Whether a field "is star" is decided from the <em>text</em>, not the expanded set (Vixie cron behavior).</li>
+          <li class="px-5 py-3.5 text-[14.5px]"><strong class="text-[#141413]">Evaluates in the job's IANA zone, in wall-clock time</strong> (<code class="font-mono text-[13px]">tz.py</code>). A wall time that falls in a DST gap fires at the <strong class="text-[#141413]">first valid minute after the gap</strong>; a wall time that occurs twice fires <strong class="text-[#141413]">once, on the first occurrence</strong>.</li>
+          <li class="px-5 py-3.5 text-[14.5px]"><strong class="text-[#141413]"><code class="font-mono text-[13px]">next_fire(after)</code> is strictly after</strong>, truncates seconds, and searches at most 5 years before raising <code class="font-mono text-[13px]">NoNextFire</code> (so <code class="font-mono text-[13px]">0 0 30 2 *</code> fails fast instead of looping).</li>
+          <li class="px-5 py-3.5 text-[14.5px]"><strong class="text-[#141413]">It never runs jobs.</strong> It only answers "when next?". Locking, retries and missed-run catch-up stay in <code class="font-mono text-[13px]">src/scheduler/runner.ts</code>, unchanged by this port.</li>
+        </ul>
+      </section>
+
+      <!-- 02 side by side -->
+      <section class="mb-14">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Side by side: Python source → proposed TypeScript</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[760px] m-0 mb-8">Highlighted regions correspond across columns. Hover one (or its note) to light up its counterpart and the gotcha it maps to.</p>
+
+        <!-- pair A -->
+        <div class="mb-12">
+          <div class="flex flex-wrap items-baseline gap-3 mb-3">
+            <span class="font-mono text-[11px] tracking-[0.06em] text-[#87867f]">PAIR A / 3</span>
+            <h3 class="m-0 font-serif text-[20px] font-medium text-[#141413]">Day matching: OR, AND, and which day is 0</h3>
+          </div>
+          <div class="grid lg:grid-cols-2 gap-4 mb-4">
+            <div class="bg-[#141413] rounded-xl overflow-hidden min-w-0">
+              <div class="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10"><span class="font-mono text-[11.5px] text-[#b8b6ac] truncate">vendor/recur/recur/match.py:18</span><span class="font-mono text-[10.5px] rounded px-1.5 py-0.5 bg-[#3d3d3a] text-[#e8e6de]">Python</span></div>
+<pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">def</span> <span class="fn">_day_matches</span>(spec: Spec, d: date) -&gt; bool:
+    dom_ok = d.day <span class="kw">in</span> spec.dom
+    dow_ok = <mark class="lk" :class="on('a1')" @mouseenter="p='a1'" @mouseleave="p=null">(d.<span class="fn">isoweekday</span>() % <span class="str">7</span>)<sup>1</sup></mark> <span class="kw">in</span> spec.dow
+    <span class="kw">if</span> <mark class="lk" :class="on('a2')" @mouseenter="p='a2'" @mouseleave="p=null">spec.dom_star <span class="kw">or</span> spec.dow_star<sup>2</sup></mark>:
+        <span class="kw">return</span> dom_ok <span class="kw">and</span> dow_ok
+    <span class="kw">return</span> <mark class="lk" :class="on('a3')" @mouseenter="p='a3'" @mouseleave="p=null">dom_ok <span class="kw">or</span> dow_ok<sup>3</sup></mark></pre>
+            </div>
+            <div class="bg-[#141413] rounded-xl overflow-hidden min-w-0">
+              <div class="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10"><span class="font-mono text-[11.5px] text-[#b8b6ac] truncate">src/scheduler/cron/match.ts (proposed)</span><span class="font-mono text-[10.5px] rounded px-1.5 py-0.5 bg-clay text-white">TS</span></div>
+<pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">function</span> <span class="fn">dayMatches</span>(spec: Spec, d: DateTime): boolean {
+  <span class="kw">const</span> domOk = spec.dom.<span class="fn">has</span>(d.day);
+  <span class="kw">const</span> dowOk = spec.dow.<span class="fn">has</span>(<mark class="lk" :class="on('a1')" @mouseenter="p='a1'" @mouseleave="p=null">d.weekday % <span class="str">7</span><sup>1</sup></mark>);
+  <span class="kw">if</span> (<mark class="lk" :class="on('a2')" @mouseenter="p='a2'" @mouseleave="p=null">spec.domStar || spec.dowStar<sup>2</sup></mark>) {
+    <span class="kw">return</span> domOk &amp;&amp; dowOk;
+  }
+  <span class="kw">return</span> <mark class="lk" :class="on('a3')" @mouseenter="p='a3'" @mouseleave="p=null">domOk || dowOk<sup>3</sup></mark>;
+}</pre>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-3 gap-3">
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('a1')" @mouseenter="p='a1'" @mouseleave="p=null"><span class="nmark">1</span><span><strong class="text-[#141413]">Three weekday conventions.</strong> Python <code class="font-mono text-[12px]">weekday()</code> is Mon=0, <code class="font-mono text-[12px]">isoweekday()</code> is Mon=1…Sun=7, JS <code class="font-mono text-[12px]">getDay()</code> is Sun=0. recur uses <code class="font-mono text-[12px]">isoweekday() % 7</code>; Luxon's <code class="font-mono text-[12px]">weekday</code> is also Mon=1…Sun=7, so the same <code class="font-mono text-[12px]">% 7</code> carries over exactly.</span></div>
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('a2')" @mouseenter="p='a2'" @mouseleave="p=null"><span class="nmark">2</span><span><strong class="text-[#141413]">"Star" is syntactic.</strong> <code class="font-mono text-[12px]">dom_star</code> is set only when the field text is literally <code class="font-mono text-[12px]">*</code> (or <code class="font-mono text-[12px]">?</code>). <code class="font-mono text-[12px]">1-31</code> expands to every day but is <em>not</em> star. The port must carry the flag from the parser, not compute <code class="font-mono text-[12px]">dom.size === 31</code>.</span></div>
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('a3')" @mouseenter="p='a3'" @mouseleave="p=null"><span class="nmark">3</span><span><strong class="text-[#141413]">OR, not AND.</strong> <code class="font-mono text-[12px]">0 9 1 * MON</code> fires on the 1st <em>and</em> on every Monday. It reads like "Mondays that are the 1st", and 9 of our 212 schedules look like someone expected that. Preserved anyway; see the edge-case table.</span></div>
+          </div>
+        </div>
+
+        <!-- pair B -->
+        <div class="mb-12">
+          <div class="flex flex-wrap items-baseline gap-3 mb-3">
+            <span class="font-mono text-[11px] tracking-[0.06em] text-[#87867f]">PAIR B / 3</span>
+            <h3 class="m-0 font-serif text-[20px] font-medium text-[#141413]">DST: Luxon's default disagrees with recur</h3>
+          </div>
+          <div class="grid lg:grid-cols-2 gap-4 mb-4">
+            <div class="bg-[#141413] rounded-xl overflow-hidden min-w-0">
+              <div class="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10"><span class="font-mono text-[11.5px] text-[#b8b6ac] truncate">vendor/recur/recur/tz.py:41</span><span class="font-mono text-[10.5px] rounded px-1.5 py-0.5 bg-[#3d3d3a] text-[#e8e6de]">Python</span></div>
+<pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">def</span> <span class="fn">localize</span>(naive: datetime, zone: ZoneInfo) -&gt; datetime:
+    aware = naive.<span class="fn">replace</span>(tzinfo=zone, <mark class="lk" :class="on('b1')" @mouseenter="p='b1'" @mouseleave="p=null">fold=<span class="str">0</span><sup>4</sup></mark>)
+    back = aware.<span class="fn">astimezone</span>(UTC).<span class="fn">astimezone</span>(zone)
+    <span class="kw">if</span> <mark class="lk" :class="on('b2')" @mouseenter="p='b2'" @mouseleave="p=null">back.<span class="fn">replace</span>(tzinfo=<span class="kw">None</span>) != naive<sup>5</sup></mark>:
+        <span class="cm"># wall time doesn't exist (spring forward)</span>
+        <span class="kw">return</span> <mark class="lk" :class="on('b3')" @mouseenter="p='b3'" @mouseleave="p=null"><span class="fn">_first_valid_after_gap</span>(naive, zone)<sup>6</sup></mark>
+    <span class="kw">return</span> aware</pre>
+            </div>
+            <div class="bg-[#141413] rounded-xl overflow-hidden min-w-0">
+              <div class="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10"><span class="font-mono text-[11.5px] text-[#b8b6ac] truncate">src/scheduler/cron/tz.ts (proposed)</span><span class="font-mono text-[10.5px] rounded px-1.5 py-0.5 bg-clay text-white">TS</span></div>
+<pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">function</span> <span class="fn">localize</span>(wall: Wall, zone: string): DateTime {
+  <span class="kw">const</span> dt = DateTime.<span class="fn">fromObject</span>(wall, { zone }); <mark class="lk" :class="on('b1')" @mouseenter="p='b1'" @mouseleave="p=null"><span class="cm">// earlier offset</span><sup>4</sup></mark>
+  <span class="kw">if</span> (<mark class="lk" :class="on('b2')" @mouseenter="p='b2'" @mouseleave="p=null">dt.hour !== wall.hour || dt.minute !== wall.minute<sup>5</sup></mark>) {
+    <span class="cm">// Luxon shifted 02:30 to 03:30; recur wants 03:00</span>
+    <span class="kw">return</span> <mark class="lk" :class="on('b3')" @mouseenter="p='b3'" @mouseleave="p=null"><span class="fn">firstValidAfterGap</span>(wall, zone)<sup>6</sup></mark>;
+  }
+  <span class="kw">return</span> dt;
+}</pre>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-3 gap-3">
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('b1')" @mouseenter="p='b1'" @mouseleave="p=null"><span class="nmark">4</span><span><strong class="text-[#141413]">Ambiguous times: first occurrence.</strong> <code class="font-mono text-[12px]">fold=0</code> picks the earlier (pre-transition) offset, so 02:30 on fall-back day fires once, in summer time. The port relies on Luxon doing the same and <strong>pins it with recur's test vector</strong> <code class="font-mono text-[12px]">test_fall_back_fires_once</code> rather than trusting the default.</span></div>
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('b2')" @mouseenter="p='b2'" @mouseleave="p=null"><span class="nmark">5</span><span><strong class="text-[#141413]">Detecting a gap.</strong> Python needs a UTC round trip to notice an impossible wall time. Luxon never errors; it silently moves the time forward by the gap length. Comparing hour and minute after construction is the equivalent check.</span></div>
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('b3')" @mouseenter="p='b3'" @mouseleave="p=null"><span class="nmark">6</span><span><strong class="text-[#141413]">03:00, not 03:30.</strong> This is the one place a literal port would change customer-visible behavior. Luxon's shift lands on 03:30; recur snaps to the first valid minute, 03:00. <code class="font-mono text-[12px]">firstValidAfterGap</code> is ported line for line, with its 4 tests.</span></div>
+          </div>
+        </div>
+
+        <!-- pair C -->
+        <div class="mb-4">
+          <div class="flex flex-wrap items-baseline gap-3 mb-3">
+            <span class="font-mono text-[11px] tracking-[0.06em] text-[#87867f]">PAIR C / 3</span>
+            <h3 class="m-0 font-serif text-[20px] font-medium text-[#141413]">Field expansion: inclusive ends and a step of zero</h3>
+          </div>
+          <div class="grid lg:grid-cols-2 gap-4 mb-4">
+            <div class="bg-[#141413] rounded-xl overflow-hidden min-w-0">
+              <div class="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10"><span class="font-mono text-[11.5px] text-[#b8b6ac] truncate">vendor/recur/recur/expand.py:9</span><span class="font-mono text-[10.5px] rounded px-1.5 py-0.5 bg-[#3d3d3a] text-[#e8e6de]">Python</span></div>
+<pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">def</span> <span class="fn">expand</span>(field: str, lo: int, hi: int) -&gt; set[int]:
+    out = <span class="fn">set</span>()
+    <span class="kw">for</span> part <span class="kw">in</span> field.<span class="fn">split</span>(<span class="str">","</span>):
+        rng, _, step = part.<span class="fn">partition</span>(<span class="str">"/"</span>)
+        a, b = (lo, hi) <span class="kw">if</span> rng == <span class="str">"*"</span> <span class="kw">else</span> <span class="fn">_bounds</span>(rng)
+        <mark class="lk" :class="on('c1')" @mouseenter="p='c1'" @mouseleave="p=null"><span class="kw">if</span> step <span class="kw">and</span> <span class="str">"-"</span> <span class="kw">not in</span> rng <span class="kw">and</span> rng != <span class="str">"*"</span>: b = hi<sup>7</sup></mark>
+        out.<span class="fn">update</span>(<mark class="lk" :class="on('c2')" @mouseenter="p='c2'" @mouseleave="p=null"><span class="fn">range</span>(a, b + <span class="str">1</span>, <span class="fn">int</span>(step <span class="kw">or</span> <span class="str">1</span>))<sup>8</sup></mark>)
+    <mark class="lk" :class="on('c3')" @mouseenter="p='c3'" @mouseleave="p=null"><span class="kw">if</span> hi == <span class="str">7</span> <span class="kw">and</span> <span class="str">7</span> <span class="kw">in</span> out: out -= {<span class="str">7</span>}; out.<span class="fn">add</span>(<span class="str">0</span>)<sup>9</sup></mark>
+    <span class="kw">return</span> out</pre>
+            </div>
+            <div class="bg-[#141413] rounded-xl overflow-hidden min-w-0">
+              <div class="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10"><span class="font-mono text-[11.5px] text-[#b8b6ac] truncate">src/scheduler/cron/expand.ts (proposed)</span><span class="font-mono text-[10.5px] rounded px-1.5 py-0.5 bg-clay text-white">TS</span></div>
+<pre class="m-0 px-5 py-4 overflow-x-auto text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">function</span> <span class="fn">expand</span>(field: string, lo: number, hi: number) {
+  <span class="kw">const</span> out = <span class="kw">new</span> Set&lt;number&gt;();
+  <span class="kw">for</span> (<span class="kw">const</span> part <span class="kw">of</span> field.<span class="fn">split</span>(<span class="str">','</span>)) {
+    <span class="kw">const</span> [rng, stepStr] = part.<span class="fn">split</span>(<span class="str">'/'</span>);
+    <span class="kw">let</span> [a, b] = rng === <span class="str">'*'</span> ? [lo, hi] : <span class="fn">bounds</span>(rng);
+    <mark class="lk" :class="on('c1')" @mouseenter="p='c1'" @mouseleave="p=null"><span class="kw">if</span> (stepStr &amp;&amp; !rng.<span class="fn">includes</span>(<span class="str">'-'</span>) &amp;&amp; rng !== <span class="str">'*'</span>) b = hi;<sup>7</sup></mark>
+    <mark class="lk" :class="on('c2')" @mouseenter="p='c2'" @mouseleave="p=null"><span class="kw">const</span> step = stepStr === <span class="kw">undefined</span> ? <span class="str">1</span> : <span class="fn">Number</span>(stepStr);
+    <span class="kw">if</span> (!(step &gt;= <span class="str">1</span>)) <span class="kw">throw new</span> <span class="fn">CronSyntaxError</span>(part);
+    <span class="kw">for</span> (<span class="kw">let</span> v = a; v &lt;= b; v += step) out.<span class="fn">add</span>(v);<sup>8</sup></mark>
+  }
+  <mark class="lk" :class="on('c3')" @mouseenter="p='c3'" @mouseleave="p=null"><span class="kw">if</span> (hi === <span class="str">7</span> &amp;&amp; out.<span class="fn">delete</span>(<span class="str">7</span>)) out.<span class="fn">add</span>(<span class="str">0</span>);<sup>9</sup></mark>
+  <span class="kw">return</span> out;
+}</pre>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-3 gap-3">
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('c1')" @mouseenter="p='c1'" @mouseleave="p=null"><span class="nmark">7</span><span><strong class="text-[#141413]"><code class="font-mono text-[12px]">5/15</code> means <code class="font-mono text-[12px]">5-59/15</code>.</strong> A bare start with a step runs to the field's max. Some cron dialects reject this syntax; recur accepts it, 3 live schedules use it, so the port accepts it too.</span></div>
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('c2')" @mouseenter="p='c2'" @mouseleave="p=null"><span class="nmark">8</span><span><strong class="text-[#141413]">Inclusive end, and step 0.</strong> <code class="font-mono text-[12px]">range(a, b + 1)</code> includes <code class="font-mono text-[12px]">b</code>, hence <code class="font-mono text-[12px]">&lt;=</code>. Python's <code class="font-mono text-[12px]">range</code> raises on step 0 (surfaced as a syntax error); a JS loop with step 0 spins forever. The explicit guard also rejects <code class="font-mono text-[12px]">NaN</code> from <code class="font-mono text-[12px]">*/x</code>.</span></div>
+            <div class="border border-[#d1cfc5] bg-white rounded-xl p-4 flex gap-3 text-[13.5px] transition-colors" :style="note('c3')" @mouseenter="p='c3'" @mouseleave="p=null"><span class="nmark">9</span><span><strong class="text-[#141413]">Sunday is 0 and 7.</strong> Folding 7 into 0 after expansion means <code class="font-mono text-[12px]">5-7</code> (Fri–Sun) works. <code class="font-mono text-[12px]">Set.delete</code> returns whether it removed, which keeps the TS a single line.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 preserved/changed/dropped -->
+      <section class="mb-14">
+        <div class="flex items-baseline gap-3 mb-5">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">03</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Preserved, deliberately changed, dropped</h2>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="bg-white border border-[#d1cfc5] border-t-4 border-t-olive rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-olive m-0 mb-3">Preserved exactly</p>
+            <ul class="list-none m-0 p-0 space-y-2.5 text-[13.5px]">
+              <li><strong class="text-[#141413]">DOM/DOW OR rule</strong>, with syntactic star</li>
+              <li><strong class="text-[#141413]">Sunday as 0 or 7</strong>; ranges across 7</li>
+              <li><strong class="text-[#141413]">Inclusive ranges</strong>; <code class="font-mono text-[12px]">5/15</code> = <code class="font-mono text-[12px]">5-59/15</code></li>
+              <li><strong class="text-[#141413]">DST gap → first valid minute</strong> (03:00)</li>
+              <li><strong class="text-[#141413]">DST overlap → once</strong>, first occurrence</li>
+              <li><strong class="text-[#141413]">Strictly after</strong>, seconds truncated, 5-year cap</li>
+            </ul>
+          </div>
+          <div class="bg-white border border-[#d1cfc5] border-t-4 border-t-clay rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-clay-dark m-0 mb-3">Deliberately changed</p>
+            <ul class="list-none m-0 p-0 space-y-2.5 text-[13.5px]">
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">zoneinfo</code> → Luxon</strong>, with DST behavior pinned by tests (notes 4–6)</li>
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">NoNextFire</code> → returns <code class="font-mono text-[12px]">null</code></strong>; the runner already branches on null</li>
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">ValueError</code> → <code class="font-mono text-[12px]">CronSyntaxError</code></strong> with the offending field and column</li>
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">set[int]</code> → <code class="font-mono text-[12px]">Set</code> + sorted array</strong> cached per spec for the search</li>
+            </ul>
+          </div>
+          <div class="bg-white border border-[#d1cfc5] border-t-4 border-t-[#87867f] rounded-xl p-5">
+            <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-3">Dropped (not needed)</p>
+            <ul class="list-none m-0 p-0 space-y-2.5 text-[13.5px]">
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">@reboot</code></strong>: meaningless in a hosted scheduler; rejected at parse</li>
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">get_prev()</code></strong>: zero callers (grep across both repos)</li>
+              <li><strong class="text-[#141413]">6-field seconds mode</strong>: behind a flag that is off for all 212 schedules</li>
+              <li><strong class="text-[#141413]"><code class="font-mono text-[12px]">pytz</code> fallback</strong> for Python 3.8</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 edge cases -->
+      <section class="mb-14">
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">04</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Edge cases: expected behavior on both sides</h2>
+        </div>
+        <p class="text-[#87867f] max-w-[760px] m-0 mb-6">Zone is Europe/Berlin. 2026 DST changes: 29 March (02:00 → 03:00) and 25 October (03:00 → 02:00).</p>
+        <div class="overflow-x-auto border border-[#d1cfc5] rounded-xl bg-white">
+          <table class="w-full text-sm border-collapse min-w-[860px]">
+            <thead class="bg-[#f0eee6] text-left font-mono text-[11px] uppercase tracking-[0.05em] text-[#87867f]">
+              <tr><th class="px-4 py-2.5 font-medium w-[22%]">Schedule · case</th><th class="px-4 py-2.5 font-medium w-[32%]">recur (Python)</th><th class="px-4 py-2.5 font-medium w-[32%]">Port (TypeScript)</th><th class="px-4 py-2.5 font-medium">Match</th></tr>
+            </thead>
+            <tbody class="divide-y divide-[#f0eee6]">
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">0 9 1 * MON</code><br><span class="text-[#87867f] text-[13px]">both day fields set</span></td><td class="px-4 py-3 align-top">Fires on the 1st and on every Monday (OR).</td><td class="px-4 py-3 align-top">Same, via note 3.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 whitespace-nowrap">identical</span></td></tr>
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">0 9 1-31 * MON</code><br><span class="text-[#87867f] text-[13px]">full range, not star</span></td><td class="px-4 py-3 align-top">Fires <strong class="text-[#141413]">every day</strong>: <code class="font-mono text-[12px]">1-31</code> isn't star, so OR applies and DOM always matches. Test <code class="font-mono text-[12px]">test_full_range_is_not_star</code>.</td><td class="px-4 py-3 align-top">Same, because star-ness comes from the parser (note 2).</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 whitespace-nowrap">identical</span></td></tr>
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">30 2 * * *</code><br><span class="text-[#87867f] text-[13px]">29 Mar, spring forward</span></td><td class="px-4 py-3 align-top">Fires at <strong class="text-[#141413]">03:00 CEST</strong>.</td><td class="px-4 py-3 align-top">03:00 CEST via <code class="font-mono text-[12px]">firstValidAfterGap</code>. Luxon's default would give 03:30.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 whitespace-nowrap">identical</span></td></tr>
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">*/15 2 * * *</code><br><span class="text-[#87867f] text-[13px]">29 Mar, whole hour missing</span></td><td class="px-4 py-3 align-top">All four slots map to 03:00; strictly-after dedupes, so it fires <strong class="text-[#141413]">once</strong>.</td><td class="px-4 py-3 align-top">Same: once at 03:00.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 whitespace-nowrap">identical</span></td></tr>
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">30 2 * * *</code><br><span class="text-[#87867f] text-[13px]">25 Oct, 02:30 happens twice</span></td><td class="px-4 py-3 align-top">Fires once, at 02:30 CEST (+02:00).</td><td class="px-4 py-3 align-top">Same; pinned by <code class="font-mono text-[12px]">test_fall_back_fires_once</code>.</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive rounded-full px-2 py-0.5 whitespace-nowrap">identical</span></td></tr>
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">0 0 30 2 *</code><br><span class="text-[#87867f] text-[13px]">30 February</span></td><td class="px-4 py-3 align-top">Searches 5 years, raises <code class="font-mono text-[12px]">NoNextFire</code>.</td><td class="px-4 py-3 align-top">Same search, returns <code class="font-mono text-[12px]">null</code>. Runner marks the job "never fires".</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-2 py-0.5 whitespace-nowrap">equivalent*</span></td></tr>
+              <tr><td class="px-4 py-3 align-top"><code class="font-mono text-[12.5px] text-[#141413]">*/0 * * * *</code><br><span class="text-[#87867f] text-[13px]">zero step</span></td><td class="px-4 py-3 align-top"><code class="font-mono text-[12px]">ValueError</code> from <code class="font-mono text-[12px]">range</code>, re-raised as a syntax error.</td><td class="px-4 py-3 align-top"><code class="font-mono text-[12px]">CronSyntaxError</code> at field 1, before any loop runs (note 8).</td><td class="px-4 py-3 align-top"><span class="font-mono text-[11px] border border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark rounded-full px-2 py-0.5 whitespace-nowrap">equivalent*</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-[13px] text-[#87867f] mt-2.5 mb-0 max-w-[860px]">* Equivalent = same decision, different surface (a return value or error type instead of a Python exception). Flag a row if you want the exception shape kept.</p>
+      </section>
+
+      <!-- 05 sign-off -->
+      <section class="mb-6">
+        <div class="flex items-baseline gap-3 mb-5">
+          <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">05</span>
+          <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Sign-off</h2>
+        </div>
+        <div class="bg-white border-2 border-[#141413] rounded-xl p-6 grid md:grid-cols-[1fr_auto] gap-6 items-center">
+          <div>
+            <h3 class="m-0 mb-2 font-serif text-[20px] font-medium text-[#141413]">Ready to port when you are</h3>
+            <p class="m-0 text-[14.5px] max-w-[680px]">Reply <strong class="text-[#141413]">"semantics confirmed"</strong> and I'll translate recur's 31 tests to Vitest first, then implement
+              <code class="font-mono text-[13px]">expand.ts</code>, <code class="font-mono text-[13px]">match.ts</code> and <code class="font-mono text-[13px]">tz.ts</code> until they pass. Or correct any row: quote its number ("note 6", "30 February row") and I'll revise this map before writing code.</p>
+            <p class="m-0 mt-3 font-mono text-[12px] text-[#87867f]">Open question: should the 9 OR-style schedules (note 3) get a warning in the UI? Out of scope for the port either way.</p>
+          </div>
+          <div class="flex flex-col gap-2">
+            <button type="button" @click="copy('semantics confirmed', 'ok')" class="font-mono text-xs bg-[#141413] text-ivory rounded-lg px-4 py-2.5 hover:bg-[#3d3d3a] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="copied !== 'ok'">Copy "semantics confirmed"</span><span x-show="copied === 'ok'" x-cloak>Copied: paste it back ✓</span>
+            </button>
+            <button type="button" @click="copy($refs.tpl.textContent, 'fix')" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-4 py-2.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">
+              <span x-show="copied !== 'fix'">Copy correction template</span><span x-show="copied === 'fix'" x-cloak class="text-olive">Copied ✓</span>
+            </button>
+<pre x-ref="tpl" class="hidden">Correction to the recur semantics map:
+- note / row:
+- what the map says:
+- what recur actually does (test or line):</pre>
+          </div>
+        </div>
+      </section>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/reference-port.md</span>
+      </footer>
+    </main>
+  </body>
+</html>

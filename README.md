@@ -17,6 +17,7 @@ npx skills@latest add petechu/skills
 | [teach-back](./skills/teach-back/SKILL.md)         | Practice technical explanations with a believable persona, adaptive questions, coaching feedback, and replay                                    |
 | [session-cost](./skills/session-cost/SKILL.md)     | Analyze one session's cost and tool trajectory to find expensive workflow habits and concrete improvements                                      |
 | [eli5](./skills/eli5/SKILL.md)                     | Explain any topic like I'm 5 — a picture-heavy HTML artifact with one consistent metaphor, few words, a story arc, and a live demo              |
+| [explain-pr](./skills/explain-pr/SKILL.md)         | Turn a branch into a reviewable PR — pseudocode summary, show-me visuals, Mermaid when it helps, TDD evidence, optional narrated video walkthrough |
 
 > **Note:** This collection is growing. The skills above are the first of many — additional skills will be added over time.
 
@@ -33,8 +34,9 @@ A skill is a markdown file (`SKILL.md`) that an agent loads on demand to gain fo
 ```text
 skills/
 ├── html-artifacts/
-│   ├── SKILL.md        # Skill definition and workflow
-│   └── REFERENCE.md    # Clean design system reference
+│   ├── SKILL.md        # Workflow + pattern mapper (which pattern(s) fit the job)
+│   ├── references/     # foundations.md (shell, tokens, components) + one how-to per pattern
+│   └── examples/       # One finished showcase .html per pattern
 ├── code-wiki/
 │   ├── SKILL.md        # Skill definition and workflow
 │   ├── scripts/code-wiki  # Bundled deterministic Node.js engine

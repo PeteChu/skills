@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Release-note writer prompt — tuner</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clay: #d97757;
+        --color-clay-dark: #b85c3e;
+        --color-oat: #e3dacc;
+        --color-olive: #788c5d;
+        --color-rust: #b04a3f;
+        --color-ivory: #faf9f5;
+        --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+    <style>
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      [x-cloak] { display: none !important; }
+      /* Textarea and highlight backdrop must share every metric that affects wrapping. */
+      .ed { font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace; font-size: 13px; line-height: 1.7;
+            padding: 16px 18px; margin: 0; border: 0; letter-spacing: 0; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
+      textarea.ed::selection { background: rgba(217,119,87,0.28); }
+      details.fold > summary { list-style: none; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary::before { content: "▸"; color: #d97757; transition: transform 120ms; }
+      details.fold[open] > summary::before { transform: rotate(90deg); }
+    </style>
+    <script>
+      const DEFAULT_TEMPLATE =
+`You write customer-facing release notes for {{product}}.
+Readers: {{audience}}.
+
+Change type: {{change_type}}
+Pull request: {{pr_title}}
+Description from the engineer:
+{{pr_body}}
+
+Write one release-note entry of at most 60 words.
+- Lead with what the reader can now do, not what the code does.
+- If the change type is "breaking", start with "Action needed:" and say exactly what to change and by when.
+- Never mention ticket numbers, class names, or feature-flag keys.
+Return only the entry, no heading.`;
+
+      const SLOTS = [
+        { name: 'product',     required: false, hint: 'Product name + one-line positioning' },
+        { name: 'audience',    required: true,  hint: 'Who reads this note' },
+        { name: 'change_type', required: true,  hint: 'fix · feature · breaking' },
+        { name: 'pr_title',    required: true,  hint: 'Merged PR title' },
+        { name: 'pr_body',     required: true,  hint: 'PR description, verbatim' },
+        { name: 'labels',      required: false, hint: 'GitHub labels, comma-separated' }
+      ];
+      const TOKEN_BUDGET = 210;
+      const PRODUCT = 'Ledgerline, a bookkeeping app for freelancers';
+
+      const SAMPLES = [
+        { label: 'Sample 1', kind: 'fix', ref: 'acme/ledgerline#2291', data: {
+          product: PRODUCT,
+          audience: 'freelancers and small agencies; not technical',
+          change_type: 'fix',
+          pr_title: 'Fix CSV export dropping rows after 10,000 transactions',
+          pr_body: 'ExportWriter stopped at the first page boundary because the cursor was not advanced after flush(). Adds the missing advance and a regression test with 25k rows. Closes LED-4412.',
+          labels: 'export, csv, bug' } },
+        { label: 'Sample 2', kind: 'feature', ref: 'acme/ledgerline#2307', data: {
+          product: PRODUCT,
+          audience: 'freelancers and small agencies; not technical',
+          change_type: 'feature',
+          pr_title: 'Add recurring invoice schedules (weekly, monthly, custom)',
+          pr_body: 'New Schedule model + cron worker. Users pick a cadence on the invoice page; drafts are generated 3 days before the send date so they can review them. Behind invoices.recurring, 100% after QA sign-off.',
+          labels: 'invoices, feature' } },
+        { label: 'Sample 3', kind: 'breaking', ref: 'acme/ledgerline#2315', data: {
+          product: PRODUCT,
+          audience: 'developers who call the public REST API',
+          change_type: 'breaking',
+          pr_title: 'API: remove v1 /transactions, require cursor pagination',
+          pr_body: 'v1 /transactions with page= offset params is removed on 2026-12-01. Integrations must call /v2/transactions with cursor=. Offset pagination timed out for accounts over 50k rows. Sunset email went out 2026-08-01. Partners with nightly syncs (Zapier, the QuickBooks bridge) are affected.',
+          labels: 'api, breaking' } }
+      ];
+      const SLOT_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+      const KNOWN = SLOTS.map(s => s.name);
+
+      function tuner() {
+        return {
+          tpl: DEFAULT_TEMPLATE,
+          slots: SLOTS,
+          samples: SAMPLES.map(s => ({ ...s, data: { ...s.data } })),
+          budget: TOKEN_BUDGET,
+          touched: false,
+          copied: null,
+
+          // --- parsing ---
+          split(text, onSlot) {
+            const out = []; let last = 0, m;
+            SLOT_RE.lastIndex = 0;
+            while ((m = SLOT_RE.exec(text)) !== null) {
+              if (m.index > last) out.push({ text: text.slice(last, m.index), kind: 'text' });
+              out.push(onSlot(m[1], m[0]));
+              last = m.index + m[0].length;
+            }
+            if (last < text.length) out.push({ text: text.slice(last), kind: 'text' });
+            return out;
+          },
+          get editorSegs() {
+            const segs = this.split(this.tpl, (name, raw) => ({ text: raw, kind: KNOWN.includes(name) ? 'slot' : 'unknown' }));
+            segs.push({ text: ' ', kind: 'text' }); // keeps a trailing newline visible in the backdrop
+            return segs;
+          },
+          filledSegs(sample) {
+            return this.split(this.tpl, (name, raw) => {
+              const v = sample.data[name];
+              return (v === undefined || v === '') ? { text: raw, kind: 'missing' } : { text: v, kind: 'fill' };
+            });
+          },
+          filled(sample) { return this.filledSegs(sample).map(s => s.text).join(''); },
+          tokens(text) { return Math.round(text.length / 4); },
+
+          // --- validation ---
+          get used() { const u = {}; let m; SLOT_RE.lastIndex = 0; while ((m = SLOT_RE.exec(this.tpl)) !== null) u[m[1]] = (u[m[1]] || 0) + 1; return u; },
+          get unknown() { return Object.keys(this.used).filter(n => !KNOWN.includes(n)); },
+          get unused() { return KNOWN.filter(n => !this.used[n]); },
+          get missingRequired() { return SLOTS.filter(s => s.required && !this.used[s.name]).map(s => s.name); },
+          get overBudget() { return this.samples.filter(s => this.tokens(this.filled(s)) > this.budget).map(s => s.label); },
+          get issues() {
+            const out = [];
+            this.unknown.forEach(n => out.push({ level: 'error', text: '{{' + n + '}} is not a known field; it will reach the model unfilled.' }));
+            this.missingRequired.forEach(n => out.push({ level: 'error', text: 'Required slot {{' + n + '}} is missing from the template.' }));
+            this.overBudget.forEach(l => out.push({ level: 'error', text: l + ' renders over the ' + this.budget + '-token budget.' }));
+            this.unused.filter(n => !this.missingRequired.includes(n)).forEach(n => out.push({ level: 'info', text: '{{' + n + '}} is available but unused.' }));
+            return out;
+          },
+          get errors() { return this.issues.filter(i => i.level === 'error').length; },
+
+          // --- editing ---
+          insert(name) {
+            const ta = this.$refs.ta, tok = '{{' + name + '}}';
+            const s = this.touched ? ta.selectionStart : this.tpl.length, e = this.touched ? ta.selectionEnd : s;
+            this.tpl = this.tpl.slice(0, s) + tok + this.tpl.slice(e);
+            this.$nextTick(() => { ta.focus(); ta.setSelectionRange(s + tok.length, s + tok.length); });
+          },
+          reset() { this.tpl = DEFAULT_TEMPLATE; this.samples = SAMPLES.map(s => ({ ...s, data: { ...s.data } })); },
+          get edited() { return this.tpl !== DEFAULT_TEMPLATE; },
+
+          // --- export ---
+          copy(text, which) {
+            const done = () => { this.copied = which; setTimeout(() => this.copied = null, 1400); };
+            const fallback = () => {
+              const ta = document.createElement('textarea');
+              ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+              document.body.appendChild(ta); ta.select();
+              try { document.execCommand('copy'); } catch (e) {}
+              ta.remove(); done();
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+            else fallback();
+          }
+        };
+      }
+    </script>
+  </head>
+  <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-4 sm:px-6 py-14 lg:py-16">
+    <main class="mx-auto max-w-[1360px]" x-data="tuner()">
+      <header class="mb-8 max-w-[820px]">
+        <p class="font-mono text-[11px] tracking-[0.08em] uppercase text-[#87867f] mb-2.5">Editor · acme/ledgerline · prompts/release-note.txt</p>
+        <h1 class="text-[#141413] font-serif font-medium text-[clamp(32px,5vw,44px)] leading-[1.12] tracking-tight m-0 mb-5">
+          Tune the release-note prompt against three real PRs
+        </h1>
+        <div class="bg-[#f0eee6] border border-[#d1cfc5] rounded-xl px-5 py-4 text-[14.5px]">
+          <span class="block mb-1.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#87867f]">Prompt</span>
+          Our changelog bot turns merged PRs into release notes and the output is too engineer-y. Let me edit the prompt
+          template and see it filled for a bug fix, a feature, and a breaking API change at the same time. I’ll copy the
+          final template back into <code class="font-mono text-[13px]">prompts/release-note.txt</code>.
+        </div>
+      </header>
+
+      <!-- Sticky toolbar -->
+      <div class="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-6 bg-ivory/90 backdrop-blur border-b border-[#d1cfc5] flex flex-wrap gap-x-4 gap-y-2 items-center">
+        <span class="font-mono text-xs"><strong class="text-[#141413]" x-text="tpl.length"></strong> chars · ~<strong class="text-[#141413]" x-text="tokens(tpl)"></strong> tokens</span>
+        <span class="font-mono text-xs"><strong class="text-[#141413]" x-text="Object.keys(used).length"></strong> slots used</span>
+        <span class="font-mono text-xs" :class="errors ? 'text-rust' : 'text-olive'" x-text="errors ? '⚠ ' + errors + (errors === 1 ? ' problem' : ' problems') : '✓ valid'"></span>
+        <span x-show="edited" x-cloak class="font-mono text-[11px] border border-[rgba(217,119,87,0.55)] rounded-full bg-[rgba(217,119,87,0.12)] text-clay-dark px-2 py-0.5">edited</span>
+        <span class="flex-1"></span>
+        <button type="button" @click="reset()"
+          class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Reset</button>
+        <button type="button" @click="copy(tpl, 'tpl')"
+          :class="copied === 'tpl' ? 'bg-olive border-olive' : 'bg-[#141413] border-[#141413] hover:bg-[#3d3d3a]'"
+          class="border text-ivory font-mono text-xs rounded-lg px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          x-text="copied === 'tpl' ? 'Copied ✓' : 'Copy template'"></button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 items-start">
+        <!-- Left: editor -->
+        <div class="lg:sticky lg:top-20 flex flex-col gap-4 min-w-0">
+          <section class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden focus-within:border-clay transition-colors">
+            <div class="flex items-center gap-3 px-4 py-2.5 bg-[#f0eee6] border-b border-[#d1cfc5]">
+              <span class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">Template</span>
+              <span class="flex-1"></span>
+              <span class="font-mono text-[11px] text-[#87867f]">slots use <span class="text-clay-dark">{{double_braces}}</span></span>
+            </div>
+            <div class="grid">
+              <div aria-hidden="true" class="ed col-start-1 row-start-1 text-[#3d3d3a] pointer-events-none"><template x-for="(s, i) in editorSegs" :key="i"><span :class="s.kind === 'slot' ? 'bg-[rgba(217,119,87,0.16)] text-clay-dark rounded-[3px]' : s.kind === 'unknown' ? 'bg-[rgba(176,74,63,0.12)] text-rust rounded-[3px] underline decoration-dashed decoration-rust underline-offset-4' : ''" x-text="s.text"></span></template></div>
+              <textarea x-ref="ta" x-model="tpl" @focus="touched = true" spellcheck="false" autocapitalize="off" aria-label="Prompt template"
+                class="ed col-start-1 row-start-1 h-full w-full resize-none overflow-hidden bg-transparent text-transparent caret-[#141413] outline-none"></textarea>
+            </div>
+          </section>
+
+          <section class="bg-white border border-[#d1cfc5] rounded-xl px-4 py-3.5">
+            <p class="m-0 mb-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">Available slots · click to insert at cursor</p>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="s in slots" :key="s.name">
+                <button type="button" @click="insert(s.name)" :title="s.hint"
+                  class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11.5px] border hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"
+                  :class="used[s.name] ? 'border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark' : 'border-dashed border-[#d1cfc5] bg-white text-[#87867f]'">
+                  <span x-text="'{{' + s.name + '}}'"></span>
+                  <span class="text-[10px]" x-text="used[s.name] ? '×' + used[s.name] : (s.required ? 'required' : 'unused')"></span>
+                </button>
+              </template>
+            </div>
+          </section>
+
+          <section class="bg-white border rounded-xl px-4 py-3.5" :class="errors ? 'border-[rgba(176,74,63,0.45)]' : 'border-[#d1cfc5]'">
+            <p class="m-0 mb-2 font-mono text-[11px] uppercase tracking-[0.06em]" :class="errors ? 'text-rust' : 'text-olive'"
+              x-text="errors ? 'Checks failing' : 'All checks pass'"></p>
+            <ul class="m-0 p-0 list-none space-y-1.5 text-[13px]">
+              <template x-for="(it, i) in issues" :key="i">
+                <li class="flex gap-2"><span class="font-mono" :class="it.level === 'error' ? 'text-rust' : 'text-[#87867f]'" x-text="it.level === 'error' ? '✕' : '·'"></span><span :class="it.level === 'error' ? 'text-[#141413]' : 'text-[#87867f]'" x-text="it.text"></span></li>
+              </template>
+            </ul>
+            <p class="m-0 mt-2 font-mono text-[11px] text-[#87867f]" x-text="'Budget: each filled prompt ≤ ' + budget + ' tokens (≈ chars ÷ 4).'"></p>
+          </section>
+        </div>
+
+        <!-- Right: live previews -->
+        <div class="flex flex-col gap-5 min-w-0">
+          <p class="m-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f]">Live preview · 3 sample PRs · <span class="normal-case tracking-normal">filled values in olive, unfilled slots in rust</span></p>
+          <template x-for="(s, si) in samples" :key="s.label">
+            <article class="bg-white border border-[#d1cfc5] rounded-xl overflow-hidden">
+              <div class="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[#f0eee6]">
+                <span class="font-mono text-[10.5px] uppercase tracking-[0.06em] bg-oat text-[#141413] rounded-md px-1.5 py-0.5" x-text="s.label"></span>
+                <span class="font-mono text-[11px] text-[#87867f]" x-text="s.ref"></span>
+                <span class="flex-1"></span>
+                <span class="font-mono text-[10.5px] uppercase tracking-[0.05em] border rounded-full px-2 py-px"
+                  :class="{ fix: 'border-[rgba(120,140,93,0.45)] bg-[rgba(120,140,93,0.12)] text-olive', feature: 'border-[rgba(217,119,87,0.55)] bg-[rgba(217,119,87,0.12)] text-clay-dark', breaking: 'border-[rgba(176,74,63,0.45)] bg-[rgba(176,74,63,0.10)] text-rust' }[s.kind]"
+                  x-text="s.kind"></span>
+              </div>
+              <div class="px-4 py-3.5 text-[13.5px] leading-[1.65] text-[#3d3d3a] whitespace-pre-wrap [overflow-wrap:anywhere]"><template x-for="(seg, i) in filledSegs(s)" :key="i"><span :class="seg.kind === 'fill' ? 'bg-[rgba(120,140,93,0.14)] text-[#141413] rounded-[3px]' : seg.kind === 'missing' ? 'font-mono text-[12.5px] text-rust bg-[rgba(176,74,63,0.10)] rounded-[3px] underline decoration-dashed underline-offset-4' : ''" x-text="seg.text"></span></template></div>
+              <div class="px-4 py-2.5 bg-[#f0eee6] border-t border-[#d1cfc5] flex flex-wrap items-center gap-3">
+                <div class="flex-1 min-w-[140px] flex items-center gap-2">
+                  <div class="flex-1 h-1.5 rounded-full bg-white border border-[#d1cfc5] overflow-hidden">
+                    <div class="h-full rounded-full" :class="tokens(filled(s)) > budget ? 'bg-rust' : 'bg-olive'" :style="'width:' + Math.min(100, tokens(filled(s)) / budget * 100) + '%'"></div>
+                  </div>
+                  <span class="font-mono text-[11px]" :class="tokens(filled(s)) > budget ? 'text-rust' : 'text-[#87867f]'" x-text="'~' + tokens(filled(s)) + ' / ' + budget + ' tok'"></span>
+                </div>
+                <button type="button" @click="copy(filled(s), 's' + si)"
+                  class="font-mono text-[11px] border border-[#d1cfc5] bg-white rounded-lg px-2.5 py-1 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay"
+                  :class="copied === 's' + si ? 'text-olive' : ''" x-text="copied === 's' + si ? 'Copied ✓' : 'Copy filled'"></button>
+              </div>
+              <details class="fold border-t border-[#d1cfc5]">
+                <summary class="cursor-pointer px-4 py-2.5 flex gap-2 items-center font-mono text-[11.5px] text-[#3d3d3a]">Edit this sample’s inputs</summary>
+                <div class="px-4 pb-4 grid gap-2.5">
+                  <template x-for="slot in slots" :key="slot.name">
+                    <label class="grid gap-1">
+                      <span class="font-mono text-[11px] text-[#87867f]" x-text="slot.name"></span>
+                      <textarea x-model="s.data[slot.name]" rows="2" :aria-label="s.label + ' ' + slot.name"
+                        class="font-mono text-[12px] bg-[#faf9f5] border border-[#d1cfc5] rounded-lg px-2.5 py-1.5 resize-y focus:outline-2 focus:outline-clay"></textarea>
+                    </label>
+                  </template>
+                </div>
+              </details>
+            </article>
+          </template>
+        </div>
+      </div>
+
+      <footer class="mt-16 pt-6 border-t border-[#d1cfc5] font-mono text-xs text-[#87867f]">
+        Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/prompt-tuner.md</span>
+      </footer>
+    </main>
+  </body>
+</html>
