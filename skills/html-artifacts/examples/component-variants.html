@@ -26,6 +26,36 @@
       .cm { color: #87867f; }
       .sheet button { pointer-events: none; }
       .finding:target { outline: 2px solid #d97757; outline-offset: 4px; }
+      /* ── Print / Save as PDF ─────────────────────────────────────────── */
+      @page {
+        margin: 16mm 15mm 18mm;
+        @bottom-left  { content: "Ledger Button"; font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+        @bottom-right { content: counter(page) " / " counter(pages); font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+      }
+      @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html { scroll-behavior: auto; }
+        body { background: #fff !important; padding: 0 !important; font-size: 10.5pt; }
+        main { max-width: none !important; }
+        /* Screen chrome never prints */
+        .fixed { display: none !important; }
+        button:is([\@click*="copy" i], [\@click*="clipboard"], [\@click*="reset" i], [\@click*="restart"]) { display: none !important; }
+        .sticky { position: static !important; }
+        .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+        .backdrop-blur { backdrop-filter: none !important; }
+        /* Nothing is clipped: scrollers expand, code wraps, wide SVG scales to the page */
+        .overflow-x-auto, .overflow-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        pre, .diff .row { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+        svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
+        /* Page breaks: keep headings with their content, keep small blocks whole */
+        h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
+        p, li, pre { orphans: 3; widows: 3; }
+        tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
+        .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
+        thead { display: table-header-group; }
+        /* External links show where they go */
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #87867f; overflow-wrap: anywhere; }
+      }
     </style>
   </head>
   <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
@@ -289,7 +319,7 @@
               <div><p class="m-0 text-[#141413] font-semibold">lg ghost keeps md padding</p><p class="m-0 text-[14px]">The ghost class string includes <code class="font-mono text-[12.5px]">px-3.5</code>, which wins over the size's <code class="font-mono text-[12.5px]">px-5</code> because the classes are joined without <code class="font-mono text-[12.5px]">twMerge</code>. Move padding out of the intent classes and into size only.</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Button.tsx:55 · cx(base, intent, size)</p></div>
             </li>
           </ol>
-          <div>
+          <div class="print:break-inside-avoid">
             <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Proposed cva shape (fixes 1–5)</p>
             <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
 <pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">export const</span> <span class="fn">button</span> = <span class="fn">cva</span>(base, {
@@ -317,5 +347,10 @@
         Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/component-variants.md</span>
       </footer>
     </main>
+    <script>
+      // Print with every <details> open, then restore what the reader had.
+      addEventListener('beforeprint', () => document.querySelectorAll('details:not([open])').forEach(d => { d.dataset.printOpened = ''; d.open = true; }));
+      addEventListener('afterprint', () => document.querySelectorAll('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
+    </script>
   </body>
 </html>

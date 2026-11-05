@@ -88,6 +88,30 @@ init() {
 go(i) { this.cur = Math.max(0, Math.min(this.n - 1, i)); this.slides[this.cur].scrollIntoView({ behavior: 'smooth' }); },
 ```
 
+### Print / Save as PDF
+
+A deck saved as PDF should be a deck: one landscape 16:9 page per slide, edge to edge, with the
+dark slide's background intact. Add this after the foundations print block (it overrides the
+portrait page and its footer). The fixed progress bar, dots, and counter are hidden by the
+foundations rule for `.fixed`.
+
+```css
+@page {
+  size: 13.333in 7.5in;          /* 16:9 */
+  margin: 0;
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+@media print {
+  html { scroll-snap-type: none; }
+  [data-slide] { height: 100vh; min-height: 0 !important; overflow: hidden; break-after: page; break-inside: avoid; }
+  [data-slide]:last-of-type { break-after: auto; }
+}
+```
+
+`vw`/`vh` paddings and `clamp(…vw…)` titles resolve against the page, so slides keep their
+proportions on paper.
+
 ## Interaction
 
 - Keys: →/↓/PageDown/Space go forward, ←/↑/PageUp/Shift+Space go back, Home/End jump to the
@@ -121,3 +145,4 @@ go(i) { this.cur = Math.max(0, Math.min(this.n - 1, i)); this.slides[this.cur].s
 - [ ] No slide clips at 1400×900 or overflows sideways at phone width.
 - [ ] The decision slide names the options, the lean, the deadline, and the owner.
 - [ ] Every number traces to a source on the appendix slide.
+- [ ] Save as PDF gives one landscape page per slide with no browser chrome or counters.

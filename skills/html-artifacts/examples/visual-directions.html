@@ -26,6 +26,36 @@
       @keyframes ping-dot { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(2.4); opacity: 0; } }
       .ping::after { content: ""; position: absolute; inset: 0; border-radius: 9999px; background: #d97757; animation: ping-dot 1.6s ease-out infinite; }
       @media (prefers-reduced-motion: reduce) { .ping::after { animation: none; } }
+      /* ── Print / Save as PDF ─────────────────────────────────────────── */
+      @page {
+        margin: 16mm 15mm 18mm;
+        @bottom-left  { content: "Shipment tracking card"; font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+        @bottom-right { content: counter(page) " / " counter(pages); font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+      }
+      @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html { scroll-behavior: auto; }
+        body { background: #fff !important; padding: 0 !important; font-size: 10.5pt; }
+        main { max-width: none !important; }
+        /* Screen chrome never prints */
+        .fixed { display: none !important; }
+        button:is([\@click*="copy" i], [\@click*="clipboard"], [\@click*="reset" i], [\@click*="restart"]) { display: none !important; }
+        .sticky { position: static !important; }
+        .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+        .backdrop-blur { backdrop-filter: none !important; }
+        /* Nothing is clipped: scrollers expand, code wraps, wide SVG scales to the page */
+        .overflow-x-auto, .overflow-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        pre, .diff .row { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+        svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
+        /* Page breaks: keep headings with their content, keep small blocks whole */
+        h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
+        p, li, pre { orphans: 3; widows: 3; }
+        tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
+        .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
+        thead { display: table-header-group; }
+        /* External links show where they go */
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #87867f; overflow-wrap: anywhere; }
+      }
     </style>
   </head>
   <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-4 sm:px-6 py-0" x-data="directions()">
@@ -346,6 +376,11 @@
           },
         };
       }
+    </script>
+    <script>
+      // Print with every <details> open, then restore what the reader had.
+      addEventListener('beforeprint', () => document.querySelectorAll('details:not([open])').forEach(d => { d.dataset.printOpened = ''; d.open = true; }));
+      addEventListener('afterprint', () => document.querySelectorAll('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
     </script>
   </body>
 </html>

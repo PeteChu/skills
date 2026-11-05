@@ -16,6 +16,9 @@ pattern file(s) chosen from the mapper in `SKILL.md`.
   sidebars, and `<details>` carry information Markdown would flatten.
 - **Purpose-built interaction.** When interactive, the page serves one narrow loop (compare, tune,
   click through, sort, toggle) and ends with a way to get the result back out (copy/export).
+- **Beautiful on paper too.** Readers print artifacts or Save as PDF to attach them to tickets,
+  emails, and reviews. The shell's print layer keeps the design intact on paper (see
+  [Print and Save as PDF](#print-and-save-as-pdf)).
 - **Source awareness.** File paths, PR numbers, commands, owners, dates, and line ranges appear in
   mono metadata so the reader can verify claims.
 
@@ -71,6 +74,36 @@ numbers.
       * { box-sizing: border-box; }
       html { scroll-behavior: smooth; }
       [x-cloak] { display: none !important; }
+      /* ── Print / Save as PDF ─────────────────────────────────────────── */
+      @page {
+        margin: 16mm 15mm 18mm;
+        @bottom-left  { content: "Short artifact title"; font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+        @bottom-right { content: counter(page) " / " counter(pages); font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+      }
+      @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html { scroll-behavior: auto; }
+        body { background: #fff !important; padding: 0 !important; font-size: 10.5pt; }
+        main { max-width: none !important; }
+        /* Screen chrome never prints */
+        .fixed { display: none !important; }
+        button:is([\@click*="copy" i], [\@click*="clipboard"], [\@click*="reset" i], [\@click*="restart"]) { display: none !important; }
+        .sticky { position: static !important; }
+        .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+        .backdrop-blur { backdrop-filter: none !important; }
+        /* Nothing is clipped: scrollers expand, code wraps, wide SVG scales to the page */
+        .overflow-x-auto, .overflow-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        pre, .diff .row { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+        svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
+        /* Page breaks: keep headings with their content, keep small blocks whole */
+        h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
+        p, li, pre { orphans: 3; widows: 3; }
+        tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
+        .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
+        thead { display: table-header-group; }
+        /* External links show where they go */
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #87867f; overflow-wrap: anywhere; }
+      }
     </style>
   </head>
   <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
@@ -85,11 +118,19 @@ numbers.
         <p class="max-w-[720px] m-0">One short paragraph that orients the reader.</p>
       </header>
     </main>
+    <script>
+      // Print with every <details> open, then restore what the reader had.
+      addEventListener('beforeprint', () => document.querySelectorAll('details:not([open])').forEach(d => { d.dataset.printOpened = ''; d.open = true; }));
+      addEventListener('afterprint', () => document.querySelectorAll('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
+    </script>
   </body>
 </html>
 ```
 
 Widen `max-w-[1100px]` to `max-w-[1360px]` for side-by-side grids (comparisons, variant sheets).
+
+Copy the shell verbatim, including the print block and the `beforeprint` script. Replace `"Short artifact title"` in `@page` with the page's short title
+(it prints in the footer of every page, beside the page number).
 
 ## Shared components
 
@@ -335,6 +376,54 @@ interview, blindspot pass). Selections update a live textarea the user copies ba
   `textContent` and `createElement`, never `innerHTML` with source text.
 - Real `<button>` elements with visible hover and `focus-visible` states.
 - Every editor ends in an export: Copy JSON / Copy diff / Copy Markdown / Copy prompt.
+
+## Print and Save as PDF
+
+Every artifact must look deliberate when the reader presses ⌘P / Ctrl+P and saves a PDF. Without
+help, the browser drops every background (dark code panels become pale text on white), prints
+buttons and fixed counters on every page, clips wide diagrams and code, collapses `md:` grids
+(the printable width is only ~680 CSS px), and splits cards across pages. The shell's print
+block fixes all of that. What it does:
+
+- **Keeps the design.** `print-color-adjust: exact` prints panel fills, chips, code panels, and
+  callouts even when the dialog's "Background graphics" box is unticked. The page itself turns
+  white so no ivory band stops at the paper margin.
+- **Paginates like a document.** `@page` sets margins and puts the title and `page / pages` in
+  the footer. Chrome 131+ renders these margin boxes; Chrome still adds its own
+  date/URL header and footer when there is room, so tell readers to untick "Headers and footers"
+  in the print dialog for a clean PDF.
+- **Hides screen chrome.** `.fixed` elements, copy/reset/restart buttons, shadows, and blur
+  disappear; sticky toolbars become static.
+- **Never clips.** Scrollers expand, `<pre>` and diff rows wrap, and wide SVG scales to the page
+  width.
+- **Breaks well.** Headings try to stay with the lead under them; cards, callouts, figures, table rows,
+  list items, and `<details>` don't split. Panels holding a table, code, or a diff may break,
+  and table heads repeat on each page.
+- **Shows everything.** The `beforeprint` script opens every `<details>` and restores them after.
+
+Your part, per artifact:
+
+- Add `print:hidden` to controls the generic rules don't catch: filter bars, theme toggles,
+  "Expand all", step-through buttons, sidebar tables of contents. Keep anything that carries
+  content (chips, legends, the reply text a picker produced).
+- Content hidden by Alpine state (`x-show` accordions, tab panels, step-through slides) prints
+  only in its current state. When every panel matters on paper, add `print:block!` to each panel
+  (the trailing `!` beats Alpine's inline `display: none`) and give each a visible label.
+- Use `print:break-before-page` to start a major part on a fresh page, and
+  `print:break-inside-auto` on a tall card (more than half a page) that may split, so it doesn't
+  leave a gap.
+- Badges hung outside a card (`absolute -top-3`) can land on the previous page when the card moves
+  down. Add `print:static` (plus `print:self-end` in a flex column) so they print inside it.
+- Paper is only ~680 CSS px wide, so `sm:` layouts apply but `md:` and `lg:` ones collapse to
+  their mobile form. That's usually right for sidebars and three-up grids. Where columns are the
+  point (a stat band, before/after cards), add `print:grid-cols-N` next to the breakpoint class.
+  Don't redefine the `md` variant to include print: it reorders the CSS so `md:` beats `lg:` on
+  screen.
+- Landscape artifacts (decks, wide boards) override `@page` — see
+  [`slide-deck.md`](slide-deck.md#print--save-as-pdf).
+
+Check before you hand off: open the print preview (or render a PDF headlessly) and look at every
+page. No near-empty pages, no orphaned headings, no clipped code, no buttons.
 
 ## Tailwind gotchas
 

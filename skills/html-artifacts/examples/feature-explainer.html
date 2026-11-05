@@ -30,6 +30,36 @@
       details.fold > summary::-webkit-details-marker { display: none; }
       details.fold > summary::before { content: "▸"; color: #d97757; display: inline-block; transition: transform 120ms; }
       details.fold[open] > summary::before { transform: rotate(90deg); }
+      /* ── Print / Save as PDF ─────────────────────────────────────────── */
+      @page {
+        margin: 16mm 15mm 18mm;
+        @bottom-left  { content: "How file uploads work in acme-docs"; font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+        @bottom-right { content: counter(page) " / " counter(pages); font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+      }
+      @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html { scroll-behavior: auto; }
+        body { background: #fff !important; padding: 0 !important; font-size: 10.5pt; }
+        main { max-width: none !important; }
+        /* Screen chrome never prints */
+        .fixed { display: none !important; }
+        button:is([\@click*="copy" i], [\@click*="clipboard"], [\@click*="reset" i], [\@click*="restart"]) { display: none !important; }
+        .sticky { position: static !important; }
+        .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+        .backdrop-blur { backdrop-filter: none !important; }
+        /* Nothing is clipped: scrollers expand, code wraps, wide SVG scales to the page */
+        .overflow-x-auto, .overflow-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        pre, .diff .row { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+        svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
+        /* Page breaks: keep headings with their content, keep small blocks whole */
+        h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
+        p, li, pre { orphans: 3; widows: 3; }
+        tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
+        .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
+        thead { display: table-header-group; }
+        /* External links show where they go */
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #87867f; overflow-wrap: anywhere; }
+      }
     </style>
     <script>
       function explainer() {
@@ -168,8 +198,8 @@
             <span class="font-mono text-xs bg-oat text-[#141413] px-2 py-0.5 rounded-lg">02</span>
             <h2 class="m-0 text-[25px] font-serif font-medium text-[#141413] tracking-tight">Step by step</h2>
             <span class="flex-1"></span>
-            <button type="button" @click="open = [1,2,3,4,5]" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Expand all</button>
-            <button type="button" @click="open = []" class="font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Collapse all</button>
+            <button type="button" @click="open = [1,2,3,4,5]" class="print:hidden font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Expand all</button>
+            <button type="button" @click="open = []" class="print:hidden font-mono text-xs border border-[#d1cfc5] bg-white rounded-lg px-3 py-1.5 hover:border-[#141413] focus-visible:outline-2 focus-visible:outline-clay">Collapse all</button>
           </div>
           <p class="text-[#87867f] max-w-[720px] m-0 mb-6">Steps 1–2 run in the user's tab; 3–4 run asynchronously, usually within 10 seconds. The comment shows a "scanning" chip until step 4 lands.</p>
 
@@ -181,7 +211,7 @@
                 <span class="font-serif text-[17px] text-[#141413]">1 · Ask the API for a presigned URL</span>
                 <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">api/uploads/presign.ts:18</span>
               </button>
-              <div x-show="isOpen(1)" class="px-5 pb-5 sm:pl-11">
+              <div x-show="isOpen(1)" class="print:block! px-5 pb-5 sm:pl-11">
                 <p class="m-0 mb-3 text-[14.5px] max-w-[680px]"><code class="font-mono text-[13px]">useUpload</code> posts the file's name, size and MIME type. The API looks up the upload <em>kind</em> in <code class="font-mono text-[13px]">uploads.yaml</code>, rejects anything over <code class="font-mono text-[13px]">max_bytes</code> or outside <code class="font-mono text-[13px]">mime</code>, inserts a <code class="font-mono text-[13px]">pending_uploads</code> row, and returns a URL that is valid for 15 minutes and only for that exact key and size.</p>
                 <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
 <pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// api/uploads/presign.ts</span>
@@ -203,7 +233,7 @@
                 <span class="font-serif text-[17px] text-[#141413]">2 · Browser uploads straight to the bucket</span>
                 <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">web/hooks/useUpload.ts:44</span>
               </button>
-              <div x-show="isOpen(2)" x-cloak class="px-5 pb-5 sm:pl-11">
+              <div x-show="isOpen(2)" x-cloak class="print:block! px-5 pb-5 sm:pl-11">
                 <p class="m-0 mb-2 text-[14.5px] max-w-[680px]">The hook PUTs the file to the presigned URL with progress events. Files over 100 MB switch to multipart: the hook asks for part URLs in batches of 20 and uploads 4 parts in parallel. Our servers never see the bytes, so API memory and timeouts do not limit file size.</p>
                 <p class="m-0 text-[14.5px] max-w-[680px]">If the tab closes mid-upload the <code class="font-mono text-[13px]">pending_uploads</code> row expires after 24 h and a bucket lifecycle rule removes orphaned parts.</p>
               </div>
@@ -215,7 +245,7 @@
                 <span class="font-serif text-[17px] text-[#141413]">3 · Bucket event wakes the scanner</span>
                 <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">workers/scan/index.ts:12</span>
               </button>
-              <div x-show="isOpen(3)" x-cloak class="px-5 pb-5 sm:pl-11">
+              <div x-show="isOpen(3)" x-cloak class="print:block! px-5 pb-5 sm:pl-11">
                 <p class="m-0 mb-3 text-[14.5px] max-w-[680px]"><code class="font-mono text-[13px]">ObjectCreated</code> events go to the <code class="font-mono text-[13px]">upload-scan</code> queue. The worker streams the object through ClamAV and, for images, strips EXIF and renders the variants listed for that kind. Nothing is user-visible yet.</p>
                 <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
 <pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="cm">// workers/scan/index.ts</span>
@@ -235,7 +265,7 @@
                 <span class="font-serif text-[17px] text-[#141413]">4 · Finalize: the file becomes real</span>
                 <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">api/uploads/finalize.ts:27</span>
               </button>
-              <div x-show="isOpen(4)" x-cloak class="px-5 pb-5 sm:pl-11">
+              <div x-show="isOpen(4)" x-cloak class="print:block! px-5 pb-5 sm:pl-11">
                 <p class="m-0 text-[14.5px] max-w-[680px]">Finalize is an internal route (mTLS only). It moves the <code class="font-mono text-[13px]">pending_uploads</code> row into <code class="font-mono text-[13px]">attachments</code>, then publishes <code class="font-mono text-[13px]">upload.ready</code> on the doc's realtime channel, which swaps the "scanning" chip for the file card. This is the <strong class="text-[#141413]">only</strong> place an <code class="font-mono text-[13px]">attachments</code> row is created.</p>
               </div>
             </div>
@@ -246,7 +276,7 @@
                 <span class="font-serif text-[17px] text-[#141413]">5 · Reads go through signed CDN URLs</span>
                 <span class="sm:ml-auto font-mono text-[11px] text-[#87867f]">api/uploads/url.ts:9</span>
               </button>
-              <div x-show="isOpen(5)" x-cloak class="px-5 pb-5 sm:pl-11">
+              <div x-show="isOpen(5)" x-cloak class="print:block! px-5 pb-5 sm:pl-11">
                 <p class="m-0 text-[14.5px] max-w-[680px]">The bucket is private. When a doc renders, the API checks doc access and signs a <code class="font-mono text-[13px]">files.acme.dev</code> URL valid for 15 minutes. The editor refreshes URLs on focus, so a tab left open overnight does not show broken images.</p>
               </div>
             </div>
@@ -357,5 +387,10 @@ return (
         </footer>
       </main>
     </div>
+    <script>
+      // Print with every <details> open, then restore what the reader had.
+      addEventListener('beforeprint', () => document.querySelectorAll('details:not([open])').forEach(d => { d.dataset.printOpened = ''; d.open = true; }));
+      addEventListener('afterprint', () => document.querySelectorAll('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
+    </script>
   </body>
 </html>

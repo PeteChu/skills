@@ -27,6 +27,36 @@
       .pro::before, .con::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: 2px; }
       .pro::before { background: #788c5d; }
       .con::before { background: #d97757; }
+      /* ── Print / Save as PDF ─────────────────────────────────────────── */
+      @page {
+        margin: 16mm 15mm 18mm;
+        @bottom-left  { content: "Webhook retries"; font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+        @bottom-right { content: counter(page) " / " counter(pages); font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+      }
+      @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html { scroll-behavior: auto; }
+        body { background: #fff !important; padding: 0 !important; font-size: 10.5pt; }
+        main { max-width: none !important; }
+        /* Screen chrome never prints */
+        .fixed { display: none !important; }
+        button:is([\@click*="copy" i], [\@click*="clipboard"], [\@click*="reset" i], [\@click*="restart"]) { display: none !important; }
+        .sticky { position: static !important; }
+        .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+        .backdrop-blur { backdrop-filter: none !important; }
+        /* Nothing is clipped: scrollers expand, code wraps, wide SVG scales to the page */
+        .overflow-x-auto, .overflow-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        pre, .diff .row { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+        svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
+        /* Page breaks: keep headings with their content, keep small blocks whole */
+        h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
+        p, li, pre { orphans: 3; widows: 3; }
+        tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
+        .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
+        thead { display: table-header-group; }
+        /* External links show where they go */
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #87867f; overflow-wrap: anywhere; }
+      }
     </style>
   </head>
   <body class="bg-ivory text-[#3d3d3a] font-sans antialiased leading-relaxed px-6 py-14 lg:py-16">
@@ -48,7 +78,7 @@
 
       <section class="grid grid-cols-1 lg:grid-cols-3 gap-7 mb-14" aria-label="Approaches">
         <!-- 01 -->
-        <article class="bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
+        <article class="print:break-inside-avoid bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
           <header>
             <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
               <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">01</span>Inline retry with backoff
@@ -86,8 +116,8 @@
         </article>
 
         <!-- 02 -->
-        <article class="bg-white border-2 border-clay rounded-xl p-6 flex flex-col gap-5 relative">
-          <span class="absolute -top-3 right-5 font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2.5 py-0.5">Recommended</span>
+        <article class="print:break-inside-avoid bg-white border-2 border-clay rounded-xl p-6 flex flex-col gap-5 relative">
+          <span class="absolute -top-3 right-5 print:static print:self-end font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2.5 py-0.5">Recommended</span>
           <header>
             <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
               <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">02</span>Postgres outbox + worker
@@ -126,7 +156,7 @@
         </article>
 
         <!-- 03 -->
-        <article class="bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
+        <article class="print:break-inside-avoid bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
           <header>
             <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
               <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">03</span>Managed queue + DLQ
@@ -194,5 +224,10 @@ redrive_policy = {
         Example artifact · fictional data · pattern: <span class="text-[#3d3d3a]">references/code-approaches.md</span>
       </footer>
     </main>
+    <script>
+      // Print with every <details> open, then restore what the reader had.
+      addEventListener('beforeprint', () => document.querySelectorAll('details:not([open])').forEach(d => { d.dataset.printOpened = ''; d.open = true; }));
+      addEventListener('afterprint', () => document.querySelectorAll('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
+    </script>
   </body>
 </html>
