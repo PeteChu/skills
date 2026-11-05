@@ -17,6 +17,8 @@
         --font-serif: ui-serif, Georgia, "Times New Roman", serif;
         --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
+      /* Print lays out at ~680px; let md: layouts apply on paper too */
+      @custom-variant md (@media print, (width >= 48rem));
     </style>
     <style>
       * { box-sizing: border-box; }
@@ -24,6 +26,48 @@
       [x-cloak] { display: none !important; }
       .dash > li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 18px; height: 1.5px; background: #d97757; }
       @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+      /* ── Print / Save as PDF ─────────────────────────────────────────── */
+      @page {
+        margin: 16mm 15mm 18mm;
+        @bottom-left  { content: "Offline sync, one quarter in"; font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+        @bottom-right { content: counter(page) " / " counter(pages); font: 8pt ui-monospace, Menlo, monospace; color: #87867f; }
+      }
+      @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html { scroll-behavior: auto; }
+        body { background: #fff !important; padding: 0 !important; font-size: 10.5pt; }
+        main { max-width: none !important; }
+        /* Screen chrome never prints */
+        .fixed { display: none !important; }
+        button:is([\@click*="copy" i], [\@click*="clipboard"], [\@click*="reset" i], [\@click*="restart"]) { display: none !important; }
+        .sticky { position: static !important; }
+        .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+        .backdrop-blur { backdrop-filter: none !important; }
+        /* Nothing is clipped: scrollers expand, code wraps, wide SVG scales to the page */
+        .overflow-x-auto, .overflow-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        pre, .diff .row { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+        svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
+        /* Page breaks: keep headings with their content, keep small blocks whole */
+        h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
+        p, li { orphans: 3; widows: 3; }
+        tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
+        .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
+        thead { display: table-header-group; }
+        /* External links show where they go */
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #87867f; overflow-wrap: anywhere; }
+      }
+      /* Deck on paper: one 16:9 landscape page per slide, edge to edge */
+      @page {
+        size: 13.333in 7.5in;
+        margin: 0;
+        @bottom-left { content: none; }
+        @bottom-right { content: none; }
+      }
+      @media print {
+        html { scroll-snap-type: none; }
+        [data-slide] { height: 100vh; min-height: 0 !important; overflow: hidden; break-after: page; break-inside: avoid; }
+        [data-slide]:last-of-type { break-after: auto; }
+      }
     </style>
   </head>
   <body class="bg-ivory text-[#141413] font-sans antialiased overflow-x-hidden" x-data="deck()" @keydown.window="key($event)">
@@ -315,6 +359,11 @@
           }
         };
       }
+    </script>
+    <script>
+      // Print with every <details> open, then restore what the reader had.
+      addEventListener('beforeprint', () => document.querySelectorAll('details:not([open])').forEach(d => { d.dataset.printOpened = ''; d.open = true; }));
+      addEventListener('afterprint', () => document.querySelectorAll('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
     </script>
   </body>
 </html>

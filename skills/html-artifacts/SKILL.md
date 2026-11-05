@@ -1,7 +1,7 @@
 ---
 name: html-artifacts
 description: >-
-  Generate polished, self-contained HTML artifacts instead of Markdown. Use whenever the user asks for a substantial report, plan, spec, code review, PR write-up, code explainer, research summary, status or incident report, design exploration, prototype, diagram, slide deck, comparison, brainstorm, interview, merge quiz, or one-off editing UI that should be easy to read, share, or interact with in a browser. Prefer this skill for rich deliverables even if the user says “doc”, “report”, “summary”, “plan”, “show me options”, or “write this up” and does not explicitly say HTML.
+  Generate polished, self-contained HTML artifacts instead of Markdown. Use whenever the user asks for a substantial report, plan, spec, code review, PR write-up, code explainer, research summary, status or incident report, design exploration, prototype, diagram, slide deck, comparison, brainstorm, interview, merge quiz, or one-off editing UI that should be easy to read, share, print, or save as PDF from a browser. Prefer this skill for rich deliverables even if the user says “doc”, “report”, “summary”, “plan”, “show me options”, or “write this up” and does not explicitly say HTML.
 disable-model-invocation: true
 ---
 
@@ -31,7 +31,7 @@ HTML page, save it, and report the path.
    see the finished quality bar.
 5. **Generate one complete HTML file.** Use Tailwind (Play CDN) utilities. Keep a tiny `<style>`
    block for pseudo-elements and syntax tokens, and add Alpine.js only when interactive. No build
-   step.
+   step. Keep the shell's print layer so the page also saves as a polished PDF.
 6. **Save it.** Use the user's path if given. Otherwise use `html-artifacts/<slug>.html` when that
    directory exists, else `<slug>.html` in the current directory.
 7. **Reply briefly** with the path and one sentence on what the page contains.
@@ -158,6 +158,9 @@ primary. Never stack two primaries. A page that is both a deck and a report serv
 - The page must stand alone: title, context (prompt box), labels, legends, and source notes, so it
   makes sense without the chat.
 - Interactive editors and pickers end in an export: Copy JSON / diff / Markdown / prompt / reply.
+- Print-ready: keep the foundations shell's `@custom-variant md` line, print block, and
+  `beforeprint` script, and set the footer title in `@page`. Mark leftover screen-only controls
+  `print:hidden`. See *Print and Save as PDF* in `references/foundations.md`.
 
 ## Visual language (summary — tokens and snippets in `references/foundations.md`)
 
@@ -177,4 +180,6 @@ foundations shell verbatim so these utilities exist.
 - [ ] Code and data are escaped, readable, and use real identifiers and paths.
 - [ ] Interactive controls work offline from `file://` and end in an export where relevant.
 - [ ] Narrow screens degrade gracefully (grids collapse; wide SVG scrolls).
+- [ ] Print preview / Save as PDF looks designed: backgrounds and code panels intact, no buttons
+      or fixed chrome, no clipped code or diagrams, no split cards, no near-empty pages.
 - [ ] Assumptions and open questions are labeled, not stated as fact.
