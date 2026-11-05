@@ -16,8 +16,6 @@
         --font-serif: ui-serif, Georgia, "Times New Roman", serif;
         --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
-      /* Print lays out at ~680px; let md: layouts apply on paper too */
-      @custom-variant md (@media print, (width >= 48rem));
     </style>
     <style>
       * { box-sizing: border-box; }
@@ -60,7 +58,7 @@
         svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
         /* Page breaks: keep headings with their content, keep small blocks whole */
         h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
-        p, li { orphans: 3; widows: 3; }
+        p, li, pre { orphans: 3; widows: 3; }
         tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
         .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
         thead { display: table-header-group; }

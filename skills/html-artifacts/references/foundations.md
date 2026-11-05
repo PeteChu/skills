@@ -69,8 +69,6 @@ numbers.
         --font-serif: ui-serif, Georgia, "Times New Roman", serif;
         --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
-      /* Print lays out at ~680px; let md: layouts apply on paper too */
-      @custom-variant md (@media print, (width >= 48rem));
     </style>
     <style>
       * { box-sizing: border-box; }
@@ -99,7 +97,7 @@ numbers.
         svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
         /* Page breaks: keep headings with their content, keep small blocks whole */
         h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
-        p, li { orphans: 3; widows: 3; }
+        p, li, pre { orphans: 3; widows: 3; }
         tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
         .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
         thead { display: table-header-group; }
@@ -131,8 +129,7 @@ numbers.
 
 Widen `max-w-[1100px]` to `max-w-[1360px]` for side-by-side grids (comparisons, variant sheets).
 
-Copy the shell verbatim, including the `@custom-variant` line, the print block, and the
-`beforeprint` script. Replace `"Short artifact title"` in `@page` with the page's short title
+Copy the shell verbatim, including the print block and the `beforeprint` script. Replace `"Short artifact title"` in `@page` with the page's short title
 (it prints in the footer of every page, beside the page number).
 
 ## Shared components
@@ -403,8 +400,6 @@ block fixes all of that. What it does:
   list items, and `<details>` don't split. Panels holding a table, code, or a diff may break,
   and table heads repeat on each page.
 - **Shows everything.** The `beforeprint` script opens every `<details>` and restores them after.
-- **Keeps layouts.** The `@custom-variant md` line makes every `md:` grid apply on paper, so
-  stat bands, two-column cards, and side-by-side comparisons stay side by side.
 
 Your part, per artifact:
 
@@ -418,9 +413,12 @@ Your part, per artifact:
   `print:break-inside-auto` on a tall card (more than half a page) that may split, so it doesn't
   leave a gap.
 - Badges hung outside a card (`absolute -top-3`) can land on the previous page when the card moves
-  down. Add `print:top-2` to pull them inside.
-- `lg:` layouts (sidebars, three-up grids) still collapse on paper. That's usually right; add
-  `print:grid-cols-N` only where columns are the point.
+  down. Add `print:static` (plus `print:self-end` in a flex column) so they print inside it.
+- Paper is only ~680 CSS px wide, so `sm:` layouts apply but `md:` and `lg:` ones collapse to
+  their mobile form. That's usually right for sidebars and three-up grids. Where columns are the
+  point (a stat band, before/after cards), add `print:grid-cols-N` next to the breakpoint class.
+  Don't redefine the `md` variant to include print: it reorders the CSS so `md:` beats `lg:` on
+  screen.
 - Landscape artifacts (decks, wide boards) override `@page` — see
   [`slide-deck.md`](slide-deck.md#print--save-as-pdf).
 

@@ -158,9 +158,8 @@ primary. Never stack two primaries. A page that is both a deck and a report serv
 - The page must stand alone: title, context (prompt box), labels, legends, and source notes, so it
   makes sense without the chat.
 - Interactive editors and pickers end in an export: Copy JSON / diff / Markdown / prompt / reply.
-- Print-ready: keep the foundations shell's `@custom-variant md` line, print block, and
-  `beforeprint` script, and set the footer title in `@page`. Mark leftover screen-only controls
-  `print:hidden`. See *Print and Save as PDF* in `references/foundations.md`.
+- Print-ready: keep the foundations shell's print block and `beforeprint` script, and set the
+  footer title in `@page`. Mark leftover screen-only controls `print:hidden`. See *Print and Save as PDF* in `references/foundations.md`.
 
 ## Visual language (summary — tokens and snippets in `references/foundations.md`)
 

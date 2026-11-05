@@ -16,8 +16,6 @@
         --font-serif: ui-serif, Georgia, "Times New Roman", serif;
         --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
-      /* Print lays out at ~680px; let md: layouts apply on paper too */
-      @custom-variant md (@media print, (width >= 48rem));
     </style>
     <style>
       * { box-sizing: border-box; }
@@ -51,7 +49,7 @@
         svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
         /* Page breaks: keep headings with their content, keep small blocks whole */
         h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
-        p, li { orphans: 3; widows: 3; }
+        p, li, pre { orphans: 3; widows: 3; }
         tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
         .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
         thead { display: table-header-group; }
@@ -321,7 +319,7 @@
               <div><p class="m-0 text-[#141413] font-semibold">lg ghost keeps md padding</p><p class="m-0 text-[14px]">The ghost class string includes <code class="font-mono text-[12.5px]">px-3.5</code>, which wins over the size's <code class="font-mono text-[12.5px]">px-5</code> because the classes are joined without <code class="font-mono text-[12.5px]">twMerge</code>. Move padding out of the intent classes and into size only.</p><p class="m-0 mt-1 font-mono text-xs text-[#87867f]">Button.tsx:55 · cx(base, intent, size)</p></div>
             </li>
           </ol>
-          <div>
+          <div class="print:break-inside-avoid">
             <p class="font-mono text-[11px] uppercase tracking-[0.06em] text-[#87867f] m-0 mb-2">Proposed cva shape (fixes 1–5)</p>
             <div class="bg-[#141413] rounded-xl px-5 py-4 overflow-x-auto">
 <pre class="m-0 text-[#e8e6de] font-mono text-[12.5px] leading-relaxed"><span class="kw">export const</span> <span class="fn">button</span> = <span class="fn">cva</span>(base, {

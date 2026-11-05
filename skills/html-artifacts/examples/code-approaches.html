@@ -16,8 +16,6 @@
         --font-serif: ui-serif, Georgia, "Times New Roman", serif;
         --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
-      /* Print lays out at ~680px; let md: layouts apply on paper too */
-      @custom-variant md (@media print, (width >= 48rem));
     </style>
     <style>
       * { box-sizing: border-box; }
@@ -52,7 +50,7 @@
         svg { max-width: 100% !important; min-width: 0 !important; height: auto; }
         /* Page breaks: keep headings with their content, keep small blocks whole */
         h1, h2, h3, h4, :is(div, header):has(> h2, > h3), :is(div, header):has(> h2, > h3) + p { break-after: avoid; break-inside: avoid; }
-        p, li { orphans: 3; widows: 3; }
+        p, li, pre { orphans: 3; widows: 3; }
         tr, li, figure, aside, blockquote, details, img, svg, .tl-item,
         .rounded-xl:not(:has(table, pre, .diff, section)), .rounded-lg:not(:has(table, pre, .diff)) { break-inside: avoid; }
         thead { display: table-header-group; }
@@ -80,7 +78,7 @@
 
       <section class="grid grid-cols-1 lg:grid-cols-3 gap-7 mb-14" aria-label="Approaches">
         <!-- 01 -->
-        <article class="bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
+        <article class="print:break-inside-avoid bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
           <header>
             <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
               <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">01</span>Inline retry with backoff
@@ -118,8 +116,8 @@
         </article>
 
         <!-- 02 -->
-        <article class="bg-white border-2 border-clay rounded-xl p-6 flex flex-col gap-5 relative">
-          <span class="absolute -top-3 print:top-2 right-5 font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2.5 py-0.5">Recommended</span>
+        <article class="print:break-inside-avoid bg-white border-2 border-clay rounded-xl p-6 flex flex-col gap-5 relative">
+          <span class="absolute -top-3 right-5 print:static print:self-end font-mono text-[10.5px] uppercase tracking-[0.06em] bg-clay text-white rounded-full px-2.5 py-0.5">Recommended</span>
           <header>
             <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
               <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">02</span>Postgres outbox + worker
@@ -158,7 +156,7 @@
         </article>
 
         <!-- 03 -->
-        <article class="bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
+        <article class="print:break-inside-avoid bg-white border border-[#d1cfc5] rounded-xl p-6 flex flex-col gap-5">
           <header>
             <h2 class="font-serif font-medium text-[21px] text-[#141413] m-0 mb-1.5">
               <span class="font-mono text-xs bg-oat px-2 py-0.5 rounded-lg mr-2 align-[3px]">03</span>Managed queue + DLQ
