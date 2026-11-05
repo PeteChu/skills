@@ -16,7 +16,7 @@ npx skills@latest add petechu/skills
 | [code-wiki](./skills/code-wiki/SKILL.md)           | Build, update, and query a persistent, source-cited code wiki for a repository through a bundled, deterministic, dependency-free Node.js engine |
 | [teach-back](./skills/teach-back/SKILL.md)         | Practice technical explanations with a believable persona, adaptive questions, coaching feedback, and replay                                    |
 | [session-cost](./skills/session-cost/SKILL.md)     | Analyze one session's cost and tool trajectory to find expensive workflow habits and concrete improvements                                      |
-| [eli5](./skills/eli5/SKILL.md)                     | Explain any topic like I'm 5 — a picture-heavy HTML artifact with one consistent metaphor, few words, a story arc, and a live demo              |
+| [eli5](./skills/eli5/SKILL.md)                     | Explain any topic like I'm 5 — a picture-heavy HTML artifact with one consistent metaphor, a theme drawn from the topic's world, a light/dark toggle, a story arc, and a live demo |
 | [explain-pr](./skills/explain-pr/SKILL.md)         | Turn a branch into a reviewable PR — pseudocode summary, show-me visuals, Mermaid when it helps, TDD evidence, optional narrated video walkthrough |
 
 > **Note:** This collection is growing. The skills above are the first of many — additional skills will be added over time.

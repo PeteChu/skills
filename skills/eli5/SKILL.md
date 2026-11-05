@@ -2,16 +2,21 @@
 name: eli5
 description: >-
   Explain a topic like I'm 5: a picture-heavy HTML artifact with few words, one consistent
-  metaphor, and a story anyone can follow. Invoked manually via /eli5 <topic>.
+  metaphor, a visual theme drawn from the topic's world, a light/dark toggle, and a story anyone
+  can follow. Invoked manually via /eli5 <topic> [theme: <name>].
 disable-model-invocation: true
 ---
 
 # eli5
 
 Produce a picture explainer: one HTML artifact that teaches a mechanism to someone who
-knows nothing about it. Big pictures, few words.
+knows nothing about it. Big pictures, few words, dressed in the topic's own world.
 
-**Before writing any HTML, read the two bundled references shipped with this skill** —
+Usage: `/eli5 <topic>`, or `/eli5 <topic> theme: <name>` to choose the look yourself (one of
+the families in `references/themes.md` or any free-form idea, such as "space" or "pirate
+ship"). Without a theme, the skill picks one that fits the topic.
+
+**Before writing any HTML, read the three bundled references shipped with this skill** —
 they are local files, not platform skills; do not search the filesystem beyond this
 folder for them:
 
@@ -19,6 +24,9 @@ folder for them:
   layout, and publishing. Mandatory for every artifact.
 - `references/artifact-diagramming.md` — when a picture earns its place, and the
   inline-SVG mechanics that keep it legible in both themes.
+- `references/themes.md` — how to pick a visual theme for the topic, the shared token
+  contract, readability rules every theme obeys, the light/dark toggle, and ten theme
+  families (nine with ready-made, contrast-checked palettes).
 
 What follows is the ELI5 layer neither of them provides — the brief itself.
 
@@ -46,14 +54,23 @@ the artifact.
 No glossary section. Definitions live where they are used — inside captions and
 specimens.
 
-## One metaphor, one world
+## One metaphor, one world, one theme
 
-The page doesn't just explain the subject; it _looks like_ the subject's own world. The
-Discord explainer is styled as Discord — profile-card hero, `#` channels, the app's own
-accent. This is the metaphor and the design language being one decision. When following
-the design reference's process step, derive the palette and objects from the subject's world,
-not a generic scheme, and run its editorial review against the AI-default looks it
-forbids.
+The page doesn't just explain the subject; it _looks like_ the world the explanation happens
+in. The Discord explainer is styled as Discord, with a profile-card hero, `#` channels and the
+app's own accent. A DNS page told as a post office looks like envelopes, stamps and a route
+map. The metaphor and the design language are one decision, and the theme is how the reader
+always knows which world they are in.
+
+Pick the theme with `references/themes.md` §1: a theme the user named wins, then the
+subject's own world (Native UI), then the family that matches the metaphor. Name the pick and
+the reason in the design plan, start from that family's tokens and type, and tune them to the
+exact subject. Then run the design reference's editorial review against the AI-default looks
+it forbids.
+
+The theme serves reading, never the other way round. Body text stays plain and large,
+textures stay out from behind words, and the full costume is spent on the hero and the live
+demo (themes.md §3).
 
 Emoji may appear only where the subject itself would contain them (inside a chat
 message, on a dice roll) — never as section markers or decoration.
@@ -90,6 +107,14 @@ End the body with a working miniature of the thing — a clickable demo, a real 
 actual roll of the dice. All the page's boldness is spent here; everything before it
 stays quiet. It must genuinely work from the saved file: no network, and animation that
 respects `prefers-reduced-motion`.
+
+## Light and dark, with a toggle
+
+Every page ships both themes and a visible toggle (themes.md §4). The page starts from the
+viewer's system setting. The toggle flips it, remembers the choice, and goes back to following
+the system when the viewer picks the system's own theme again. Before shipping, flip it both
+ways and look at every figure, specimen and demo state. Both themes are one click away for
+every reader, so neither is the "spare" one.
 
 ## Ship it
 

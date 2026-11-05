@@ -67,5 +67,16 @@ a paragraph explaining what a BOT tag means — the tag in the fake message _is_
 - Purple-to-blue gradient hero → flat blurple banner with two faint circles
 - A "glossary" section (Server/Channel/Command defined in a list) → folded into the treehouse
   figure's caption; three words didn't need a fourth section
-- A theme toggle button → viewer's own theme controls it; the three-state token pattern handles
-  the un-stamped default, so no JS toggle to maintain
+- Gold `--warn` reused as text for bot names (1.9:1 on white in light mode) → a dedicated
+  `--name-ink` token, gold in dark and deep amber in light; `--faint` captions darkened so they
+  pass 4.5:1 in both themes
+
+## 5 · Theme and toggle (added with `references/themes.md`)
+
+- **Theme pick:** _Native UI_, because a Discord bot lives inside a product with a look everyone
+  knows (themes.md §1, rule 2). The treehouse metaphor lives inside that world rather than
+  replacing it.
+- **Toggle:** a fixed sun/moon button in the top-right corner. The page starts from the
+  viewer's system setting, the button flips it and remembers the choice in `localStorage`, and
+  picking the system's own theme again removes the override. A tiny `<head>` script applies a
+  saved choice before first paint, and `color-scheme` keeps scrollbars and form controls in step.

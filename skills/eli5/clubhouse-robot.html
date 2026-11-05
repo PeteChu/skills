@@ -6,48 +6,62 @@
   rel="stylesheet"
   href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500&display=swap"
 />
+<script>
+  // Apply a remembered light/dark choice before first paint.
+  try {
+    var saved = localStorage.getItem("eli5-theme");
+    if (saved === "light" || saved === "dark")
+      document.documentElement.setAttribute("data-theme", saved);
+  } catch (e) {}
+</script>
 
 <style>
   /* ---------- tokens: dark-first (Discord's native world) ---------- */
   :root {
+    color-scheme: dark;
     --bg: #1e1f22;
     --surface: #2b2d31;
     --surface2: #383a40;
     --line: #3f4147;
     --ink: #f2f3f5;
     --dim: #b5bac1;
-    --faint: #80848e;
+    --faint: #949ba4;
     --accent: #5865f2;
     --accent-soft: rgba(88, 101, 242, 0.16);
     --accent-ink: #c9cdfb;
     --go: #23a55a;
     --warn: #f0b232;
+    --name-ink: #f0b232;
     --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
+      color-scheme: light;
       --bg: #edeef2;
       --surface: #ffffff;
       --surface2: #e9eaee;
       --line: #dcdee3;
       --ink: #232428;
       --dim: #5c5e66;
-      --faint: #80848e;
+      --faint: #62656d;
       --accent-soft: rgba(88, 101, 242, 0.12);
       --accent-ink: #3d49d8;
+      --name-ink: #8a5d00;
       --shadow: 0 16px 40px rgba(35, 36, 40, 0.12);
     }
   }
   :root[data-theme="light"] {
+    color-scheme: light;
     --bg: #edeef2;
     --surface: #ffffff;
     --surface2: #e9eaee;
     --line: #dcdee3;
     --ink: #232428;
     --dim: #5c5e66;
-    --faint: #80848e;
+    --faint: #62656d;
     --accent-soft: rgba(88, 101, 242, 0.12);
     --accent-ink: #3d49d8;
+    --name-ink: #8a5d00;
     --shadow: 0 16px 40px rgba(35, 36, 40, 0.12);
   }
 
@@ -349,7 +363,7 @@
   .msgcard .m-name b {
     font-family: "Fredoka", sans-serif;
     font-weight: 600;
-    color: var(--warn);
+    color: var(--name-ink);
   }
   .msgcard .m-name time {
     font-size: 0.7rem;
@@ -580,7 +594,7 @@
   }
   .msg .ava.you {
     background: var(--warn);
-    color: #fff;
+    color: #1e1f22;
     display: grid;
     place-items: center;
     font-family: "Fredoka", sans-serif;
@@ -598,7 +612,7 @@
     font-size: 0.98rem;
   }
   .msg .head b.bot {
-    color: var(--warn);
+    color: var(--name-ink);
   }
   .msg .head time {
     font-size: 0.68rem;
@@ -712,6 +726,46 @@
     font-size: 0.8rem;
   }
 
+  /* ---------- light/dark toggle ---------- */
+  .theme-toggle {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 10;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  .theme-toggle:hover {
+    background: var(--surface2);
+  }
+  .theme-toggle:focus-visible {
+    outline: 3px solid var(--accent-ink);
+    outline-offset: 2px;
+  }
+  .theme-toggle svg {
+    width: 20px;
+    height: 20px;
+  }
+  .theme-toggle[data-mode="dark"] .i-moon,
+  .theme-toggle[data-mode="light"] .i-sun {
+    display: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    body {
+      transition:
+        background-color 0.25s,
+        color 0.25s;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
@@ -725,6 +779,24 @@
     }
   }
 </style>
+
+<button class="theme-toggle" type="button" aria-label="Switch to light theme">
+  <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"
+      fill="currentColor"
+    />
+  </svg>
+  <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="4.5" fill="currentColor" />
+    <path
+      d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </svg>
+</button>
 
 <!-- reusable robot -->
 <svg width="0" height="0" style="position: absolute" aria-hidden="true">
@@ -918,7 +990,13 @@
           <g transform="translate(224,222) scale(0.44)">
             <use href="#robot" />
           </g>
-          <text x="262" y="228" font-size="12" fill="#F0B232" font-weight="500">
+          <text
+            x="262"
+            y="228"
+            font-size="12"
+            fill="var(--name-ink)"
+            font-weight="500"
+          >
             Botti
           </text>
           <rect
@@ -1364,5 +1442,46 @@
         }
       });
     });
+  })();
+
+  // Light/dark toggle: starts from the system setting, remembers an explicit
+  // choice, and follows the system again once the viewer picks its theme.
+  (function () {
+    var root = document.documentElement;
+    var btn = document.querySelector(".theme-toggle");
+    var mq = matchMedia("(prefers-color-scheme: dark)");
+    var KEY = "eli5-theme";
+    function system() {
+      return mq.matches ? "dark" : "light";
+    }
+    function current() {
+      var t = root.getAttribute("data-theme");
+      return t === "light" || t === "dark" ? t : system();
+    }
+    function paint() {
+      var mode = current();
+      btn.setAttribute("data-mode", mode);
+      btn.setAttribute(
+        "aria-label",
+        mode === "dark" ? "Switch to light theme" : "Switch to dark theme",
+      );
+    }
+    btn.addEventListener("click", function () {
+      var next = current() === "dark" ? "light" : "dark";
+      try {
+        if (next === system()) {
+          root.removeAttribute("data-theme");
+          localStorage.removeItem(KEY);
+        } else {
+          root.setAttribute("data-theme", next);
+          localStorage.setItem(KEY, next);
+        }
+      } catch (e) {
+        root.setAttribute("data-theme", next);
+      }
+      paint();
+    });
+    mq.addEventListener("change", paint);
+    paint();
   })();
 </script>
