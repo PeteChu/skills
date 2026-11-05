@@ -17,7 +17,11 @@
         "Page ends by compressing the topic into one line plus one small visual",
         "No glossary/definitions section exists",
         "<title> reads as a specific product-style name (not 'Git Explained', 'What is Git', or containing 'ELI5')",
-        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)"
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)",
+        "Visual theme is drawn from the metaphor's or subject's world (e.g. a game with save points, a photo album, or Git's own UI) and the design plan names the theme with a one-line reason; specimens and diagram frames use that world's objects",
+        "Readability holds under the theme: body text is a plain readable face at 17px or larger, decorative faces appear only in headings or labels of four words or fewer, and no texture sits directly behind running text",
+        "A visible light/dark toggle button exists: with no saved choice the page follows prefers-color-scheme, clicking it sets data-theme on <html> to the opposite theme, the choice survives a reload (localStorage wrapped in try/catch), and choosing the system's own theme again removes the override",
+        "The CSS defines tokens for light and dark in the bare :root, the guarded prefers-color-scheme block and the explicit [data-theme] block, so the system setting and the toggle both resolve to complete palettes"
       ]
     },
     {
@@ -36,7 +40,11 @@
         "Page ends by compressing the topic into one line plus one small visual",
         "No glossary/definitions section exists",
         "<title> reads as a specific product-style name (not 'DNS Explained', 'What is DNS', or containing 'ELI5')",
-        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)"
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)",
+        "Visual theme is drawn from the metaphor's or subject's world (e.g. Postal envelopes and route map, or a phone book) and the design plan names the theme with a one-line reason; specimens and diagram frames use that world's objects",
+        "Readability holds under the theme: body text is a plain readable face at 17px or larger, decorative faces appear only in headings or labels of four words or fewer, and no texture sits directly behind running text",
+        "A visible light/dark toggle button exists: with no saved choice the page follows prefers-color-scheme, clicking it sets data-theme on <html> to the opposite theme, the choice survives a reload (localStorage wrapped in try/catch), and choosing the system's own theme again removes the override",
+        "The CSS defines tokens for light and dark in the bare :root, the guarded prefers-color-scheme block and the explicit [data-theme] block, so the system setting and the toggle both resolve to complete palettes"
       ]
     },
     {
@@ -55,7 +63,48 @@
         "Page ends by compressing the topic into one line plus one small visual",
         "No glossary/definitions section exists",
         "<title> reads as a specific product-style name (not 'Mortgages Explained', 'What is a Mortgage', or containing 'ELI5')",
-        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)"
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it (no dark-ink-on-dark-fill or light-on-light, e.g. black text on dark green)",
+        "Visual theme is drawn from the metaphor's or subject's world (e.g. Market coins, jars and receipts) and the design plan names the theme with a one-line reason; specimens and diagram frames use that world's objects",
+        "Readability holds under the theme: body text is a plain readable face at 17px or larger, decorative faces appear only in headings or labels of four words or fewer, and no texture sits directly behind running text",
+        "A visible light/dark toggle button exists: with no saved choice the page follows prefers-color-scheme, clicking it sets data-theme on <html> to the opposite theme, the choice survives a reload (localStorage wrapped in try/catch), and choosing the system's own theme again removes the override",
+        "The CSS defines tokens for light and dark in the bare :root, the guarded prefers-color-scheme block and the explicit [data-theme] block, so the system setting and the toggle both resolve to complete palettes"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "/eli5 how does photosynthesis work",
+      "expected_output": "A picture-explainer HTML artifact that picks a nature theme (e.g. Field Guide: specimen cards, annotated leaf sketch, zoom from leaf to cell) without being told to, explains sunlight + water + CO2 -> sugar + oxygen inside one metaphor (a leaf kitchen or factory), has a live dial for sunlight or water, and a light/dark toggle that starts from the system setting.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a single self-contained HTML file (doctype, inline CSS/JS, no build step)",
+        "Prose discipline: at least 80% of paragraph blocks are three sentences or fewer",
+        "One central metaphor introduced early and carried through the whole explanation, with real terms (chlorophyll, carbon dioxide, glucose, oxygen) attached to it as they appear",
+        "Core mechanism diagram: an inline SVG figure shows inputs (light, water, CO2) entering the leaf and outputs (sugar, oxygen) leaving, not just labeled boxes",
+        "Visual theme is drawn from the metaphor's or subject's world (a nature or field-guide world, not a generic tech or SaaS look) and the design plan names the theme with a one-line reason; specimens and diagram frames use that world's objects",
+        "Readability holds under the theme: body text is a plain readable face at 17px or larger, decorative faces appear only in headings or labels of four words or fewer, and no texture sits directly behind running text",
+        "A working interactive demo (real control + real JS behavior) sits in the final third of the page",
+        "<title> reads as a specific product-style name (not 'Photosynthesis Explained', 'What is Photosynthesis', or containing 'ELI5')",
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it",
+        "A visible light/dark toggle button exists: with no saved choice the page follows prefers-color-scheme, clicking it sets data-theme on <html> to the opposite theme, the choice survives a reload (localStorage wrapped in try/catch), and choosing the system's own theme again removes the override",
+        "The CSS defines tokens for light and dark in the bare :root, the guarded prefers-color-scheme block and the explicit [data-theme] block, so the system setting and the toggle both resolve to complete palettes"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "/eli5 how does a sorting algorithm work theme: storybook",
+      "expected_output": "A picture-explainer HTML artifact that honors the requested Storybook theme even though the topic would default to Game Board: characters lining up by height, page-spread sections, a soft picture-book palette in both themes, a live 'next step' demo that sorts the characters, and a light/dark toggle.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a single self-contained HTML file (doctype, inline CSS/JS, no build step)",
+        "The user-requested Storybook theme is used (picture-book characters, scenes or page spreads), not the default family for algorithms",
+        "One central metaphor introduced early and carried through, with real terms (compare, swap, pass) attached to it as they appear",
+        "Core mechanism diagram: an inline SVG figure shows one compare-and-swap step changing the order, not just labeled boxes",
+        "Readability holds under the theme: body text is a plain readable face at 17px or larger, decorative faces appear only in headings or labels of four words or fewer, and no texture sits directly behind running text",
+        "A working interactive demo steps through the sort one move at a time with a visible step or move counter",
+        "<title> reads as a specific product-style name (not 'Sorting Explained' or containing 'ELI5')",
+        "All text inside SVG drawings stays readable in both themes: the ink contrasts with the fill behind it",
+        "A visible light/dark toggle button exists: with no saved choice the page follows prefers-color-scheme, clicking it sets data-theme on <html> to the opposite theme, the choice survives a reload (localStorage wrapped in try/catch), and choosing the system's own theme again removes the override",
+        "The CSS defines tokens for light and dark in the bare :root, the guarded prefers-color-scheme block and the explicit [data-theme] block, so the system setting and the toggle both resolve to complete palettes"
       ]
     }
   ]
